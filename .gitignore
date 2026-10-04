@@ -1,0 +1,13 @@
+.local-postgres/
+.local-app-secret
+exchange-local.log
+exchange-local-error.log
+*.log
+*.pid
+.npm-cache/
+node_modules/
+.env
+.DS_Store
+Thumbs.db
+
+

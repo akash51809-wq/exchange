@@ -1,0 +1,27 @@
+{
+  "name": "exchange",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Node.js application",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "local": "pglite-server --db=./.local-postgres --port=5432 --max-connections=10 --run \"node index.js\" --include-database-url"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "argon2": "^0.45.1",
+    "nodemailer": "^10.0.13",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11"
+  },
+  "allowScripts": {
+    "argon2@0.45.1": true
+  }
+}
