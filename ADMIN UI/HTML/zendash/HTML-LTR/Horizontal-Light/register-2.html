@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+	<head>
+
+		<!-- Meta data -->
+		<meta charset="UTF-8">
+		<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=0'>
+		<meta content="Exchange - Register Account" name="description">
+		<meta content="Exchange" name="author">
+		<meta name="keywords" content="recharge, portal, exchange, admin, register"/>
+
+		<!-- Title -->
+		<title>Exchange - Create Account</title>
+
+		<!--Favicon -->
+		<link rel="icon" href="../../assets/images/brand/favicon.ico" type="image/x-icon"/>
+
+		<!-- Bootstrap css -->
+		<link href="../../assets/plugins/bootstrap/css/bootstrap.css" rel="stylesheet" />
+
+		<!-- Style css -->
+		<link href="../../assets/css/style.css" rel="stylesheet" />
+
+		<!-- Dark css -->
+		<link href="../../assets/css/dark.css" rel="stylesheet" />
+
+		<!-- Skins css -->
+		<link href="../../assets/css/skins.css" rel="stylesheet" />
+
+		<!-- Animate css -->
+		<link href="../../assets/css/animated.css" rel="stylesheet" />
+
+		<!---Icons css-->
+		<link href="../../assets/css/icons.css" rel="stylesheet" />
+
+		<style>
+			.step-badge {
+				background: #e2e8f0;
+				color: #1e3a8a;
+				font-size: 11px;
+				font-weight: 700;
+				padding: 3px 8px;
+				border-radius: 12px;
+				margin-right: 6px;
+			}
+			.otp-verified-badge {
+				background: #dcfce7;
+				color: #166534;
+				font-size: 12px;
+				font-weight: 600;
+				padding: 4px 10px;
+				border-radius: 6px;
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+			}
+			.field-card {
+				background: #f8fafc;
+				border: 1px solid #e2e8f0;
+				border-radius: 8px;
+				padding: 14px 16px;
+				margin-bottom: 16px;
+			}
+			.field-card label {
+				font-weight: 600;
+				color: #334155;
+				margin-bottom: 6px;
+				font-size: 13px;
+			}
+		</style>
+	</head>
+	<body class="h-100vh custom-page1">
+	
+		<!---Global-loader-->
+		<div id="global-loader" >
+			<img src="../../assets/images/svgs/loader.svg" alt="loader">
+		</div>
+		<!---/Global-loader-->
+		
+		<div class="d-md-flex">
+			<div class="w-40 h-100vh" style="overflow-y: auto;">
+				<div class="page-single-content">
+					<div class="card-body p-5">
+						<div class="row">
+							<div class="col-md-12 mx-auto d-block">
+								<div class="card-body py-2">
+									<div class="custom-logo mb-3">
+										<a href="/login"><img src="../../assets/images/brand/favicon.png" class="header-brand-img dark-logo" alt="Exchange"></a>
+									</div>
+									<div class="mb-4">
+										<h2 class="font-weight-bold mb-1" style="color: #1e3a8a;">Create Account</h2>
+										<p class="text-muted small">Verify your WhatsApp number &amp; Email to get started.</p>
+									</div>
+
+									<form id="signup-form">
+										
+										<!-- 1. Business Name -->
+										<div class="field-card">
+											<label for="signup-business-name">
+												<i class="fa fa-building-o text-primary mr-1"></i> Business Name / Store Name *
+											</label>
+											<input id="signup-business-name" type="text" class="form-control" autocomplete="organization" placeholder="e.g. Sharma Telecom" required maxlength="100">
+										</div>
+
+										<!-- 2. WhatsApp Number & OTP -->
+										<div class="field-card">
+											<label for="signup-whatsapp">
+												<i class="fa fa-whatsapp text-success mr-1"></i> WhatsApp Number *
+											</label>
+											<div class="input-group">
+												<div class="input-group-prepend">
+													<span class="input-group-text font-weight-bold bg-white">+91</span>
+												</div>
+												<input id="signup-whatsapp" type="tel" class="form-control" autocomplete="tel" placeholder="10-digit WhatsApp number" maxlength="10" required>
+												<div class="input-group-append">
+													<button id="btn-send-wa-otp" type="button" class="btn btn-outline-success font-weight-bold">
+														<i class="fa fa-paper-plane mr-1"></i> Send OTP
+													</button>
+												</div>
+											</div>
+											<div id="wa-otp-row" class="mt-3" style="display: none;">
+												<label for="signup-wa-otp" class="small text-muted mb-1">
+													<i class="fa fa-key mr-1"></i> Enter 6-digit WhatsApp OTP *
+												</label>
+												<input id="signup-wa-otp" type="text" class="form-control font-monospace font-weight-bold text-center" inputmode="numeric" placeholder="• • • • • •" maxlength="6" style="letter-spacing: 4px; font-size: 16px;">
+												<small class="text-muted d-block mt-1">OTP sent to your WhatsApp number.</small>
+											</div>
+										</div>
+
+										<!-- 3. Email ID & OTP -->
+										<div class="field-card">
+											<label for="signup-email">
+												<i class="fa fa-envelope-o text-primary mr-1"></i> Email Address *
+											</label>
+											<div class="input-group">
+												<input id="signup-email" type="email" class="form-control" autocomplete="email" placeholder="e.g. user@example.com" required maxlength="100">
+												<div class="input-group-append">
+													<button id="btn-send-email-otp" type="button" class="btn btn-outline-primary font-weight-bold">
+														<i class="fa fa-paper-plane mr-1"></i> Send OTP
+													</button>
+												</div>
+											</div>
+											<div id="email-otp-row" class="mt-3" style="display: none;">
+												<label for="signup-email-otp" class="small text-muted mb-1">
+													<i class="fa fa-key mr-1"></i> Enter 6-digit Email OTP *
+												</label>
+												<input id="signup-email-otp" type="text" class="form-control font-monospace font-weight-bold text-center" inputmode="numeric" placeholder="• • • • • •" maxlength="6" style="letter-spacing: 4px; font-size: 16px;">
+												<small class="text-muted d-block mt-1">OTP sent to your WhatsApp &amp; Email.</small>
+											</div>
+										</div>
+
+										<div class="col-12 mt-4 px-0">
+											<button id="btn-submit-signup" type="submit" class="btn btn-lg btn-primary btn-block font-weight-bold shadow-sm">
+												<i class="fa fa-user-plus mr-1"></i> Verify &amp; Create Account
+											</button>
+										</div>
+									</form>
+
+									<div id="auth-message" role="status" aria-live="polite" class="mt-3"></div>
+
+									<!-- Success confirmation upon registration -->
+									<div id="signup-credentials" class="alert alert-success mt-4 p-4 text-center" hidden style="border-radius: 8px;">
+										<div class="mb-3">
+											<i class="fa fa-check-circle text-success" style="font-size: 48px;"></i>
+										</div>
+										<h4 class="font-weight-bold mb-2 text-dark">Account Created Successfully!</h4>
+										<p id="credentials-warning" class="mb-3 text-dark"></p>
+										
+										<div class="bg-white p-3 rounded border mb-3 text-left">
+											<div class="text-success font-weight-bold mb-1">
+												<i class="fa fa-whatsapp mr-1"></i> WhatsApp Message Sent
+											</div>
+											<div class="small text-muted mb-2">
+												आपकी <strong>User ID (मोबाइल नंबर)</strong> और <strong>Password</strong> आपके WhatsApp नंबर पर भेज दी गई है।
+											</div>
+											<div class="text-primary font-weight-bold mb-1">
+												<i class="fa fa-envelope-o mr-1"></i> Email Notification Sent
+											</div>
+											<div class="small text-muted">
+												लॉगिन विवरण आपके रजिस्टर्ड ईमेल आईडी पर भी भेज दिया गया है।
+											</div>
+										</div>
+
+										<a id="created-login-link" class="btn btn-primary btn-block font-weight-bold py-2" href="/login">
+											<i class="fa fa-sign-in mr-1"></i> Proceed to Login
+										</a>
+									</div>
+
+									<div class="mt-4 mb-4 text-center">
+										<div class="font-weight-normal fs-15 text-muted">Already have an account? <a class="btn-link font-weight-bold text-primary" href="/login">Login here</a></div>
+									</div>
+
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="w-80 bg-style h-100vh page-style d-none d-md-block">
+				<div class="page-single-content">
+					<div class="card-body text-white">
+						<div class="row">
+							<div class="col-md-12 pl-6 pr-6">
+								<div class="custom-body1">
+									<h2 class="mb-3 fs-35 font-weight-bold">Seamless B2B Recharge &amp; Exchange Platform</h2>
+									<p class="text-white-50 fs-16">Fast, automated API integration with live margins, instant WhatsApp OTP verification, and 24/7 wallet topups.</p>
+									<a href="/login" class="btn btn-lg btn-outline-light mt-4 font-weight-bold">Already Registered? Back to Login</a>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Jquery js-->
+		<script src="../../assets/js/jquery-3.5.1.min.js"></script>
+
+		<!-- Bootstrap4 js-->
+		<script src="../../assets/plugins/bootstrap/popper.min.js"></script>
+		<script src="../../assets/plugins/bootstrap/js/bootstrap.min.js"></script>
+
+		<!-- Loader js-->
+		<script src="../../assets/js/loader.js"></script>
+
+		<script src="/auth-client.js"></script>
+	</body>
+</html>
