@@ -289,86 +289,131 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 1. EMAIL (GMAIL SMTP) SETTINGS TAB -->
+            <!-- 1. EMAIL (GMAIL WEBHOOK / SMTP) SETTINGS TAB -->
             <!-- ========================================== -->
             <div class="tab-pane active" id="tabEmail">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
-                  <h5><i class="fa fa-envelope text-primary"></i> Email (Gmail SMTP) Configuration</h5>
+                  <h5><i class="fa fa-envelope text-primary"></i> Email Notification Configuration</h5>
                   <div class="custom-control custom-switch custom-switch-lg">
                     <input type="checkbox" class="custom-control-input" id="emailEnabled">
                     <label class="custom-control-label" for="emailEnabled" id="emailEnabledLabel">Email Disabled</label>
                   </div>
                 </div>
                 <div class="settings-panel-body">
-                  
-                  <div class="help-callout">
-                    <strong><i class="fa fa-info-circle"></i> Gmail SMTP Setup Guide:</strong>
-                    <ol>
-                      <li>In your Google Account, enable <strong>2-Step Verification</strong>.</li>
-                      <li>Go to <em>Security &rarr; 2-Step Verification &rarr; App Passwords</em>.</li>
-                      <li>Create an App Password (name: <code>Exchange Portal</code>) and copy the 16-character key.</li>
-                      <li>Enter your Gmail ID in Username and the 16-character App Password below.</li>
-                    </ol>
-                  </div>
 
                   <form id="emailForm">
                     <div class="row">
-                      <div class="col-md-4 form-group">
-                        <label for="emailProvider" class="font-weight-bold">Email Provider</label>
-                        <select id="emailProvider" class="form-control">
-                          <option value="gmail" selected>Google / Gmail SMTP</option>
+                      <div class="col-md-12 form-group">
+                        <label for="emailProvider" class="font-weight-bold">Email Sending Method / Provider</label>
+                        <select id="emailProvider" class="form-control form-control-lg font-weight-bold">
+                          <option value="google_script" selected>🌟 Google Apps Script Webhook (Recommended for Render Cloud - HTTPS Port 443)</option>
+                          <option value="gmail">Gmail SMTP (Direct Port 465 / 587)</option>
                           <option value="custom">Custom SMTP Server</option>
                         </select>
-                      </div>
-
-                      <div class="col-md-5 form-group">
-                        <label for="smtpHost" class="font-weight-bold">SMTP Host *</label>
-                        <input type="text" id="smtpHost" class="form-control" value="smtp.gmail.com" required>
-                      </div>
-
-                      <div class="col-md-3 form-group">
-                        <label for="smtpPort" class="font-weight-bold">Port *</label>
-                        <input type="number" id="smtpPort" class="form-control" value="465" required>
+                        <small class="form-text text-muted">Google Apps Script sends real emails from your Gmail account via standard HTTPS (Port 443), completely bypassing Render cloud SMTP port blocks.</small>
                       </div>
                     </div>
 
-                    <div class="row">
-                      <div class="col-md-4 form-group">
-                        <label for="smtpEncryption" class="font-weight-bold">Security / Encryption</label>
-                        <select id="smtpEncryption" class="form-control">
-                          <option value="ssl" selected>SSL (Port 465)</option>
-                          <option value="tls">TLS / STARTTLS (Port 587)</option>
-                        </select>
+                    <!-- 1.A: GOOGLE APPS SCRIPT WEBHOOK CONFIG -->
+                    <div id="googleScriptSection">
+                      <div class="help-callout" style="background: #f0fdf4; border-left-color: #22c55e;">
+                        <strong class="text-success"><i class="fa fa-shield"></i> Quick 2-Minute Setup for Google Apps Script Webhook:</strong>
+                        <ol class="mb-2 mt-1" style="padding-left: 20px;">
+                          <li>Open <a href="https://script.google.com" target="_blank" class="font-weight-bold text-primary">script.google.com <i class="fa fa-external-link"></i></a> and click <strong>New Project</strong>.</li>
+                          <li>Delete all existing code in the editor, click <strong>"Copy Apps Script Code"</strong> below, and paste it.</li>
+                          <li>Click <strong>Deploy &rarr; New deployment</strong> &rarr; Select type: <strong>Web app</strong>.</li>
+                          <li>Set <em>Execute as:</em> <strong>Me (your-gmail@gmail.com)</strong> and <em>Who has access:</em> <strong>Anyone</strong> &rarr; Click <strong>Deploy</strong>.</li>
+                          <li>Authorize access, copy the generated <strong>Web app URL</strong> (starts with <code>https://script.google.com/macros/s/.../exec</code>), and paste it in the box below!</li>
+                        </ol>
+                        <button type="button" class="btn btn-sm btn-outline-success font-weight-bold" id="btnCopyScriptCode">
+                          <i class="fa fa-copy mr-1"></i> Copy Google Apps Script Code
+                        </button>
+                        <span id="copyScriptStatus" class="ml-2 small text-success font-weight-bold" style="display:none;">✓ Code Copied!</span>
                       </div>
 
-                      <div class="col-md-4 form-group">
-                        <label for="smtpUser" class="font-weight-bold">SMTP Username / Gmail Address *</label>
-                        <input type="email" id="smtpUser" class="form-control" placeholder="yourcompany@gmail.com" required>
+                      <div class="row">
+                        <div class="col-md-8 form-group">
+                          <label for="googleScriptUrl" class="font-weight-bold">Google Script Web App URL *</label>
+                          <input type="url" id="googleScriptUrl" class="form-control" placeholder="https://script.google.com/macros/s/AKfycb.../exec">
+                          <small class="text-muted">Generated after clicking Deploy &rarr; New deployment &rarr; Web app</small>
+                        </div>
+                        <div class="col-md-4 form-group">
+                          <label for="googleScriptKey" class="font-weight-bold">Secret Key (Optional)</label>
+                          <input type="text" id="googleScriptKey" class="form-control" placeholder="exchange_secret">
+                          <small class="text-muted">Matches the <code>secretKey</code> in your Apps Script code.</small>
+                        </div>
                       </div>
 
-                      <div class="col-md-4 form-group">
-                        <label for="smtpPass" class="font-weight-bold">Password / App Password (16-char) *</label>
-                        <div class="input-group">
-                          <input type="password" id="smtpPass" class="form-control font-monospace" placeholder="•••• •••• •••• ••••" required autocomplete="new-password">
-                          <div class="input-group-append">
-                            <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#smtpPass">
-                              <i class="fa fa-eye"></i>
-                            </button>
-                          </div>
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                          <label for="fromNameScript" class="font-weight-bold">Sender Display Name</label>
+                          <input type="text" id="fromNameScript" class="form-control" value="Exchange Portal Admin">
                         </div>
                       </div>
                     </div>
 
-                    <div class="row">
-                      <div class="col-md-6 form-group">
-                        <label for="fromEmail" class="font-weight-bold">Sender Email (From)</label>
-                        <input type="email" id="fromEmail" class="form-control" placeholder="Same as Gmail username if empty">
+                    <!-- 1.B: STANDARD SMTP CONFIG -->
+                    <div id="smtpSection" style="display:none;">
+                      <div class="help-callout">
+                        <strong><i class="fa fa-info-circle"></i> Direct Gmail / SMTP Setup Guide:</strong>
+                        <ol class="mb-0" style="padding-left: 20px;">
+                          <li>In your Google Account, enable <strong>2-Step Verification</strong>.</li>
+                          <li>Go to <em>Security &rarr; 2-Step Verification &rarr; App Passwords</em>.</li>
+                          <li>Create an App Password (name: <code>Exchange Portal</code>) and copy the 16-character key.</li>
+                          <li>Enter your Gmail in Username and the 16-character App Password below.</li>
+                        </ol>
                       </div>
 
-                      <div class="col-md-6 form-group">
-                        <label for="fromName" class="font-weight-bold">Sender Name (From Display Name)</label>
-                        <input type="text" id="fromName" class="form-control" value="Exchange Portal Admin">
+                      <div class="row">
+                        <div class="col-md-5 form-group">
+                          <label for="smtpHost" class="font-weight-bold">SMTP Host *</label>
+                          <input type="text" id="smtpHost" class="form-control" value="smtp.gmail.com">
+                        </div>
+
+                        <div class="col-md-3 form-group">
+                          <label for="smtpPort" class="font-weight-bold">Port *</label>
+                          <input type="number" id="smtpPort" class="form-control" value="465">
+                        </div>
+
+                        <div class="col-md-4 form-group">
+                          <label for="smtpEncryption" class="font-weight-bold">Security / Encryption</label>
+                          <select id="smtpEncryption" class="form-control">
+                            <option value="ssl" selected>SSL (Port 465)</option>
+                            <option value="tls">TLS / STARTTLS (Port 587)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                          <label for="smtpUser" class="font-weight-bold">SMTP Username / Gmail Address *</label>
+                          <input type="email" id="smtpUser" class="form-control" placeholder="yourcompany@gmail.com">
+                        </div>
+
+                        <div class="col-md-6 form-group">
+                          <label for="smtpPass" class="font-weight-bold">Password / App Password (16-char) *</label>
+                          <div class="input-group">
+                            <input type="password" id="smtpPass" class="form-control font-monospace" placeholder="•••• •••• •••• ••••" autocomplete="new-password">
+                            <div class="input-group-append">
+                              <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#smtpPass">
+                                <i class="fa fa-eye"></i>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                          <label for="fromEmail" class="font-weight-bold">Sender Email (From)</label>
+                          <input type="email" id="fromEmail" class="form-control" placeholder="Same as Gmail username if empty">
+                        </div>
+
+                        <div class="col-md-6 form-group">
+                          <label for="fromName" class="font-weight-bold">Sender Name (From Display Name)</label>
+                          <input type="text" id="fromName" class="form-control" value="Exchange Portal Admin">
+                        </div>
                       </div>
                     </div>
 
@@ -380,14 +425,14 @@ module.exports = function createAdminServiceSettingsPage({
                     </div>
                   </form>
 
-                  <!-- Test SMTP Email Box -->
+                  <!-- Test SMTP / Webhook Email Box -->
                   <div class="test-box-card">
                     <h6 class="font-weight-bold text-dark mb-2"><i class="fa fa-paper-plane text-primary mr-1"></i> Test Email Delivery</h6>
-                    <p class="text-muted small mb-3">Send a test email to verify your Gmail SMTP credentials.</p>
+                    <p class="text-muted small mb-3">Send a real test email to verify your email configuration.</p>
                     <div class="row align-items-end">
                       <div class="col-md-8 form-group mb-md-0">
                         <label for="testEmailRecipient" class="small font-weight-bold">Recipient Email Address</label>
-                        <input type="email" id="testEmailRecipient" class="form-control" placeholder="recipient@example.com">
+                        <input type="email" id="testEmailRecipient" class="form-control" placeholder="yourpersonal@gmail.com">
                       </div>
                       <div class="col-md-4">
                         <button type="button" class="btn btn-success btn-block" id="btnSendTestEmail">
@@ -875,6 +920,67 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
+    // Email Provider Switching Logic
+    const emailProviderSelect = document.getElementById('emailProvider');
+    const googleScriptSection = document.getElementById('googleScriptSection');
+    const smtpSection = document.getElementById('smtpSection');
+
+    function updateEmailProviderVisibility() {
+      const p = emailProviderSelect ? emailProviderSelect.value : 'google_script';
+      if (p === 'google_script') {
+        if (googleScriptSection) googleScriptSection.style.display = 'block';
+        if (smtpSection) smtpSection.style.display = 'none';
+      } else {
+        if (googleScriptSection) googleScriptSection.style.display = 'none';
+        if (smtpSection) smtpSection.style.display = 'block';
+        if (p === 'gmail') {
+          const hostInput = document.getElementById('smtpHost');
+          if (hostInput && !hostInput.value) hostInput.value = 'smtp.gmail.com';
+        }
+      }
+    }
+    if (emailProviderSelect) {
+      emailProviderSelect.addEventListener('change', updateEmailProviderVisibility);
+    }
+
+    // Copy Google Apps Script Snippet
+    const btnCopyScriptCode = document.getElementById('btnCopyScriptCode');
+    const copyScriptStatus = document.getElementById('copyScriptStatus');
+    const googleAppsScriptSource = [
+      'function doPost(e) {',
+      '  try {',
+      '    var data = JSON.parse(e.postData.contents);',
+      '    var secretKey = "exchange_secret"; // Matches portal Secret Key if configured',
+      '    if (secretKey && data.key && data.key !== secretKey) {',
+      '      return ContentService.createTextOutput(JSON.stringify({ status: "error", message: "Invalid Security Key" }))',
+      '        .setMimeType(ContentService.MimeType.JSON);',
+      '    }',
+      '    GmailApp.sendEmail(data.to, data.subject, data.text || "", {',
+      '      htmlBody: data.html || data.text,',
+      '      name: data.name || "Exchange Portal"',
+      '    });',
+      '    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Email sent successfully via Gmail" }))',
+      '      .setMimeType(ContentService.MimeType.JSON);',
+      '  } catch (err) {',
+      '    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))',
+      '      .setMimeType(ContentService.MimeType.JSON);',
+      '  }',
+      '}'
+    ].join('\\n');
+
+    if (btnCopyScriptCode) {
+      btnCopyScriptCode.addEventListener('click', () => {
+        navigator.clipboard.writeText(googleAppsScriptSource).then(() => {
+          if (copyScriptStatus) {
+            copyScriptStatus.style.display = 'inline';
+            setTimeout(() => { copyScriptStatus.style.display = 'none'; }, 3000);
+          }
+        }).catch(() => {
+          alert('Failed to copy to clipboard automatically. Please copy the code manually.');
+        });
+      });
+    }
+
     // Load Saved Settings on Page Load
     async function loadSettings() {
       try {
@@ -887,14 +993,21 @@ module.exports = function createAdminServiceSettingsPage({
           emailSwitch.checked = Boolean(data.email.isEnabled);
           emailLabel.textContent = emailSwitch.checked ? 'Email Enabled' : 'Email Disabled';
           emailLabel.style.color = emailSwitch.checked ? '#16a34a' : '#64748b';
-          document.getElementById('emailProvider').value = data.email.provider || 'gmail';
+          const provider = data.email.provider || (data.email.googleScriptUrl ? 'google_script' : (data.email.smtpHost ? 'gmail' : 'google_script'));
+          if (emailProviderSelect) emailProviderSelect.value = provider;
+          document.getElementById('googleScriptUrl').value = data.email.googleScriptUrl || '';
+          document.getElementById('googleScriptKey').value = data.email.googleScriptKey || '';
+          document.getElementById('fromNameScript').value = data.email.fromName || 'Exchange Portal Admin';
           document.getElementById('smtpHost').value = data.email.smtpHost || 'smtp.gmail.com';
-          document.getElementById('smtpPort').value = data.email.smtpPort || '587';
-          document.getElementById('smtpEncryption').value = data.email.encryption || 'tls';
+          document.getElementById('smtpPort').value = data.email.smtpPort || '465';
+          document.getElementById('smtpEncryption').value = data.email.encryption || 'ssl';
           document.getElementById('smtpUser').value = data.email.username || '';
           document.getElementById('smtpPass').value = data.email.password || '';
           document.getElementById('fromEmail').value = data.email.fromEmail || '';
           document.getElementById('fromName').value = data.email.fromName || '';
+          updateEmailProviderVisibility();
+        } else {
+          updateEmailProviderVisibility();
         }
 
         // Populate WhatsApp
@@ -992,16 +1105,19 @@ module.exports = function createAdminServiceSettingsPage({
       emailSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
       emailSaveStatus.textContent = '';
 
+      const provider = document.getElementById('emailProvider').value;
       const payload = {
         isEnabled: emailSwitch.checked,
-        provider: document.getElementById('emailProvider').value,
+        provider,
+        googleScriptUrl: document.getElementById('googleScriptUrl').value.trim(),
+        googleScriptKey: document.getElementById('googleScriptKey').value.trim(),
+        fromName: provider === 'google_script' ? document.getElementById('fromNameScript').value.trim() : document.getElementById('fromName').value.trim(),
         smtpHost: document.getElementById('smtpHost').value.trim(),
         smtpPort: Number(document.getElementById('smtpPort').value),
         encryption: document.getElementById('smtpEncryption').value,
         username: document.getElementById('smtpUser').value.trim(),
         password: document.getElementById('smtpPass').value.trim(),
         fromEmail: document.getElementById('fromEmail').value.trim(),
-        fromName: document.getElementById('fromName').value.trim(),
       };
 
       try {
@@ -1038,19 +1154,23 @@ module.exports = function createAdminServiceSettingsPage({
         return;
       }
 
+      const provider = document.getElementById('emailProvider').value;
       btnSendTestEmail.disabled = true;
-      btnSendTestEmail.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Testing SMTP &amp; Sending...';
+      btnSendTestEmail.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending Test Email...';
       testEmailAlert.style.display = 'none';
 
       const payload = {
         toEmail: to,
+        provider,
+        googleScriptUrl: document.getElementById('googleScriptUrl').value.trim(),
+        googleScriptKey: document.getElementById('googleScriptKey').value.trim(),
+        fromName: provider === 'google_script' ? document.getElementById('fromNameScript').value.trim() : document.getElementById('fromName').value.trim(),
         smtpHost: document.getElementById('smtpHost').value.trim(),
         smtpPort: Number(document.getElementById('smtpPort').value),
         encryption: document.getElementById('smtpEncryption').value,
         username: document.getElementById('smtpUser').value.trim(),
         password: document.getElementById('smtpPass').value.trim(),
         fromEmail: document.getElementById('fromEmail').value.trim(),
-        fromName: document.getElementById('fromName').value.trim(),
       };
 
       try {
@@ -1058,17 +1178,17 @@ module.exports = function createAdminServiceSettingsPage({
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           credentials: 'same-origin',
-          signal: AbortSignal.timeout(18000),
+          signal: AbortSignal.timeout(22000),
           body: JSON.stringify(payload),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'SMTP Test Failed.');
+        if (!res.ok) throw new Error(data.error || 'Test Email Delivery Failed.');
         testEmailAlert.className = 'alert alert-success mt-3';
-        testEmailAlert.innerHTML = '<strong>✓ Email Sent Successfully!</strong> ' + (data.message || 'SMTP verified.');
+        testEmailAlert.innerHTML = '<strong>✓ Email Sent Successfully!</strong> ' + (data.message || 'Email verified.');
         testEmailAlert.style.display = 'block';
       } catch (err) {
         testEmailAlert.className = 'alert alert-danger mt-3';
-        testEmailAlert.innerHTML = '<strong>✗ SMTP Test Failed:</strong> ' + err.message;
+        testEmailAlert.innerHTML = '<strong>✗ Email Test Failed:</strong> ' + err.message;
         testEmailAlert.style.display = 'block';
       } finally {
         btnSendTestEmail.disabled = false;
@@ -1356,32 +1476,45 @@ module.exports = function createAdminServiceSettingsPage({
   }
 
   /**
-   * POST /api/admin/settings/services/email - Save Email / SMTP configuration
+   * POST /api/admin/settings/services/email - Save Email (Google Script Webhook or SMTP) configuration
    */
   async function handleSaveEmailSettings(request, response, input) {
     const isEnabled = Boolean(input.isEnabled);
-    const provider = String(input.provider || 'gmail').trim();
-    const smtpHost = String(input.smtpHost || 'smtp.gmail.com').trim();
-    const smtpPort = Number(input.smtpPort) || 587;
-    const encryption = String(input.encryption || 'tls').trim();
+    const provider = String(input.provider || 'google_script').trim();
+    const googleScriptUrl = String(input.googleScriptUrl || '').trim();
+    const googleScriptKey = String(input.googleScriptKey || '').trim();
+    const fromName = String(input.fromName || 'Exchange Portal Admin').trim();
+
+    const smtpHost = String(input.smtpHost || '').trim();
+    const smtpPort = Number(input.smtpPort) || 465;
+    const encryption = String(input.encryption || 'ssl').trim();
     const username = String(input.username || '').trim().toLowerCase();
     const password = String(input.password || '').trim().replace(/\s+/g, '');
     const fromEmail = String(input.fromEmail || username).trim().toLowerCase();
-    const fromName = String(input.fromName || 'Exchange Portal Admin').trim();
 
-    if (isEnabled && (!smtpHost || !username || !password)) {
-      throw httpError('SMTP Host, Username, and Password / App Password are required when email service is enabled.', 400);
+    if (isEnabled) {
+      if (provider === 'google_script') {
+        if (!googleScriptUrl || !googleScriptUrl.startsWith('https://')) {
+          throw httpError('Please provide a valid Google Script Web App URL (starts with https://script.google.com/...)', 400);
+        }
+      } else {
+        if (!smtpHost || !username || !password) {
+          throw httpError('SMTP Host, Username, and Password / App Password are required when email service is enabled.', 400);
+        }
+      }
     }
 
     const config = {
       provider,
+      googleScriptUrl,
+      googleScriptKey,
+      fromName,
       smtpHost,
       smtpPort,
       encryption,
       username,
       password,
       fromEmail,
-      fromName,
     };
 
     const ciphertext = encryptServiceConfig(config);
@@ -1398,7 +1531,7 @@ module.exports = function createAdminServiceSettingsPage({
   }
 
   /**
-   * POST /api/admin/settings/services/email/test - Send a live test email via SMTP
+   * POST /api/admin/settings/services/email/test - Send a live test email via Google Apps Script Webhook or SMTP
    */
   async function handleTestEmail(request, response, input) {
     const toEmail = String(input.toEmail || '').trim().toLowerCase();
@@ -1406,14 +1539,93 @@ module.exports = function createAdminServiceSettingsPage({
       throw httpError('Valid recipient email address is required.', 400);
     }
 
-    // Load saved or provided SMTP config
+    const provider = String(input.provider || 'google_script').trim();
+    let googleScriptUrl = String(input.googleScriptUrl || '').trim();
+    let googleScriptKey = String(input.googleScriptKey || '').trim();
+    let fromName = String(input.fromName || 'Exchange Portal Admin').trim();
+
+    // 1) Test via Google Apps Script Webhook (Port 443 HTTPS - Works 100% on Render Cloud)
+    if (provider === 'google_script' || (googleScriptUrl && !input.smtpHost)) {
+      if (!googleScriptUrl) {
+        const row = await db.query("SELECT config_ciphertext FROM admin_service_settings WHERE service_key = 'email'");
+        if (row.rowCount > 0) {
+          const saved = decryptServiceConfig(row.rows[0].config_ciphertext);
+          googleScriptUrl = googleScriptUrl || saved.googleScriptUrl || '';
+          googleScriptKey = googleScriptKey || saved.googleScriptKey || '';
+          fromName = fromName || saved.fromName || 'Exchange Portal Admin';
+        }
+      }
+
+      if (!googleScriptUrl || !googleScriptUrl.startsWith('https://')) {
+        throw httpError('Please enter a valid Google Script Web App URL (starts with https://script.google.com/...)', 400);
+      }
+
+      const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+      try {
+        const res = await fetch(googleScriptUrl, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          redirect: 'follow', // Handles Google Apps Script 302 redirect
+          signal: AbortSignal.timeout(20000),
+          body: JSON.stringify({
+            key: googleScriptKey,
+            to: toEmail,
+            subject: `[Exchange Portal] Gmail Test Verification (${nowStr})`,
+            text: `Hello,\n\nYour Google Apps Script Gmail Webhook is working perfectly on Exchange Portal!\n\nDelivery: HTTPS (Port 443)\nVerified At: ${nowStr}\n\nRegards,\nExchange Portal Admin`,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                <div style="background: #1e3a8a; color: #ffffff; padding: 18px 24px;">
+                  <h2 style="margin: 0; font-size: 20px;">Exchange Portal</h2>
+                  <p style="margin: 4px 0 0; font-size: 13px; color: #bfdbfe;">Gmail Notification Verification</p>
+                </div>
+                <div style="padding: 24px;">
+                  <p style="font-size: 15px; color: #1e293b; margin-top: 0;">Hello,</p>
+                  <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px 16px; border-radius: 4px; margin: 16px 0;">
+                    <strong style="color: #15803d; font-size: 14px;">✓ Gmail Delivery Verified Successfully!</strong>
+                    <p style="margin: 4px 0 0; font-size: 13px; color: #166534;">Your Gmail account is connected via Google Apps Script Webhook over HTTPS Port 443.</p>
+                  </div>
+                  <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin: 16px 0; color: #334155;">
+                    <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; font-weight: bold; width: 140px;">Delivery Method:</td><td>Google Apps Script Webhook (Port 443)</td></tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; font-weight: bold;">Sender Name:</td><td>${escapeHtml(fromName)}</td></tr>
+                    <tr style="border-bottom: 1px solid #f1f5f9;"><td style="padding: 8px 0; font-weight: bold;">Recipient:</td><td>${escapeHtml(toEmail)}</td></tr>
+                    <tr><td style="padding: 8px 0; font-weight: bold;">Verified At:</td><td>${escapeHtml(nowStr)}</td></tr>
+                  </table>
+                  <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
+                  <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">This is an automated test message sent from Exchange Portal Admin Console.</p>
+                </div>
+              </div>
+            `,
+            name: fromName,
+          }),
+        });
+
+        const respText = await res.text();
+        let parsed = {};
+        try { parsed = JSON.parse(respText); } catch (_) {}
+
+        if (parsed.status === 'error' || parsed.error) {
+          throw new Error(parsed.message || parsed.error || 'Google Script returned an error.');
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          message: `Test email successfully delivered to ${toEmail} via your Gmail account!`,
+        });
+        return;
+      } catch (err) {
+        console.error('Google Script Email error:', err);
+        throw httpError(`Gmail Webhook Error: ${err.message}`, 400);
+      }
+    }
+
+    // 2) Standard SMTP / Direct Gmail fallback
     let host = input.smtpHost ? String(input.smtpHost).trim() : '';
     let port = input.smtpPort ? Number(input.smtpPort) : 0;
     let encryption = input.encryption ? String(input.encryption).trim() : '';
     let user = input.username ? String(input.username).trim().toLowerCase() : '';
     let pass = input.password ? String(input.password).trim().replace(/\s+/g, '') : '';
     let fromEmail = input.fromEmail ? String(input.fromEmail).trim().toLowerCase() : '';
-    let fromName = input.fromName ? String(input.fromName).trim() : '';
 
     if (!host || !user || !pass) {
       const row = await db.query("SELECT config_ciphertext FROM admin_service_settings WHERE service_key = 'email'");
