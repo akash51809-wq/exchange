@@ -1878,9 +1878,35 @@ const AUTH_CLIENT_JS = `
 const routes = new Map([
   ['GET /health', async () => ({
     statusCode: 200,
-    body: { status: 'ok' },
+    body: { status: 'ok', service: 'exchange', timestamp: new Date().toISOString(), uptime: Math.floor(process.uptime()) },
+  })],
+  ['GET /ping', async () => ({
+    statusCode: 200,
+    body: { status: 'pong', timestamp: new Date().toISOString() },
   })],
 ]);
+
+// Auto Keep-Alive Pinger (Render Free Tier Sleep Prevention)
+function startKeepAlivePinger() {
+  const targetUrl = (process.env.PING_URL || process.env.RENDER_EXTERNAL_URL || 'https://exchange.easyrechargesolution.com').trim();
+  if (!targetUrl || targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1')) return;
+
+  const pingEndpoint = targetUrl.replace(/\/$/, '') + '/health';
+  const INTERVAL_MS = 4 * 60 * 1000; // हर 4 मिनट में पिंग (Render 15 मिनट में सोता है)
+
+  setInterval(() => {
+    fetch(pingEndpoint)
+      .then((res) => {
+        if (res.ok) {
+          // console.log(`[Keep-Alive] Pinged ${pingEndpoint} - HTTP ${res.status}`);
+        }
+      })
+      .catch((err) => {
+        console.warn(`[Keep-Alive Warning] Ping failed:`, err.message);
+      });
+  }, INTERVAL_MS).unref();
+}
+startKeepAlivePinger();
 
 async function handleRequest(request, response) {
   const startedAt = Date.now();
