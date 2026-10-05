@@ -35,7 +35,7 @@ async function sendUserDashboard(user, response) {
     });
   html = html.replace(
     /(<div class="dropdown-menu dropdown-menu-right dropdown-menu-arrow animated p-0">)[\s\S]*?(<\/div>\s*<\/div>)/,
-    '$1<div class="text-center border-bottom pb-4 pt-4"><a href="#" class="text-center user pb-0 font-weight-bold">' + escapeHtml(user.name) + '</a><p class="text-center user-semi-title mb-0">User Account</p></div><a id="logout-button" class="dropdown-item border-bottom" href="/login"><i class="dropdown-icon mdi mdi-logout-variant"></i> Sign out</a>$2',
+    '$1<div class="text-center border-bottom pb-4 pt-4"><a href="#" class="text-center user pb-0 font-weight-bold">' + escapeHtml(user.name) + '</a><p class="text-center user-semi-title mb-0">User Account</p></div><a id="logout-button" class="dropdown-item border-bottom" href="/admin/login"><i class="dropdown-icon mdi mdi-logout-variant"></i> Sign out</a>$2',
   );
   if (!html.includes('<script src="/auth-client.js"></script>')) {
     html = html.replace(/<\/body>/i, '<script src="/auth-client.js"></script>\n\t</body>');

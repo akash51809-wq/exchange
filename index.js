@@ -1041,6 +1041,10 @@ async function registerUser(request, response) {
   }
 
   // Send Welcome Message via WhatsApp & Email
+  const requestHost = request.headers['x-forwarded-host'] || request.headers.host || 'exchange.easyrechargesolution.com';
+  const requestProto = request.headers['x-forwarded-proto'] || (IS_PRODUCTION ? 'https' : 'http');
+  const loginUrl = `${requestProto}://${requestHost}/admin/login`;
+
   try {
     const welcomeWaMsg =
       `🎉 *Welcome to Exchange Portal!*\n\n` +
@@ -1048,7 +1052,7 @@ async function registerUser(request, response) {
       `🏢 *Business:* ${credentials.businessName}\n` +
       `👤 *User ID:* ${credentials.userId}\n` +
       `🔑 *Password:* ${credentials.password}\n\n` +
-      `🌐 *Login URL:* http://127.0.0.1:3000/login\n\n` +
+      `🌐 *Login URL:* ${loginUrl}\n\n` +
       `कृपया अपना पासवर्ड सुरक्षित रखें।`;
 
     await sendWhatsappNotification({
@@ -1067,7 +1071,7 @@ async function registerUser(request, response) {
       decryptServiceConfig,
       toEmail: credentials.email,
       subject: '🎉 Welcome to Exchange Portal - Registration Details',
-      text: `Hello ${credentials.businessName},\n\nWelcome to Exchange Portal!\n\nYour account has been registered successfully.\n\nUser ID: ${credentials.userId}\nPassword: ${credentials.password}\nLogin: http://127.0.0.1:3000/login\n\nRegards,\nExchange Portal Admin`,
+      text: `Hello ${credentials.businessName},\n\nWelcome to Exchange Portal!\n\nYour account has been registered successfully.\n\nUser ID: ${credentials.userId}\nPassword: ${credentials.password}\nLogin: ${loginUrl}\n\nRegards,\nExchange Portal Admin`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
           <div style="background: #1e3a8a; color: #ffffff; padding: 20px 24px;">
@@ -1085,7 +1089,7 @@ async function registerUser(request, response) {
               </table>
             </div>
             <div style="text-align: center; margin: 24px 0;">
-              <a href="/login" style="background: #1e3a8a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Login to Your Account</a>
+              <a href="${loginUrl}" style="background: #1e3a8a; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Login to Your Account</a>
             </div>
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;">
             <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">Please keep your password confidential.</p>
@@ -1101,7 +1105,7 @@ async function registerUser(request, response) {
     ok: true,
     message: 'खाता सफलतापूर्वक बन गया! आपकी यूजर आईडी और पासवर्ड आपके WhatsApp और Email पर भेज दिए गए हैं।',
     userId: credentials.userId,
-    redirect: '/login?userId=' + encodeURIComponent(credentials.userId),
+    redirect: '/admin/login?userId=' + encodeURIComponent(credentials.userId),
   });
 }
 
@@ -1807,7 +1811,7 @@ const AUTH_CLIENT_JS = `
         if (byId('created-user-id')) byId('created-user-id').textContent = result.userId;
         if (byId('created-password')) byId('created-password').textContent = result.password;
         if (byId('credentials-warning')) byId('credentials-warning').textContent = result.message;
-        if (byId('created-login-link')) byId('created-login-link').href = '/login?userId=' + encodeURIComponent(result.userId);
+        if (byId('created-login-link')) byId('created-login-link').href = '/admin/login?userId=' + encodeURIComponent(result.userId);
         message('खाता सफलतापूर्वक बनाया गया!', false);
       } catch (error) {
         message(error.message, true);
@@ -2153,18 +2157,56 @@ async function handleRequest(request, response) {
       }
       if (url.pathname === '/') {
         statusCode = 302;
-        response.writeHead(statusCode, { location: '/login' });
+        response.writeHead(statusCode, { location: '/admin/login' });
         response.end();
         return;
       }
-      const authPage = {
-        '/login': '/admin/login-2.html',
-        '/signup': '/admin/register-2.html',
-        '/forgot-password': '/admin/forgot-password-2.html',
-      }[url.pathname];
-      if (authPage) {
+
+      // Legacy & clean auth redirects
+      const legacyRedirects = {
+        '/admin/login-2.html': '/admin/login',
+        '/admin/login.html': '/admin/login',
+        '/login-2.html': '/admin/login',
+        '/login.html': '/admin/login',
+        '/admin/register-2.html': '/admin/register',
+        '/admin/register.html': '/admin/register',
+        '/register-2.html': '/admin/register',
+        '/register.html': '/admin/register',
+        '/admin/signup-2.html': '/admin/register',
+        '/admin/signup.html': '/admin/register',
+        '/signup-2.html': '/admin/register',
+        '/signup.html': '/admin/register',
+        '/admin/forgot-password-2.html': '/admin/forgot-password',
+        '/admin/forgot-password.html': '/admin/forgot-password',
+        '/forgot-password-2.html': '/admin/forgot-password',
+        '/forgot-password.html': '/admin/forgot-password',
+      };
+      if (legacyRedirects[url.pathname]) {
+        statusCode = 301;
+        const query = url.search || '';
+        response.writeHead(statusCode, { location: legacyRedirects[url.pathname] + query });
+        response.end();
+        return;
+      }
+
+      if (url.pathname === '/login') {
         statusCode = 302;
-        response.writeHead(statusCode, { location: authPage });
+        const query = url.search || '';
+        response.writeHead(statusCode, { location: '/admin/login' + query });
+        response.end();
+        return;
+      }
+      if (url.pathname === '/signup' || url.pathname === '/register') {
+        statusCode = 302;
+        const query = url.search || '';
+        response.writeHead(statusCode, { location: '/admin/register' + query });
+        response.end();
+        return;
+      }
+      if (url.pathname === '/forgot-password') {
+        statusCode = 302;
+        const query = url.search || '';
+        response.writeHead(statusCode, { location: '/admin/forgot-password' + query });
         response.end();
         return;
       }
@@ -2173,7 +2215,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) {
           statusCode = 302;
-          response.writeHead(statusCode, { location: '/login' });
+          response.writeHead(statusCode, { location: '/admin/login' });
           response.end();
           return;
         }
@@ -2193,7 +2235,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) {
           statusCode = 302;
-          response.writeHead(statusCode, { location: '/login' });
+          response.writeHead(statusCode, { location: '/admin/login' });
           response.end();
           return;
         }
@@ -2369,11 +2411,20 @@ async function handleRequest(request, response) {
         return;
       }
 
-      if ((url.pathname === '/admin' || url.pathname.startsWith('/admin/')) && !['/admin/login-2.html', '/admin/register-2.html', '/admin/forgot-password-2.html'].includes(url.pathname)) {
+      const publicAdminPaths = [
+        '/admin/login',
+        '/admin/login-2.html',
+        '/admin/register',
+        '/admin/register-2.html',
+        '/admin/signup',
+        '/admin/forgot-password',
+        '/admin/forgot-password-2.html',
+      ];
+      if ((url.pathname === '/admin' || url.pathname.startsWith('/admin/')) && !publicAdminPaths.includes(url.pathname)) {
         const session = await getSession(request);
         if (!session) {
           statusCode = 302;
-          response.writeHead(statusCode, { location: '/login' });
+          response.writeHead(statusCode, { location: '/admin/login' });
           response.end();
           return;
         }

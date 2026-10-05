@@ -17,6 +17,15 @@ async function serveAdminUi(urlPath, method, response) {
   if (urlPath === '/admin' || urlPath === '/admin/') {
     root = ADMIN_UI_ROOT;
     requestedPath = 'index.html';
+  } else if (urlPath === '/admin/login' || urlPath === '/login') {
+    root = ADMIN_UI_ROOT;
+    requestedPath = 'login-2.html';
+  } else if (urlPath === '/admin/register' || urlPath === '/admin/signup' || urlPath === '/signup' || urlPath === '/register') {
+    root = ADMIN_UI_ROOT;
+    requestedPath = 'register-2.html';
+  } else if (urlPath === '/admin/forgot-password' || urlPath === '/forgot-password') {
+    root = ADMIN_UI_ROOT;
+    requestedPath = 'forgot-password-2.html';
   } else if (urlPath.startsWith('/admin/')) {
     root = ADMIN_UI_ROOT;
     requestedPath = urlPath.slice('/admin/'.length);
