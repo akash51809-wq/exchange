@@ -1601,11 +1601,19 @@ module.exports = function createAdminServiceSettingsPage({
         });
 
         const respText = await res.text();
-        let parsed = {};
+        let parsed = null;
         try { parsed = JSON.parse(respText); } catch (_) {}
 
-        if (parsed.status === 'error' || parsed.error) {
-          throw new Error(parsed.message || parsed.error || 'Google Script returned an error.');
+        if (!parsed || parsed.status !== 'success') {
+          let errorDetail = (parsed && (parsed.message || parsed.error)) || '';
+          if (!errorDetail) {
+            if (respText.includes('Sorry, unable to open the file') || respText.includes('Page not found')) {
+              errorDetail = 'Google ne access reject kar diya (Page not found / Unauthorized). Kripya Google Script me Deploy -> Manage deployments me jakar check karein ki "Who has access" = "Anyone" select hai aur Editor me ek bar Test Run karke permissions Allow kiye gaye hain.';
+            } else {
+              errorDetail = 'Invalid response from Google Script Webhook: ' + respText.slice(0, 150);
+            }
+          }
+          throw new Error(errorDetail);
         }
 
         sendJson(response, 200, {
