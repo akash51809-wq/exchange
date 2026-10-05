@@ -1058,6 +1058,7 @@ module.exports = function createAdminServiceSettingsPage({
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           credentials: 'same-origin',
+          signal: AbortSignal.timeout(18000),
           body: JSON.stringify(payload),
         });
         const data = await res.json();
@@ -1438,41 +1439,25 @@ module.exports = function createAdminServiceSettingsPage({
       throw httpError('Incomplete SMTP configuration. Please fill Host, Username, and Password.', 400);
     }
 
-    const isGmail = host.includes('gmail.com');
+    const isGmail = host.includes('gmail.com') || user.endsWith('@gmail.com');
     const isSecure = encryption === 'ssl' || port === 465;
 
-    let transporter;
-    if (isGmail && isSecure) {
-      transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user,
-          pass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 12000,
-        greetingTimeout: 8000,
-        socketTimeout: 15000,
-      });
-    } else {
-      transporter = nodemailer.createTransport({
-        host: isGmail ? 'smtp.gmail.com' : host,
-        port: Number(port) || (isSecure ? 465 : 587),
-        secure: isSecure,
-        auth: {
-          user,
-          pass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 12000,
-        greetingTimeout: 8000,
-        socketTimeout: 15000,
-      });
-    }
+    const createTransportInstance = (targetPort, secureMode) => nodemailer.createTransport({
+      host: isGmail ? 'smtp.gmail.com' : host,
+      port: targetPort,
+      secure: secureMode,
+      family: 4, // CRITICAL: Enforce IPv4 to avoid ENETUNREACH IPv6 routing error on Render
+      auth: {
+        user,
+        pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 8000,
+      greetingTimeout: 6000,
+      socketTimeout: 10000,
+    });
 
     const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
@@ -1507,17 +1492,15 @@ module.exports = function createAdminServiceSettingsPage({
     };
 
     try {
+      let transporter = createTransportInstance(port, isSecure);
       let info;
       try {
         info = await transporter.sendMail(mailOptions);
       } catch (firstErr) {
         if (isGmail) {
-          const fallbackTransporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: { user, pass },
-            tls: { rejectUnauthorized: false },
-          });
-          info = await fallbackTransporter.sendMail(mailOptions);
+          const altPort = isSecure ? 587 : 465;
+          const altTransporter = createTransportInstance(altPort, !isSecure);
+          info = await altTransporter.sendMail(mailOptions);
         } else {
           throw firstErr;
         }
@@ -1529,7 +1512,13 @@ module.exports = function createAdminServiceSettingsPage({
       });
     } catch (err) {
       console.error('SMTP Send error:', err);
-      throw httpError(`SMTP Error: ${err.message}`, 400);
+      let userErrMsg = err.message;
+      if (/invalid login|badcredential|username and password not accepted/i.test(err.message)) {
+        userErrMsg = 'Gmail ne credentials reject kar diye: Kripya 16-digit Google App Password check karein aur ensure karein ki 2-Step Verification ON hai.';
+      } else if (/enotfound|enetunreach|etimedout/i.test(err.message)) {
+        userErrMsg = `SMTP server connection error (${err.code || err.message}).`;
+      }
+      throw httpError(`SMTP Error: ${userErrMsg}`, 400);
     }
   }
 
