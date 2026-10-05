@@ -79,7 +79,6 @@ const createAdminShowOperatorsPage = require('./pages/admin-show-operators');
 const createAdminUserListPage = require('./pages/admin-user-list');
 const createAdminSellerApiRequestsPage = require('./pages/admin-seller-api-requests');
 const createAdminServiceSettingsPage = require('./pages/admin-service-settings');
-const createAdminGmailSettingsPage = require('./pages/admin-gmail-settings');
 const createAdminStaticUi = require('./pages/admin-static-ui');
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
 const { executeStockApiCall, extractValueByPath } = require('./lib/stock-api-helper');
@@ -174,7 +173,6 @@ const {
   handleTestPlanApi,
   handleSaveMarginDifferenceSettings,
 } = createAdminServiceSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
-const { sendAdminGmailSettingsPage } = createAdminGmailSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
 const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
 
 // PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
@@ -2312,14 +2310,6 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminShowOperatorsPage(admin, response, url.searchParams);
-        statusCode = 200;
-        return;
-      }
-      if (url.pathname === '/admin/settings/gmail-settings' || url.pathname === '/admin/settings/email-settings' || url.pathname === '/admin/settings/email' || url.pathname === '/admin/settings/gmail') {
-        const admin = await getSession(request);
-        if (!admin) throw httpError('login required', 401);
-        if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        await sendAdminGmailSettingsPage(admin, response);
         statusCode = 200;
         return;
       }
