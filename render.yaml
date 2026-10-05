@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: exchange-platform
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_SECRET
+        generateValue: true
+      - key: ADMIN_BOOTSTRAP_PASSWORD
+        value: Admin@123

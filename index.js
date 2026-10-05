@@ -88,7 +88,7 @@ const { fetchOperatorLookup } = require('./lib/plan-api-service');
 
 // 1) कॉन्फ़िगरेशन: PORT और HOST को चलाते समय environment से बदला जा सकता है।
 const PORT = parsePort(process.env.PORT, 3000);
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' || process.env.RENDER ? '0.0.0.0' : '0.0.0.0');
 const MAX_JSON_BYTES = 1_000_000; // अधिकतम JSON body: 1 MB
 const REQUEST_TIMEOUT_MS = 15_000;
 const ADMIN_UI_ROOT = path.resolve(__dirname, 'ADMIN UI/HTML/zendash/HTML-LTR/Horizontal-Light');
