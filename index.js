@@ -47,13 +47,21 @@
 
 const http = require('node:http');
 const { URL } = require('node:url');
-const { Pool } = require('pg');
 const crypto = require('node:crypto');
 const argon2 = require('argon2');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+
+// Load environment variables from .env if present
+try {
+  if (typeof process.loadEnvFile === 'function' && fs.existsSync('.env')) {
+    process.loadEnvFile();
+  }
+} catch (_) {}
+
+const { createSupabaseDbPool, createSupabaseClientInstance, getDatabaseUrl } = require('./lib/supabase');
 const createUserDashboardPage = require('./pages/user-dashboard');
 const createUserPlaceholderPage = require('./pages/user-placeholder');
 const createUserFundOrderPage = require('./pages/user-fund-order');
@@ -85,7 +93,7 @@ const MAX_JSON_BYTES = 1_000_000; // अधिकतम JSON body: 1 MB
 const REQUEST_TIMEOUT_MS = 15_000;
 const ADMIN_UI_ROOT = path.resolve(__dirname, 'ADMIN UI/HTML/zendash/HTML-LTR/Horizontal-Light');
 const ADMIN_ASSETS_ROOT = path.resolve(__dirname, 'ADMIN UI/HTML/zendash/assets');
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = getDatabaseUrl();
 const APP_SECRET = process.env.APP_SECRET || (process.env.NODE_ENV === 'production' ? '' : '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
 let ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || (process.env.NODE_ENV === 'production' ? undefined : 'Admin@123');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
@@ -113,15 +121,9 @@ function getClientIp(req) {
   return req.socket?.remoteAddress || '127.0.0.1';
 }
 
-const db = new Pool({
-  connectionString: DATABASE_URL,
-  max: 10,
-  connectionTimeoutMillis: 5_000,
-  idleTimeoutMillis: 30_000,
-});
-db.on('error', (err) => {
-  console.error('Database pool client error (caught):', err.message);
-});
+// Supabase PostgreSQL Pool & Supabase Client
+const db = createSupabaseDbPool();
+const supabase = createSupabaseClientInstance();
 
 const { sendUserDashboard } = createUserDashboardPage({ db, adminUiRoot: ADMIN_UI_ROOT });
 const { sendUserPanelPage } = createUserPlaceholderPage({ db });
@@ -488,8 +490,13 @@ const DATABASE_SCHEMA = `
 `;
 
 async function initializeDatabase() {
-  if (!DATABASE_URL) throw new Error('DATABASE_URL सेट नहीं है; PostgreSQL कनेक्शन आवश्यक है।');
-  if (!/^[a-f0-9]{64}$/i.test(APP_SECRET)) throw new Error('APP_SECRET में 32-byte hex secret सेट करें।');
+  const dbUrl = getDatabaseUrl();
+  if (!dbUrl) {
+    throw new Error('DATABASE_URL या SUPABASE_DB_URL सेट नहीं है। कृपया .env फ़ाइल में Supabase PostgreSQL Connection String सेट करें।');
+  }
+  if (!/^[a-f0-9]{64}$/i.test(APP_SECRET)) {
+    throw new Error('APP_SECRET में 32-byte hex secret सेट करें (जैसे 64 वर्णों का hex स्ट्रिंग)।');
+  }
   const client = await db.connect();
   try {
     await client.query('BEGIN');
@@ -3389,10 +3396,10 @@ async function startServer() {
     await initializeDatabase();
     server.listen(PORT, HOST, () => {
       console.log(`Exchange API http://${HOST}:${PORT} पर चल रहा है।`);
-      console.log('PostgreSQL कनेक्शन तैयार है।');
+      console.log('✓ Supabase / PostgreSQL डेटाबेस कनेक्शन सक्रिय और तैयार है।');
     });
   } catch (error) {
-    console.error('PostgreSQL तैयार नहीं हुआ; API शुरू नहीं की गई।', error.message);
+    console.error('✗ डेटाबेस कनेक्शन विफल; API शुरू नहीं की गई:', error.message);
     process.exitCode = 1;
     await db.end();
   }

@@ -1,13 +1,24 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Dependencies
+node_modules/
+.npm-cache/
+
+# Local database temp files (legacy)
 .local-postgres/
 .local-app-secret
-exchange-local.log
-exchange-local-error.log
+
+# Logs & PIDs
 *.log
 *.pid
-.npm-cache/
-node_modules/
-.env
+
+# OS generated files
 .DS_Store
 Thumbs.db
+
+
 
 
