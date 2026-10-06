@@ -183,6 +183,7 @@ const { sendAdminSellerApiRequestsPage } = createAdminSellerApiRequestsPage({ db
 const {
   sendAdminServiceSettingsPage,
   handleGetServices,
+  handleSaveGeneralSettings,
   handleSaveEmailSettings,
   handleTestEmail,
   handleSaveWhatsappSettings,
@@ -1303,6 +1304,78 @@ async function loginUser(request, response) {
     : await argon2.hash(password || 'invalid-password', { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 }).then(() => false);
   if (!user || !passwordMatches) throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
 
+  // Check Login OTP general setting
+  const genSettings = await getGeneralSettings();
+  if (genSettings.loginOtpEnabled) {
+    const otp = String(input.otp || '').trim();
+    const challengeKey = `login:${user.id}`;
+    if (!otp) {
+      const generatedOtp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+      await db.query(
+        `INSERT INTO otp_challenges (phone_lookup_hash, otp_hash, purpose, expires_at, attempts, sent_at, consumed_at)
+         VALUES ($1, $2, 'login_otp', now() + interval '5 minutes', 0, now(), NULL)
+         ON CONFLICT (phone_lookup_hash) DO UPDATE SET
+           otp_hash = EXCLUDED.otp_hash,
+           purpose = EXCLUDED.purpose,
+           expires_at = EXCLUDED.expires_at,
+           attempts = 0,
+           sent_at = now(),
+           consumed_at = NULL`,
+        [challengeKey, otpDigest(challengeKey, generatedOtp, 'login_otp')],
+      );
+
+      const userDetails = await db.query('SELECT email, phone_ciphertext FROM users WHERE id = $1', [user.id]);
+      const userRow = userDetails.rows[0] || {};
+      let rawMobile = '';
+      if (userRow.phone_ciphertext) {
+        try { rawMobile = decryptMobile(userRow.phone_ciphertext); } catch (_) {}
+      }
+      const otpMsg = `Exchange Security: Your Login OTP is ${generatedOtp}. Valid for 5 minutes. Do not share with anyone.`;
+      if (rawMobile) {
+        sendWhatsappNotification({
+          db,
+          decryptServiceConfig,
+          toNumber: rawMobile,
+          message: otpMsg,
+        }).catch((err) => console.warn('[WhatsApp Login OTP Error]', err.message));
+      }
+      if (userRow.email) {
+        sendEmailNotification({
+          db,
+          decryptServiceConfig,
+          toEmail: userRow.email,
+          subject: `Exchange Login OTP: ${generatedOtp}`,
+          text: otpMsg,
+          html: `<p>Your Login OTP is:</p><h2 style="letter-spacing:4px;color:#1e3a8a;">${generatedOtp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+        }).catch((err) => console.warn('[Email Login OTP Error]', err.message));
+      }
+
+      sendJson(response, 200, {
+        requireOtp: true,
+        message: 'Login OTP sent to your registered Email & WhatsApp. Please enter OTP to complete login.',
+        userId: user.username,
+        developmentOtp: !IS_PRODUCTION ? generatedOtp : undefined,
+      });
+      return;
+    }
+
+    // Verify OTP
+    const challenge = await db.query(
+      `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+       WHERE phone_lookup_hash = $1`,
+      [challengeKey],
+    );
+    const row = challenge.rows[0];
+    if (!row || row.purpose !== 'login_otp' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+      throw httpError('OTP expired or invalid. Please login again.', 400);
+    }
+    if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'login_otp'))) {
+      await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+      throw httpError('Incorrect OTP entered.', 400);
+    }
+    await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+  }
+
   const token = crypto.randomBytes(32).toString('base64url');
   const tokenHash = crypto.createHash('sha256').update(token).digest();
   await db.query(
@@ -1361,6 +1434,35 @@ function decryptServiceConfig(data) {
   const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey('admin-service-settings'), bytes.subarray(0, 12));
   decipher.setAuthTag(bytes.subarray(12, 28));
   return JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+}
+
+async function getGeneralSettings() {
+  try {
+    const row = await db.query("SELECT is_enabled, config_ciphertext FROM admin_service_settings WHERE service_key = 'general'");
+    if (row.rowCount > 0 && decryptServiceConfig) {
+      const config = decryptServiceConfig(row.rows[0].config_ciphertext);
+      return { isEnabled: row.rows[0].is_enabled, ...config };
+    }
+  } catch (err) {
+    console.warn('[General Settings] Query error:', err.message);
+  }
+  return {
+    loginOtpEnabled: false,
+    instantResponseEnabled: true,
+    instantResponseSeconds: 15,
+    complainAcceptAfterEnabled: false,
+    complainAcceptMode: 'instant',
+    complainAcceptValue: 60,
+    complainAcceptUnit: 'seconds',
+    complainMaxAgeEnabled: true,
+    complainMaxAgeDays: 7,
+    notifyPendingTxnEnabled: true,
+    notifyPendingTxnMinutes: 15,
+    stopRehitAfterEnabled: true,
+    stopRehitAfterMinutes: 2,
+    stopSameNumberAmountEnabled: true,
+    stopSameNumberAmountMinutes: 3,
+  };
 }
 
 async function quoteTransactionMargin(request, response) {
@@ -1959,10 +2061,35 @@ const AUTH_CLIENT_JS = `
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
-        const result = await post('/api/auth/login', {
+        const payload = {
           userId: byId('login-user-id').value,
           password: byId('login-password').value,
-        });
+        };
+        const otpInput = byId('login-otp');
+        if (otpInput && otpInput.value) {
+          payload.otp = otpInput.value.trim();
+        }
+        const result = await post('/api/auth/login', payload);
+        if (result.requireOtp) {
+          let otpGroup = byId('login-otp-group');
+          if (!otpGroup) {
+            otpGroup = document.createElement('div');
+            otpGroup.id = 'login-otp-group';
+            otpGroup.className = 'input-group mb-4';
+            otpGroup.innerHTML = '<input id="login-otp" type="text" class="form-control" placeholder="Enter 6-digit OTP sent to Mobile/Email" maxlength="6" required autofocus>';
+            const passEl = byId('login-password');
+            const passGroup = passEl ? passEl.closest('.input-group') : null;
+            if (passGroup && passGroup.parentNode) {
+              passGroup.parentNode.insertBefore(otpGroup, passGroup.nextSibling);
+            } else {
+              loginForm.prepend(otpGroup);
+            }
+          }
+          const submitBtn = loginForm.querySelector('button[type="submit"]');
+          if (submitBtn) submitBtn.textContent = 'Verify OTP & Login';
+          message(result.developmentOtp ? result.message + ' (Dev OTP: ' + result.developmentOtp + ')' : result.message);
+          return;
+        }
         location.assign(result.redirect);
       } catch (error) {
         message(error.message, true);
@@ -2320,6 +2447,59 @@ function startKeepAlivePinger() {
   }, INTERVAL_MS).unref();
 }
 startKeepAlivePinger();
+
+// Background Worker: Notify Seller about Pending Transactions (WhatsApp Reminder)
+function startPendingRechargeNotifier() {
+  const PENDING_CHECK_INTERVAL_MS = 60 * 1000; // Check every 60 seconds
+
+  setInterval(async () => {
+    try {
+      const genSettings = await getGeneralSettings();
+      if (!genSettings.notifyPendingTxnEnabled) return;
+      const notifyMinutes = Number(genSettings.notifyPendingTxnMinutes || 15);
+      if (notifyMinutes <= 0) return;
+
+      const pendingOrders = await db.query(
+        `SELECT r.id, r.amount_minor, r.mobile_number, r.created_at, r.seller_user_id,
+                u.phone_ciphertext, u.name, u.username
+         FROM recharge_orders r
+         JOIN users u ON u.id = r.seller_user_id
+         WHERE r.status = 'pending'
+           AND (r.response_payload->>'seller_notified') IS NULL
+           AND r.created_at <= (now() - ($1 || ' minutes')::interval)
+         LIMIT 10`,
+        [String(notifyMinutes)],
+      );
+
+      for (const row of pendingOrders.rows) {
+        let sellerPhone = '';
+        if (row.phone_ciphertext && decryptMobile) {
+          try { sellerPhone = decryptMobile(row.phone_ciphertext); } catch (_) {}
+        }
+        if (sellerPhone) {
+          const amt = (Number(row.amount_minor) / 100).toFixed(2);
+          const msg = `🔔 *Pending Recharge Reminder*\nHello ${row.name || row.username},\nRecharge of ₹${amt} for Mobile: ${row.mobile_number || 'N/A'} is currently PENDING with your API since more than ${notifyMinutes} minutes.\nKindly clear or update the recharge status ASAP.\nThank you!`;
+          await sendWhatsappNotification({
+            db,
+            decryptServiceConfig,
+            toNumber: sellerPhone,
+            message: msg,
+          }).catch((err) => console.warn('[Pending Reminder Error]', err.message));
+        }
+
+        await db.query(
+          `UPDATE recharge_orders 
+           SET response_payload = jsonb_set(COALESCE(response_payload::jsonb, '{}'::jsonb), '{seller_notified}', 'true'::jsonb)
+           WHERE id = $1`,
+          [row.id],
+        ).catch(() => {});
+      }
+    } catch (err) {
+      // Ignore background notification errors
+    }
+  }, PENDING_CHECK_INTERVAL_MS).unref();
+}
+startPendingRechargeNotifier();
 
 async function handleRequest(request, response) {
   const startedAt = Date.now();
@@ -3611,6 +3791,16 @@ async function handleRequest(request, response) {
 
         throw httpError('अमान्य action।', 400);
       }
+      if (url.pathname === '/api/admin/settings/services/general') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleSaveGeneralSettings(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services/email') {
         checkSameOrigin(request);
         const admin = await getSession(request);
@@ -3695,7 +3885,7 @@ async function handleRequest(request, response) {
         if (!orderId && !refId) throw httpError('Order ID or Ref ID is required to raise a dispute.', 400);
 
         const orderRes = await db.query(
-          `SELECT id, user_id, seller_user_id, status, dispute_status
+          `SELECT id, user_id, seller_user_id, status, dispute_status, created_at
            FROM recharge_orders
            WHERE user_id = $1 AND (id::text = $2 OR idempotency_key = $3)
            LIMIT 1`,
@@ -3707,6 +3897,29 @@ async function handleRequest(request, response) {
 
         if (order.dispute_status === 'accepted') {
           throw httpError('This transaction has already been refunded.', 400);
+        }
+
+        // Validate Dispute General Settings (complainMaxAge & complainAcceptAfter)
+        const genSettings = await getGeneralSettings();
+        if (genSettings.complainMaxAgeEnabled) {
+          const maxDays = Number(genSettings.complainMaxAgeDays || 7);
+          if (maxDays > 0) {
+            const ageDays = (Date.now() - new Date(order.created_at || Date.now()).getTime()) / (1000 * 60 * 60 * 24);
+            if (ageDays > maxDays) {
+              throw httpError(`Complaints cannot be accepted for transactions older than ${maxDays} days.`, 400);
+            }
+          }
+        }
+
+        if (genSettings.complainAcceptAfterEnabled && genSettings.complainAcceptMode === 'delay') {
+          let delaySec = Number(genSettings.complainAcceptValue || 0);
+          if (genSettings.complainAcceptUnit === 'minutes') delaySec *= 60;
+          const ageSec = (Date.now() - new Date(order.created_at || Date.now()).getTime()) / 1000;
+          if (ageSec < delaySec) {
+            const remSec = Math.ceil(delaySec - ageSec);
+            const remText = genSettings.complainAcceptUnit === 'minutes' ? `${Math.ceil(remSec / 60)} minute(s)` : `${remSec} second(s)`;
+            throw httpError(`Complain can only be submitted after ${genSettings.complainAcceptValue} ${genSettings.complainAcceptUnit || 'seconds'} of recharge. Please wait ${remText}.`, 400);
+          }
         }
 
         const dispCode = 'DSP-' + order.id.slice(0, 8).toUpperCase();

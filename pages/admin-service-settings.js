@@ -149,6 +149,129 @@ module.exports = function createAdminServiceSettingsPage({
       cursor: pointer;
     }
 
+    /* Compact General Settings List */
+    .general-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .general-list-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #edf2f7;
+      transition: background-color 0.15s ease;
+      gap: 16px;
+    }
+    .general-list-item:last-child {
+      border-bottom: none;
+    }
+    .general-list-item:hover {
+      background-color: #f8fafc;
+    }
+    .general-item-left {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      flex: 1;
+    }
+    .general-toggle-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 50px;
+      padding-top: 2px;
+    }
+    .compact-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      margin: 0;
+      cursor: pointer;
+    }
+    .compact-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .compact-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1;
+      transition: .25s ease;
+      border-radius: 24px;
+    }
+    .compact-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s ease;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .compact-switch input:checked + .compact-slider {
+      background-color: #10b981;
+    }
+    .compact-switch input:checked + .compact-slider:before {
+      transform: translateX(20px);
+    }
+    .compact-switch-badge {
+      font-size: 10px;
+      font-weight: 700;
+      margin-top: 3px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .compact-switch-badge.badge-on {
+      color: #10b981;
+    }
+    .compact-switch-badge.badge-off {
+      color: #94a3b8;
+    }
+    .general-item-content {
+      flex: 1;
+    }
+    .general-item-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 0 0 3px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .general-item-desc {
+      font-size: 12.5px;
+      color: #64748b;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .general-item-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      min-width: 260px;
+      flex-shrink: 0;
+    }
+    @media (max-width: 768px) {
+      .general-list-item {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .general-item-controls {
+        justify-content: flex-start;
+        padding-left: 66px;
+        margin-top: 8px;
+      }
+    }
+
     /* Help Callout */
     .help-callout {
       background: #eff6ff;
@@ -252,7 +375,7 @@ module.exports = function createAdminServiceSettingsPage({
             <div class="settings-titlebar">
               <div>
                 <h3><i class="fa fa-cogs mr-1"></i> System &amp; Service Settings</h3>
-                <p>Configure Email (Gmail SMTP), WhatsApp Gateway, Plan API (planapi.in / HLR Lookup), and communication channels.</p>
+                <p>Configure General Settings, Email (Gmail SMTP), WhatsApp Gateway, Plan API (planapi.in / HLR Lookup), and communication channels.</p>
               </div>
             </div>
 
@@ -261,7 +384,10 @@ module.exports = function createAdminServiceSettingsPage({
             <!-- Multi-Button Settings Selector -->
             <div class="settings-nav-card">
               <div class="settings-btn-group">
-                <button type="button" class="settings-tab-btn active" data-target="#tabEmail">
+                <button type="button" class="settings-tab-btn active" data-target="#tabGeneral">
+                  <i class="fa fa-sliders"></i> General
+                </button>
+                <button type="button" class="settings-tab-btn" data-target="#tabEmail">
                   <i class="fa fa-envelope"></i> Email (Gmail SMTP)
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabWhatsapp">
@@ -289,9 +415,244 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
+            <!-- 0. GENERAL SERVICE & SYSTEM SETTINGS TAB -->
+            <!-- ========================================== -->
+            <div class="tab-pane active" id="tabGeneral">
+              <div class="settings-panel-card">
+                <div class="settings-panel-header">
+                  <h5><i class="fa fa-sliders text-primary"></i> General Rules &amp; Service Settings</h5>
+                  <span class="badge badge-light border text-muted px-2 py-1"><i class="fa fa-cogs mr-1"></i> Global Configuration</span>
+                </div>
+                
+                <div class="p-0">
+                  <div class="general-list">
+                    
+                    <!-- 1. Login OTP -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Login OTP">
+                            <input type="checkbox" id="loginOtpEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="loginOtpEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-shield text-primary"></i> Login OTP
+                          </h6>
+                          <p class="general-item-desc">
+                            इसे ON करने से यूज़र जितनी भी बार लॉगिन करेगा उसे Mail व WhatsApp पर OTP जाएगी। OTP Fill करने पर ही लॉगिन होगा। OFF करने पर डायरेक्ट पासवर्ड से लॉगिन हो जाएगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <span class="badge badge-light border py-2 px-3 text-dark font-weight-normal">
+                          <i class="fa fa-envelope text-primary mr-1"></i> Email &amp; <i class="fa fa-whatsapp text-success mr-1"></i> WhatsApp OTP
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- 2. Instant Response Time -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Instant Response Time">
+                            <input type="checkbox" id="instantResponseEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="instantResponseEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-bolt text-warning"></i> Instant Response Time
+                          </h6>
+                          <p class="general-item-desc">
+                            Buyer जब कोई रिचार्ज रिक्वेस्ट भेजेगा तो जितना सेकंड टाइम सेट है अगर उतनी देर में हमें सेलर से Success या Fail रिस्पॉन्स मिला तो वह Live रिस्पॉन्स जाएगा। उस सेट टाइम के बाद रिस्पॉन्स आया सेलर से तो फिर यूज़र ने जो Callback URL सेट किया है उसपे रिस्पॉन्स जाएगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="instantResponseSeconds" class="form-control font-weight-bold text-center" value="15" min="1" max="180">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Seconds</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 3. Complain Accept After -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Complain Accept After">
+                            <input type="checkbox" id="complainAcceptAfterEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="complainAcceptAfterEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-clock-o text-danger"></i> Complain Accept After
+                          </h6>
+                          <p class="general-item-desc">
+                            Instant में रिचार्ज करते ही Buyer कम्प्लेन/विवाद दर्ज कर सकता है। सेकंड या मिनट सेट होने से केवल उतने समय के बाद ही Dispute/Complain स्वीकार होगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="d-flex align-items-center">
+                          <select id="complainAcceptMode" class="form-control form-control-sm font-weight-bold mr-2" style="width: 110px;">
+                            <option value="instant" selected>⚡ Instant</option>
+                            <option value="delay">⏱️ Set Time</option>
+                          </select>
+                          <div id="complainAcceptDelayWrap" class="input-group input-group-sm" style="max-width: 155px; display: none;">
+                            <input type="number" id="complainAcceptValue" class="form-control font-weight-bold text-center" value="60" min="1">
+                            <div class="input-group-append">
+                              <select id="complainAcceptUnit" class="custom-select custom-select-sm border-left-0 font-weight-bold" style="border-top-left-radius: 0; border-bottom-left-radius: 0;">
+                                <option value="seconds" selected>Sec</option>
+                                <option value="minutes">Min</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4. Do not Accept Complain After -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Do not Accept Complain After">
+                            <input type="checkbox" id="complainMaxAgeEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="complainMaxAgeEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-calendar-times-o text-secondary"></i> Do not Accept Complain After
+                          </h6>
+                          <p class="general-item-desc">
+                            इसमें जितने Days भरे होंगे, सिर्फ उतने दिन पुराने ट्रांजैक्शन का ही Complain प्राप्त होगा, उससे पुरानी तारीख के रिचार्ज का कम्प्लेन स्वीकार नहीं होगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="complainMaxAgeDays" class="form-control font-weight-bold text-center" value="7" min="1" max="90">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Days (दिन)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 5. Notify Pending Txn After -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Notify Pending Txn After">
+                            <input type="checkbox" id="notifyPendingTxnEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="notifyPendingTxnEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-whatsapp text-success"></i> Notify Pending Txn After
+                          </h6>
+                          <p class="general-item-desc">
+                            रिचार्ज जिस भी Seller के पास गया है, यदि रिचार्ज Pending रहता है तो उतने सेट मिनट के बाद Seller को WhatsApp पर पेंडिंग रिचार्ज क्लियर करने का रिमाइंडर मैसेज जाएगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="notifyPendingTxnMinutes" class="form-control font-weight-bold text-center" value="15" min="1" max="1440">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Minutes (Min)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 6. Stop Rehit After -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Stop Rehit After">
+                            <input type="checkbox" id="stopRehitAfterEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="stopRehitAfterEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-ban text-danger"></i> Stop Rehit After
+                          </h6>
+                          <p class="general-item-desc">
+                            इसमें जितने मिनट सेट होंगे, अगर पहली API से रिचार्ज फेल होने में उतने मिनट या उससे अधिक समय लगा तो रिचार्ज Buyer को भी सीधा Fail रिस्पॉन्स जाएगा, अगले सेलर पर Re-hit नहीं होगा।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="stopRehitAfterMinutes" class="form-control font-weight-bold text-center" value="2" min="1" max="60">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Minutes (Min)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 7. Stop Same Number/Amount for -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Stop Same Number/Amount for">
+                            <input type="checkbox" id="stopSameNumberAmountEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="stopSameNumberAmountEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-clone text-info"></i> Stop Same Number/Amount for
+                          </h6>
+                          <p class="general-item-desc">
+                            जो रिचार्ज 1 बार Success हो चुका है, उसी समान नंबर और समान अमाउंट का नया रिक्वेस्ट उतने सेट मिनट में किसी भी यूज़र से दोबारा स्वीकार नहीं होगा (डुप्लीकेट रिचार्ज ब्लॉक)।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="stopSameNumberAmountMinutes" class="form-control font-weight-bold text-center" value="3" min="1" max="180">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Minutes (Min)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+
+                <div class="card-footer bg-light d-flex justify-content-between align-items-center py-3 px-4">
+                  <button type="button" class="btn btn-primary px-4 font-weight-bold shadow-sm" id="btnSaveGeneralSettings">
+                    <i class="fa fa-save mr-1"></i> Save General Settings
+                  </button>
+                  <span id="generalSettingsSaveStatus" class="font-weight-bold"></span>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- ========================================== -->
             <!-- 1. EMAIL (GMAIL WEBHOOK / SMTP) SETTINGS TAB -->
             <!-- ========================================== -->
-            <div class="tab-pane active" id="tabEmail">
+            <div class="tab-pane" id="tabEmail">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
                   <h5><i class="fa fa-envelope text-primary"></i> Email Notification Configuration</h5>
@@ -986,7 +1347,38 @@ module.exports = function createAdminServiceSettingsPage({
       try {
         const res = await fetch('/api/admin/settings/services');
         const data = await res.json();
-        if (!res.ok) return;
+        // Populate General Settings
+        if (data.general) {
+          const g = data.general;
+          const setSwitch = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) {
+              el.checked = Boolean(val);
+              updateToggleBadge(id);
+            }
+          };
+          const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el && val !== undefined && val !== null) el.value = val;
+          };
+
+          setSwitch('loginOtpEnabled', g.loginOtpEnabled);
+          setSwitch('instantResponseEnabled', g.instantResponseEnabled !== false);
+          setVal('instantResponseSeconds', g.instantResponseSeconds ?? 15);
+          setSwitch('complainAcceptAfterEnabled', g.complainAcceptAfterEnabled);
+          setVal('complainAcceptMode', g.complainAcceptMode || 'instant');
+          setVal('complainAcceptValue', g.complainAcceptValue ?? 60);
+          setVal('complainAcceptUnit', g.complainAcceptUnit || 'seconds');
+          setSwitch('complainMaxAgeEnabled', g.complainMaxAgeEnabled !== false);
+          setVal('complainMaxAgeDays', g.complainMaxAgeDays ?? 7);
+          setSwitch('notifyPendingTxnEnabled', g.notifyPendingTxnEnabled !== false);
+          setVal('notifyPendingTxnMinutes', g.notifyPendingTxnMinutes ?? 15);
+          setSwitch('stopRehitAfterEnabled', g.stopRehitAfterEnabled !== false);
+          setVal('stopRehitAfterMinutes', g.stopRehitAfterMinutes ?? 2);
+          setSwitch('stopSameNumberAmountEnabled', g.stopSameNumberAmountEnabled !== false);
+          setVal('stopSameNumberAmountMinutes', g.stopSameNumberAmountMinutes ?? 3);
+          updateComplainDelayVisibility();
+        }
 
         // Populate Email
         if (data.email) {
@@ -1438,6 +1830,99 @@ module.exports = function createAdminServiceSettingsPage({
       }
     });
 
+    // General Settings Toggle Badges & Logic
+    const generalToggles = [
+      'loginOtpEnabled',
+      'instantResponseEnabled',
+      'complainAcceptAfterEnabled',
+      'complainMaxAgeEnabled',
+      'notifyPendingTxnEnabled',
+      'stopRehitAfterEnabled',
+      'stopSameNumberAmountEnabled'
+    ];
+
+    function updateToggleBadge(id) {
+      const cb = document.getElementById(id);
+      const statusEl = document.getElementById(id + 'Status');
+      if (cb && statusEl) {
+        if (cb.checked) {
+          statusEl.textContent = 'ON';
+          statusEl.className = 'compact-switch-badge badge-on';
+        } else {
+          statusEl.textContent = 'OFF';
+          statusEl.className = 'compact-switch-badge badge-off';
+        }
+      }
+    }
+
+    generalToggles.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('change', () => updateToggleBadge(id));
+      }
+    });
+
+    const complainAcceptModeSelect = document.getElementById('complainAcceptMode');
+    const complainAcceptDelayWrap = document.getElementById('complainAcceptDelayWrap');
+    function updateComplainDelayVisibility() {
+      if (complainAcceptModeSelect && complainAcceptDelayWrap) {
+        complainAcceptDelayWrap.style.display = complainAcceptModeSelect.value === 'delay' ? 'flex' : 'none';
+      }
+    }
+    if (complainAcceptModeSelect) {
+      complainAcceptModeSelect.addEventListener('change', updateComplainDelayVisibility);
+    }
+
+    // Save General Settings
+    const btnSaveGeneral = document.getElementById('btnSaveGeneralSettings');
+    const generalSaveStatus = document.getElementById('generalSettingsSaveStatus');
+
+    if (btnSaveGeneral) {
+      btnSaveGeneral.addEventListener('click', async () => {
+        btnSaveGeneral.disabled = true;
+        btnSaveGeneral.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
+        generalSaveStatus.textContent = '';
+
+        const payload = {
+          loginOtpEnabled: document.getElementById('loginOtpEnabled').checked,
+          instantResponseEnabled: document.getElementById('instantResponseEnabled').checked,
+          instantResponseSeconds: Number(document.getElementById('instantResponseSeconds').value) || 15,
+          complainAcceptAfterEnabled: document.getElementById('complainAcceptAfterEnabled').checked,
+          complainAcceptMode: document.getElementById('complainAcceptMode').value,
+          complainAcceptValue: Number(document.getElementById('complainAcceptValue').value) || 60,
+          complainAcceptUnit: document.getElementById('complainAcceptUnit').value,
+          complainMaxAgeEnabled: document.getElementById('complainMaxAgeEnabled').checked,
+          complainMaxAgeDays: Number(document.getElementById('complainMaxAgeDays').value) || 7,
+          notifyPendingTxnEnabled: document.getElementById('notifyPendingTxnEnabled').checked,
+          notifyPendingTxnMinutes: Number(document.getElementById('notifyPendingTxnMinutes').value) || 15,
+          stopRehitAfterEnabled: document.getElementById('stopRehitAfterEnabled').checked,
+          stopRehitAfterMinutes: Number(document.getElementById('stopRehitAfterMinutes').value) || 2,
+          stopSameNumberAmountEnabled: document.getElementById('stopSameNumberAmountEnabled').checked,
+          stopSameNumberAmountMinutes: Number(document.getElementById('stopSameNumberAmountMinutes').value) || 3,
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/general', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || data.message || 'Failed to save general settings.');
+          generalSaveStatus.textContent = '✓ General settings saved successfully!';
+          generalSaveStatus.className = 'text-success font-weight-bold ml-3';
+          setTimeout(() => { generalSaveStatus.textContent = ''; }, 3500);
+        } catch (err) {
+          generalSaveStatus.textContent = '✗ ' + err.message;
+          generalSaveStatus.className = 'text-danger font-weight-bold ml-3';
+        } finally {
+          btnSaveGeneral.disabled = false;
+          btnSaveGeneral.innerHTML = '<i class="fa fa-save mr-1"></i> Save General Settings';
+        }
+      });
+    }
+
     function escapeHtml(str) {
       if (!str) return '';
       return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
@@ -1472,7 +1957,62 @@ module.exports = function createAdminServiceSettingsPage({
         ...config,
       };
     }
+    if (!result.general) {
+      result.general = {
+        isEnabled: true,
+        loginOtpEnabled: false,
+        instantResponseEnabled: true,
+        instantResponseSeconds: 15,
+        complainAcceptAfterEnabled: false,
+        complainAcceptMode: 'instant',
+        complainAcceptValue: 60,
+        complainAcceptUnit: 'seconds',
+        complainMaxAgeEnabled: true,
+        complainMaxAgeDays: 7,
+        notifyPendingTxnEnabled: true,
+        notifyPendingTxnMinutes: 15,
+        stopRehitAfterEnabled: true,
+        stopRehitAfterMinutes: 2,
+        stopSameNumberAmountEnabled: true,
+        stopSameNumberAmountMinutes: 3,
+      };
+    }
     sendJson(response, 200, result);
+  }
+
+  /**
+   * POST /api/admin/settings/services/general - Save General Settings configuration
+   */
+  async function handleSaveGeneralSettings(request, response, input) {
+    const config = {
+      loginOtpEnabled: Boolean(input.loginOtpEnabled),
+      instantResponseEnabled: Boolean(input.instantResponseEnabled),
+      instantResponseSeconds: Math.max(1, parseInt(input.instantResponseSeconds, 10) || 15),
+      complainAcceptAfterEnabled: Boolean(input.complainAcceptAfterEnabled),
+      complainAcceptMode: input.complainAcceptMode === 'delay' ? 'delay' : 'instant',
+      complainAcceptValue: Math.max(0, parseInt(input.complainAcceptValue, 10) || 0),
+      complainAcceptUnit: input.complainAcceptUnit === 'minutes' ? 'minutes' : 'seconds',
+      complainMaxAgeEnabled: Boolean(input.complainMaxAgeEnabled),
+      complainMaxAgeDays: Math.max(1, parseInt(input.complainMaxAgeDays, 10) || 7),
+      notifyPendingTxnEnabled: Boolean(input.notifyPendingTxnEnabled),
+      notifyPendingTxnMinutes: Math.max(1, parseInt(input.notifyPendingTxnMinutes, 10) || 15),
+      stopRehitAfterEnabled: Boolean(input.stopRehitAfterEnabled),
+      stopRehitAfterMinutes: Math.max(1, parseInt(input.stopRehitAfterMinutes, 10) || 2),
+      stopSameNumberAmountEnabled: Boolean(input.stopSameNumberAmountEnabled),
+      stopSameNumberAmountMinutes: Math.max(1, parseInt(input.stopSameNumberAmountMinutes, 10) || 3),
+    };
+
+    const ciphertext = encryptServiceConfig(config);
+
+    await db.query(
+      `INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext, updated_at)
+       VALUES ('general', true, $1, now())
+       ON CONFLICT (service_key) DO UPDATE
+       SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
+      [ciphertext],
+    );
+
+    sendJson(response, 200, { ok: true, message: 'General settings saved successfully.', general: config });
   }
 
   /**
@@ -1986,6 +2526,7 @@ module.exports = function createAdminServiceSettingsPage({
   return {
     sendAdminServiceSettingsPage,
     handleGetServices,
+    handleSaveGeneralSettings,
     handleSaveEmailSettings,
     handleTestEmail,
     handleSaveWhatsappSettings,
