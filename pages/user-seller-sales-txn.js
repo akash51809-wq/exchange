@@ -91,7 +91,7 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
 
     const query = `
       SELECT r.id, r.user_id AS buyer_user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
-             r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor,
+             r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor, r.seller_margin_minor,
              r.status, r.idempotency_key, r.provider_reference, r.with_gst, r.created_at,
              o.operator_code, u.username AS buyer_username, u.name AS buyer_name
       FROM recharge_orders r
@@ -112,8 +112,9 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
     let failedCount = 0;
 
     const rowsHtml = result.rows.map((row, index) => {
+      const rowSellerMargin = BigInt(row.seller_margin_minor || row.margin_minor || '0');
       totalAmountMinor += BigInt(row.amount_minor || '0');
-      totalMarginMinor += BigInt(row.margin_minor || '0');
+      totalMarginMinor += rowSellerMargin;
       if (row.status === 'successful') successCount++;
       else if (row.status === 'pending' || row.status === 'processing') pendingCount++;
       else if (row.status === 'failed') failedCount++;
@@ -139,7 +140,7 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       }
 
       const formattedAmount = `₹${formatMinorUnits(row.amount_minor)}`;
-      const formattedMargin = `₹${formatMinorUnits(row.margin_minor || '0')}`;
+      const formattedMargin = `₹${formatMinorUnits(rowSellerMargin.toString())}`;
       const shortTxnId = String(row.id).slice(0, 13) + '...';
 
       return `

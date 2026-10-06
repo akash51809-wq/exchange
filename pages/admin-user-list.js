@@ -8,6 +8,9 @@ module.exports = function createAdminUserListPage({ db, formatMinorUnits, decryp
     // Keep the list usable during a rolling local restart when the app code is newer than its database.
     await db.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS address TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS pincode TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS state TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS city TEXT;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS parent_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
       CREATE INDEX IF NOT EXISTS users_parent_user_idx ON users (parent_user_id) WHERE parent_user_id IS NOT NULL;
     `);
@@ -49,7 +52,7 @@ module.exports = function createAdminUserListPage({ db, formatMinorUnits, decryp
     filters.page = Math.min(filters.page, pageCount);
     values.push(pageSize, (filters.page - 1) * pageSize);
     const result = await db.query(
-      `SELECT u.id, u.username, u.name, u.email, u.phone_ciphertext, u.status, u.created_at, u.address,
+      `SELECT u.id, u.username, u.name, u.email, u.phone_ciphertext, u.status, u.created_at, u.address, u.pincode, u.state, u.city,
               p.id AS parent_id, p.username AS parent_username, p.name AS parent_name,
               COALESCE(w.balance_minor, 0) AS balance_minor
        FROM users u LEFT JOIN wallets w ON w.user_id=u.id AND w.currency='INR'
@@ -58,14 +61,15 @@ module.exports = function createAdminUserListPage({ db, formatMinorUnits, decryp
       values,
     );
     const rows = result.rows.map((user, index) => {
-      let mobile = 'â€”';
-      try { mobile = decryptMobile(user.phone_ciphertext) || 'â€”'; } catch { mobile = 'Unavailable'; }
+      let mobile = '—';
+      try { mobile = decryptMobile(user.phone_ciphertext) || '—'; } catch { mobile = 'Unavailable'; }
       const balance = formatMinorUnits(user.balance_minor);
       const created = new Date(user.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
       const parentName = user.parent_name ? `${user.parent_name} (${user.parent_username})` : '';
-      const details = { id: user.id, userId: user.username, name: user.name, email: user.email || '', mobile, address: user.address || '', parentUser: user.parent_username || '', parentName, status: user.status, joined: created, balance };
+      const fullAddress = [user.address, user.city, user.state && user.pincode ? `${user.state} - ${user.pincode}` : (user.state || user.pincode)].filter(Boolean).join(', ');
+      const details = { id: user.id, userId: user.username, name: user.name, email: user.email || '', mobile, address: user.address || '', pincode: user.pincode || '', state: user.state || '', city: user.city || '', parentUser: user.parent_username || '', parentName, status: user.status, joined: created, balance };
       const encoded = escapeHtml(JSON.stringify(details));
-      return `<tr><td>${(filters.page - 1) * pageSize + index + 1}</td><td><div class="user-main"><span class="user-avatar">${escapeHtml(user.name.trim().slice(0, 1).toUpperCase())}</span><span><strong>${escapeHtml(user.name)}</strong><small>ID: ${escapeHtml(user.username)}</small><small>Joined: ${escapeHtml(created)}</small></span></div></td><td>${user.parent_name ? `<strong>${escapeHtml(user.parent_name)}</strong><small class="subline">${escapeHtml(user.parent_username)}</small>` : '<span class="text-muted">Not assigned</span>'}</td><td><strong>${escapeHtml(mobile)}</strong><small class="subline">${escapeHtml(user.email || 'ईमेल दर्ज नहीं')}</small></td><td>${user.address ? escapeHtml(user.address) : '<span class="text-muted">Not provided</span>'}</td><td><span class="balance-chip" data-balance-user="${user.id}" title="Live wallet balance">₹${balance}</span></td><td><select class="form-control form-control-sm status-select" data-status-user="${user.id}" aria-label="Status for ${escapeHtml(user.username)}"><option value="active"${user.status === 'active' ? ' selected' : ''}>Active</option><option value="blocked"${user.status === 'blocked' ? ' selected' : ''}>Inactive</option><option value="pending"${user.status === 'pending' ? ' selected' : ''}>Pending</option></select></td><td><div class="user-actions"><button class="user-action edit" type="button" title="Edit" data-edit="${encoded}"><i class="fa fa-pencil"></i></button><button class="user-action password" type="button" title="Change Password" data-password="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-key"></i></button><button class="user-action setting" type="button" title="Settings" data-setting="${encoded}"><i class="fa fa-cog"></i></button><button class="user-action margin" type="button" title="Margin" data-margin="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-percent"></i></button><button class="user-action setup" type="button" title="Setup" data-setup="${encoded}"><i class="fa fa-sliders"></i></button><button class="user-action delete" type="button" title="Delete" data-delete="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-trash"></i></button></div></td></tr>`;
+      return `<tr><td>${(filters.page - 1) * pageSize + index + 1}</td><td><div class="user-main"><span class="user-avatar">${escapeHtml(user.name.trim().slice(0, 1).toUpperCase())}</span><span><strong>${escapeHtml(user.name)}</strong><small>ID: ${escapeHtml(user.username)}</small><small>Joined: ${escapeHtml(created)}</small></span></div></td><td>${user.parent_name ? `<strong>${escapeHtml(user.parent_name)}</strong><small class="subline">${escapeHtml(user.parent_username)}</small>` : '<span class="text-muted">Not assigned</span>'}</td><td><strong>${escapeHtml(mobile)}</strong><small class="subline">${escapeHtml(user.email || 'ईमेल दर्ज नहीं')}</small></td><td>${fullAddress ? escapeHtml(fullAddress) : '<span class="text-muted">Not provided</span>'}</td><td><span class="balance-chip" data-balance-user="${user.id}" title="Live wallet balance">₹${balance}</span></td><td><select class="form-control form-control-sm status-select" data-status-user="${user.id}" aria-label="Status for ${escapeHtml(user.username)}"><option value="active"${user.status === 'active' ? ' selected' : ''}>Active</option><option value="blocked"${user.status === 'blocked' ? ' selected' : ''}>Inactive</option><option value="pending"${user.status === 'pending' ? ' selected' : ''}>Pending</option></select></td><td><div class="user-actions"><button class="user-action edit" type="button" title="Edit" data-edit="${encoded}"><i class="fa fa-pencil"></i></button><button class="user-action password" type="button" title="Change Password" data-password="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-key"></i></button><button class="user-action setting" type="button" title="Settings" data-setting="${encoded}"><i class="fa fa-cog"></i></button><button class="user-action margin" type="button" title="Margin" data-margin="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-percent"></i></button><button class="user-action setup" type="button" title="Setup" data-setup="${encoded}"><i class="fa fa-sliders"></i></button><button class="user-action delete" type="button" title="Delete" data-delete="${user.id}" data-user="${escapeHtml(user.username)}"><i class="fa fa-trash"></i></button></div></td></tr>`;
     }).join('');
     const pageUrl = (page) => {
       const params = new URLSearchParams();

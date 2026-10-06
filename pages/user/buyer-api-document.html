@@ -116,6 +116,7 @@
             <a href="#dispute-request"><i class="fa fa-exclamation-triangle"></i> Dispute Request</a>
             <a href="#callback-url"><i class="fa fa-reply-all"></i> Callback URL</a>
             <a href="#operator-code"><i class="fa fa-list-ul"></i> Operator Code</a>
+            <a href="#response-codes"><i class="fa fa-shield"></i> Response Codes</a>
           </nav>
         </div>
 
@@ -757,6 +758,73 @@
                 </tbody>
               </table>
 
+            </div>
+          </section>
+
+          <!-- 7. Response Codes & Error List -->
+          <section class="doc-card" id="response-codes">
+            <div class="doc-card-header">
+              <span>7. API Response Codes &amp; Error List</span>
+              <span class="badge">SPECIFICATION</span>
+            </div>
+            <div class="doc-card-body">
+              <p class="text-muted mb-2" style="font-size: 11.5px;">Standard HTTP and application-level response codes returned by the Buyer API:</p>
+              <table class="table-compact">
+                <thead>
+                  <tr>
+                    <th style="width: 14%;">CODE</th>
+                    <th style="width: 18%;">STATUS</th>
+                    <th>RESPONSE MESSAGE &amp; DESCRIPTION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>235</code></td>
+                    <td><span class="st-success">SUCCESS</span></td>
+                    <td><code>SUCCESS- Dispute Accepcted</code> &mdash; Dispute request registered and accepted.</td>
+                  </tr>
+                  <tr>
+                    <td><code>106</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Account Suspended -Contact To Admin</code> &mdash; Buyer user account is suspended.</td>
+                  </tr>
+                  <tr>
+                    <td><code>109</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Duplicate Reference Id</code> &mdash; A transaction with this reference ID already exists.</td>
+                  </tr>
+                  <tr>
+                    <td><code>128</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Insufficient Fund</code> &mdash; Insufficient INR balance in buyer wallet.</td>
+                  </tr>
+                  <tr>
+                    <td><code>142</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Mobile length should be between {Min-Max}</code> &mdash; Mobile number length does not match operator required length.</td>
+                  </tr>
+                  <tr>
+                    <td><code>145</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Invalid API key</code> &mdash; Username or API token is missing, incorrect, or invalid.</td>
+                  </tr>
+                  <tr>
+                    <td><code>160</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- No sellers available for selected margin</code> &mdash; No seller matches or satisfies buyer configured purchase margin limit.</td>
+                  </tr>
+                  <tr>
+                    <td><code>242</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Bad Voucher or This Denomination Is Not Allowed</code> &mdash; Denomination outside operator limits or marked as stopped.</td>
+                  </tr>
+                  <tr>
+                    <td><code>270</code></td>
+                    <td><span class="st-failure">FAILED</span></td>
+                    <td><code>FAILED- Service has been temporarily suspended for Your account for more detail contact to customer care</code> &mdash; Service access is temporarily suspended.</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </section>
 
