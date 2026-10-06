@@ -251,7 +251,7 @@ module.exports = function createAdminBankApprovalPage({ db }) {
       'referrer-policy': 'no-referrer',
       'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
     });
-    response.end(await addPanelChrome(html, { role: 'admin', userId: admin.id, db }));
+    response.end(await addPanelChrome(html, { role: 'admin', userId: admin.id, db, currentPath: '/admin/payment/bank-approval' }));
   }
 
   return { sendAdminBankApprovalPage };

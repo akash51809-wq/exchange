@@ -91,11 +91,18 @@ async function serveAdminUi(urlPath, method, response) {
     if (!['login-2.html', 'register-2.html', 'forgot-password-2.html'].includes(path.basename(filePath))) {
       htmlBody = useFullWidthContainers(htmlBody);
       // Replace any existing template menu list with only the created system menus
-      htmlBody = htmlBody.replace(
-        /<ul\s+class=["']horizontalMenu-list["'][^>]*>[\s\S]*?<\/ul>/i,
-        `<ul class="horizontalMenu-list">${renderAdminMenuList('/admin/')}</ul>`,
-      );
-      htmlBody = await addPanelChrome(htmlBody, { role: 'admin' });
+      if (/<nav\s+class=["']horizontalMenu[^"']*["'][^>]*>[\s\S]*?<\/nav>/i.test(htmlBody)) {
+        htmlBody = htmlBody.replace(
+          /<nav\s+class=["']horizontalMenu[^"']*["'][^>]*>[\s\S]*?<\/nav>/i,
+          `<nav class="horizontalMenu clearfix"><ul class="horizontalMenu-list">${renderAdminMenuList(urlPath || '/admin/')}</ul></nav>`,
+        );
+      } else {
+        htmlBody = htmlBody.replace(
+          /<ul\s+class=["']horizontalMenu-list["'][^>]*>[\s\S]*?<\/ul>/i,
+          `<ul class="horizontalMenu-list">${renderAdminMenuList(urlPath || '/admin/')}</ul>`,
+        );
+      }
+      htmlBody = await addPanelChrome(htmlBody, { role: 'admin', currentPath: urlPath || '/admin/' });
     }
   }
   const contentLength = htmlBody === undefined ? fileInfo.size : Buffer.byteLength(htmlBody);

@@ -45,7 +45,7 @@ module.exports = function createAdminShowOperatorsPage({ db, formatMinorUnits })
       'x-content-type-options': 'nosniff', 'x-frame-options': 'DENY', 'referrer-policy': 'no-referrer',
       'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
     });
-    response.end(await addPanelChrome(html, { role: 'admin' }));
+    response.end(await addPanelChrome(html, { role: 'admin', currentPath: '/admin/settings/show-operator' }));
   }
 
   return { sendAdminShowOperatorsPage };

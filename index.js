@@ -3045,7 +3045,7 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
-      if (url.pathname === '/admin/payment/invoice' || url.pathname === '/admin/payment/invoices') {
+      if (url.pathname === '/admin/payment/invoice' || url.pathname === '/admin/payment/invoices' || url.pathname === '/admin/invoice' || url.pathname === '/admin/invoices') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
