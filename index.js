@@ -74,6 +74,7 @@ const createUserBuyerPurchaseTxnPage = require('./pages/user-buyer-purchase-txn'
 const createUserSellerSalesDisputePage = require('./pages/user-seller-sales-dispute');
 const createAdminDisputesPage = require('./pages/admin-disputes');
 const createAdminFundRequestsPage = require('./pages/admin-fund-requests');
+const createAdminBankListPage = require('./pages/admin-bank-list');
 const createAdminCreateOperatorPage = require('./pages/admin-create-operator');
 const createAdminShowOperatorsPage = require('./pages/admin-show-operators');
 const createAdminUserListPage = require('./pages/admin-user-list');
@@ -159,6 +160,7 @@ const {
   handleGetCredentials,
 } = createBuyerApiService({ db, formatMinorUnits, encryptMobile, decryptMobile, decryptSellerApiConfig, decryptServiceConfig, fetchOperatorLookup, sendJson, httpError });
 const { sendAdminFundRequestsPage } = createAdminFundRequestsPage({ db, formatMinorUnits, decryptFundField });
+const { sendAdminBankListPage } = createAdminBankListPage({ db });
 const { sendAdminCreateOperatorPage } = createAdminCreateOperatorPage({});
 const { sendAdminShowOperatorsPage } = createAdminShowOperatorsPage({ db, formatMinorUnits });
 const { sendAdminUserListPage } = createAdminUserListPage({ db, formatMinorUnits, decryptMobile, normalizeIndianMobile, lookupMobile });
@@ -301,6 +303,34 @@ const DATABASE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS wallet_fund_requests_status_created_idx ON wallet_fund_requests (status, created_at DESC);
   CREATE INDEX IF NOT EXISTS wallet_fund_requests_account_hash_idx ON wallet_fund_requests (user_id, source_account_hash);
   CREATE INDEX IF NOT EXISTS wallet_fund_requests_transaction_hash_idx ON wallet_fund_requests (user_id, transaction_id_hash);
+
+  CREATE TABLE IF NOT EXISTS admin_bank_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    bank_name TEXT NOT NULL,
+    branch_name TEXT,
+    account_holder TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    ifsc_code TEXT NOT NULL,
+    billing_info TEXT DEFAULT '24×7 Auto Billing',
+    cash_deposit_charges NUMERIC(10,2) DEFAULT 0.00,
+    upi_id TEXT,
+    qr_image_url TEXT,
+    bank_logo_url TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+
+  ALTER TABLE wallet_fund_requests DROP CONSTRAINT IF EXISTS wallet_fund_requests_bank_code_check;
+  ALTER TABLE wallet_fund_requests ADD COLUMN IF NOT EXISTS bank_account_id UUID REFERENCES admin_bank_accounts(id) ON DELETE SET NULL;
+  ALTER TABLE wallet_fund_requests ADD COLUMN IF NOT EXISTS bank_name TEXT;
+  ALTER TABLE wallet_fund_requests ADD COLUMN IF NOT EXISTS deposit_account TEXT;
+
+  INSERT INTO admin_bank_accounts (bank_name, branch_name, account_holder, account_number, ifsc_code, billing_info, cash_deposit_charges, is_active)
+  SELECT 'AXIS BANK', 'ETAWAH', 'S3 SOLUTION & SERVICE COMPANY', '93849335819868', 'UTIB0CCH274', '24×7 Auto Billing Above ₹5000', 500.00, true
+  WHERE NOT EXISTS (SELECT 1 FROM admin_bank_accounts);
+
+  UPDATE admin_service_settings SET is_enabled = true WHERE service_key = 'whatsapp' AND is_enabled = false;
 
   CREATE TABLE IF NOT EXISTS operator_definitions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1266,7 +1296,28 @@ async function createFundRequest(request, response) {
   const [whole, fraction = ''] = amount.split('.');
   const amountMinor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
   if (amountMinor < 1n || amountMinor > 1_000_000_000n) throw httpError('à¤°à¤¾à¤¶à¤¿ 0.01 à¤¸à¥‡ 10,000,000 à¤°à¥‚à¤ªà¤¯à¥‡ à¤•à¥‡ à¤¬à¥€à¤š à¤¹à¥‹à¤¨à¥€ à¤šà¤¾à¤¹à¤¿à¤à¥¤', 400);
-  if (input.bankCode !== 'axis') throw httpError('à¤¬à¥ˆà¤‚à¤• à¤šà¥à¤¨à¤¨à¤¾ à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  const bankId = String(input.bankId || '').trim();
+  const bankCode = String(input.bankCode || '').trim();
+  let bankRow = null;
+
+  if (bankId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bankId)) {
+    const bRes = await db.query('SELECT id, bank_name, account_number FROM admin_bank_accounts WHERE id = $1 AND is_active = true', [bankId]);
+    if (bRes.rowCount > 0) bankRow = bRes.rows[0];
+  }
+
+  if (!bankRow && bankCode) {
+    const bRes = await db.query('SELECT id, bank_name, account_number FROM admin_bank_accounts WHERE lower(bank_name) = lower($1) AND is_active = true LIMIT 1', [bankCode]);
+    if (bRes.rowCount > 0) bankRow = bRes.rows[0];
+  }
+
+  if (!bankRow) {
+    const bRes = await db.query('SELECT id, bank_name, account_number FROM admin_bank_accounts WHERE is_active = true ORDER BY created_at ASC LIMIT 1');
+    if (bRes.rowCount > 0) bankRow = bRes.rows[0];
+  }
+
+  if (!bankRow) {
+    throw httpError('सक्रिय बैंक विवरण उपलब्ध नहीं है। कृपया व्यवस्थापक से संपर्क करें।', 400);
+  }
   const paymentModes = ['Bank Transfer', 'UPI', 'Cash Deposit'];
   if (!paymentModes.includes(input.paymentMode)) throw httpError('à¤­à¥à¤—à¤¤à¤¾à¤¨ à¤¤à¤°à¥€à¤•à¤¾ à¤šà¥à¤¨à¤¨à¤¾ à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
   if (input.walletType !== 'Prepaid') throw httpError('à¤…à¤­à¥€ à¤•à¥‡à¤µà¤² Prepaid wallet à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¹à¥ˆà¥¤', 400);
@@ -1298,11 +1349,11 @@ async function createFundRequest(request, response) {
 
   const saved = await db.query(
     `INSERT INTO wallet_fund_requests
-       (user_id, amount_minor, bank_code, payment_mode, wallet_type, proof_mime, proof_data,
+       (user_id, amount_minor, bank_code, bank_account_id, bank_name, deposit_account, payment_mode, wallet_type, proof_mime, proof_data,
         source_account_ciphertext, source_account_hash, transaction_id_ciphertext, transaction_id_hash)
-     VALUES ($1, $2, 'axis', $3, 'Prepaid', $4, $5, $6, $7, $8, $9) RETURNING id, status, created_at`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'Prepaid', $8, $9, $10, $11, $12, $13) RETURNING id, status, created_at`,
     [
-      user.id, amountMinor.toString(), input.paymentMode, proofMime, proofData ? encryptFundProof(proofData) : null,
+      user.id, amountMinor.toString(), bankRow.bank_name.toLowerCase(), bankRow.id, bankRow.bank_name, bankRow.account_number, input.paymentMode, proofMime, proofData ? encryptFundProof(proofData) : null,
       accountNumber ? encryptFundField(accountNumber, 'account') : null,
       accountNumber ? fundFieldHash('account', accountNumber) : null,
       transactionId ? encryptFundField(transactionId, 'transaction') : null,
@@ -1359,6 +1410,104 @@ async function decideFundRequest(request, response, requestId) {
   } finally {
     client.release();
   }
+
+async function handleGetAdminBanks(request, response) {
+  const admin = await getSession(request);
+  if (!admin || admin.role !== 'admin') throw httpError('Unauthorized', 401);
+  const result = await db.query('SELECT * FROM admin_bank_accounts ORDER BY created_at ASC');
+  sendJson(response, 200, { ok: true, banks: result.rows });
+}
+
+async function handleCreateAdminBank(request, response) {
+  const admin = await getSession(request);
+  if (!admin || admin.role !== 'admin') throw httpError('Unauthorized', 401);
+  const input = await readJson(request);
+
+  const bankName = String(input.bank_name || '').trim();
+  const branchName = String(input.branch_name || '').trim();
+  const accountHolder = String(input.account_holder || '').trim();
+  const accountNumber = String(input.account_number || '').trim();
+  const ifscCode = String(input.ifsc_code || '').trim().toUpperCase();
+  const billingInfo = String(input.billing_info || '24×7 Auto Billing').trim();
+  const cashDepositCharges = parseFloat(input.cash_deposit_charges) || 0;
+  const upiId = String(input.upi_id || '').trim();
+  const qrImageUrl = String(input.qr_image_url || '').trim();
+  const isActive = input.is_active !== undefined ? Boolean(input.is_active) : true;
+
+  if (!bankName) throw httpError('Bank name is required.', 400);
+  if (!accountHolder) throw httpError('Account holder name is required.', 400);
+  if (!accountNumber) throw httpError('Account number is required.', 400);
+  if (!ifscCode) throw httpError('IFSC code is required.', 400);
+
+  const result = await db.query(
+    `INSERT INTO admin_bank_accounts
+       (bank_name, branch_name, account_holder, account_number, ifsc_code, billing_info,
+        cash_deposit_charges, upi_id, qr_image_url, is_active, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+     RETURNING *`,
+    [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive]
+  );
+  sendJson(response, 201, { ok: true, bank: result.rows[0], message: 'Bank account added successfully.' });
+}
+
+async function handleUpdateAdminBank(request, response, bankId) {
+  const admin = await getSession(request);
+  if (!admin || admin.role !== 'admin') throw httpError('Unauthorized', 401);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bankId)) throw httpError('Invalid Bank ID', 400);
+  const input = await readJson(request);
+
+  const bankName = String(input.bank_name || '').trim();
+  const branchName = String(input.branch_name || '').trim();
+  const accountHolder = String(input.account_holder || '').trim();
+  const accountNumber = String(input.account_number || '').trim();
+  const ifscCode = String(input.ifsc_code || '').trim().toUpperCase();
+  const billingInfo = String(input.billing_info || '24×7 Auto Billing').trim();
+  const cashDepositCharges = parseFloat(input.cash_deposit_charges) || 0;
+  const upiId = String(input.upi_id || '').trim();
+  const qrImageUrl = String(input.qr_image_url || '').trim();
+  const isActive = input.is_active !== undefined ? Boolean(input.is_active) : true;
+
+  if (!bankName) throw httpError('Bank name is required.', 400);
+  if (!accountHolder) throw httpError('Account holder name is required.', 400);
+  if (!accountNumber) throw httpError('Account number is required.', 400);
+  if (!ifscCode) throw httpError('IFSC code is required.', 400);
+
+  const result = await db.query(
+    `UPDATE admin_bank_accounts
+     SET bank_name = $1, branch_name = $2, account_holder = $3, account_number = $4,
+         ifsc_code = $5, billing_info = $6, cash_deposit_charges = $7, upi_id = $8,
+         qr_image_url = $9, is_active = $10, updated_at = now()
+     WHERE id = $11
+     RETURNING *`,
+    [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive, bankId]
+  );
+  if (!result.rowCount) throw httpError('Bank account not found.', 404);
+  sendJson(response, 200, { ok: true, bank: result.rows[0], message: 'Bank account updated successfully.' });
+}
+
+async function handleToggleAdminBank(request, response, bankId) {
+  const admin = await getSession(request);
+  if (!admin || admin.role !== 'admin') throw httpError('Unauthorized', 401);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bankId)) throw httpError('Invalid Bank ID', 400);
+  const input = await readJson(request);
+  const isActive = Boolean(input.is_active);
+
+  const result = await db.query(
+    'UPDATE admin_bank_accounts SET is_active = $1, updated_at = now() WHERE id = $2 RETURNING *',
+    [isActive, bankId]
+  );
+  if (!result.rowCount) throw httpError('Bank account not found.', 404);
+  sendJson(response, 200, { ok: true, is_active: result.rows[0].is_active, message: 'Bank status updated.' });
+}
+
+async function handleDeleteAdminBank(request, response, bankId) {
+  const admin = await getSession(request);
+  if (!admin || admin.role !== 'admin') throw httpError('Unauthorized', 401);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bankId)) throw httpError('Invalid Bank ID', 400);
+
+  await db.query('DELETE FROM admin_bank_accounts WHERE id = $1', [bankId]);
+  sendJson(response, 200, { ok: true, message: 'Bank account deleted.' });
+}
 }
 
 async function createOperator(request, response) {
@@ -2499,6 +2648,19 @@ async function handleRequest(request, response) {
         return;
       }
 
+      if (url.pathname === '/admin/payment/bank-list' || url.pathname === '/admin/payment/banks') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminBankListPage(admin, response);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/payment/banks') {
+        await handleGetAdminBanks(request, response);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/admin/payment/fund-request') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -3166,6 +3328,30 @@ async function handleRequest(request, response) {
         if (action === 'update') await updateOperator(request, response, operatorId);
         else if (action === 'status') await setOperatorStatus(request, response, operatorId);
         else await deleteOperator(request, response, operatorId);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/payment/banks' && request.method === 'POST') {
+        await handleCreateAdminBank(request, response);
+        statusCode = response.statusCode || 201;
+        return;
+      }
+      const adminBankUpdateMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})$/i);
+      if (adminBankUpdateMatch) {
+        if (request.method === 'PUT' || request.method === 'POST') {
+          await handleUpdateAdminBank(request, response, adminBankUpdateMatch[1]);
+          statusCode = response.statusCode || 200;
+          return;
+        }
+        if (request.method === 'DELETE') {
+          await handleDeleteAdminBank(request, response, adminBankUpdateMatch[1]);
+          statusCode = response.statusCode || 200;
+          return;
+        }
+      }
+      const adminBankToggleMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})\/toggle$/i);
+      if (adminBankToggleMatch) {
+        await handleToggleAdminBank(request, response, adminBankToggleMatch[1]);
         statusCode = response.statusCode || 200;
         return;
       }
