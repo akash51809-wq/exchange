@@ -298,9 +298,10 @@ document.querySelectorAll('[data-toggle-action]').forEach(btn => {
       const res = await fetch(\`/api/admin/payment/banks/\${id}/toggle\`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify({ is_active: !cur }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Failed to update status');
       location.reload();
     } catch (err) {
@@ -359,9 +360,10 @@ document.getElementById('bankForm').addEventListener('submit', async (e) => {
     const res = await fetch(url, {
       method,
       headers: { 'content-type': 'application/json' },
+      credentials: 'same-origin',
       body: JSON.stringify(payload),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to save bank account');
     $('#bankModal').modal('hide');
     location.reload();

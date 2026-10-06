@@ -1410,6 +1410,7 @@ async function decideFundRequest(request, response, requestId) {
   } finally {
     client.release();
   }
+}
 
 async function handleGetAdminBanks(request, response) {
   const admin = await getSession(request);
@@ -1507,7 +1508,6 @@ async function handleDeleteAdminBank(request, response, bankId) {
 
   await db.query('DELETE FROM admin_bank_accounts WHERE id = $1', [bankId]);
   sendJson(response, 200, { ok: true, message: 'Bank account deleted.' });
-}
 }
 
 async function createOperator(request, response) {
@@ -2433,6 +2433,57 @@ async function handleRequest(request, response) {
       return;
     }
 
+    // Admin Payment Bank Management Page & API (All HTTP Methods)
+    if (url.pathname === '/admin/payment/bank-list' || url.pathname === '/admin/payment/banks') {
+      const admin = await getSession(request);
+      if (!admin) throw httpError('login required', 401);
+      if (admin.role !== 'admin') throw httpError('admin access required', 403);
+      await sendAdminBankListPage(admin, response);
+      statusCode = 200;
+      return;
+    }
+    if (url.pathname === '/api/admin/payment/banks') {
+      if (request.method === 'GET' || request.method === 'HEAD') {
+        await handleGetAdminBanks(request, response);
+        statusCode = 200;
+        return;
+      }
+      if (request.method === 'POST') {
+        await handleCreateAdminBank(request, response);
+        statusCode = response.statusCode || 201;
+        return;
+      }
+    }
+    const adminBankUpdateMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})$/i);
+    if (adminBankUpdateMatch) {
+      if (request.method === 'PUT' || request.method === 'POST') {
+        await handleUpdateAdminBank(request, response, adminBankUpdateMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (request.method === 'DELETE') {
+        await handleDeleteAdminBank(request, response, adminBankUpdateMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+    }
+    const adminBankToggleMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})\/toggle$/i);
+    if (adminBankToggleMatch) {
+      if (request.method === 'PATCH' || request.method === 'POST') {
+        await handleToggleAdminBank(request, response, adminBankToggleMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+    }
+    const adminBankDeleteMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})\/delete$/i);
+    if (adminBankDeleteMatch) {
+      if (request.method === 'POST' || request.method === 'DELETE') {
+        await handleDeleteAdminBank(request, response, adminBankDeleteMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+    }
+
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (url.pathname === '/api/seller/api-settings') {
         const session = await getSession(request);
@@ -2648,19 +2699,7 @@ async function handleRequest(request, response) {
         return;
       }
 
-      if (url.pathname === '/admin/payment/bank-list' || url.pathname === '/admin/payment/banks') {
-        const admin = await getSession(request);
-        if (!admin) throw httpError('login required', 401);
-        if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        await sendAdminBankListPage(admin, response);
-        statusCode = 200;
-        return;
-      }
-      if (url.pathname === '/api/admin/payment/banks') {
-        await handleGetAdminBanks(request, response);
-        statusCode = 200;
-        return;
-      }
+      
       if (url.pathname === '/admin/payment/fund-request') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -3331,30 +3370,7 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
-      if (url.pathname === '/api/admin/payment/banks' && request.method === 'POST') {
-        await handleCreateAdminBank(request, response);
-        statusCode = response.statusCode || 201;
-        return;
-      }
-      const adminBankUpdateMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})$/i);
-      if (adminBankUpdateMatch) {
-        if (request.method === 'PUT' || request.method === 'POST') {
-          await handleUpdateAdminBank(request, response, adminBankUpdateMatch[1]);
-          statusCode = response.statusCode || 200;
-          return;
-        }
-        if (request.method === 'DELETE') {
-          await handleDeleteAdminBank(request, response, adminBankUpdateMatch[1]);
-          statusCode = response.statusCode || 200;
-          return;
-        }
-      }
-      const adminBankToggleMatch = url.pathname.match(/^\/api\/admin\/payment\/banks\/([0-9a-f-]{36})\/toggle$/i);
-      if (adminBankToggleMatch) {
-        await handleToggleAdminBank(request, response, adminBankToggleMatch[1]);
-        statusCode = response.statusCode || 200;
-        return;
-      }
+      
       if (url.pathname === '/api/fund-requests') {
         await createFundRequest(request, response);
         statusCode = response.statusCode || 201;
