@@ -151,8 +151,8 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
         disputeCell = `<span class="badge badge-success" style="background:#10b981;font-size:11px;" title="Refunded"><i class="fa fa-check-circle"></i> Dispute: Accepted</span>`;
       } else if (dStatus === 'rejected') {
         disputeCell = `<span class="badge badge-danger" style="background:#ef4444;font-size:11px;" title="Note: ${escapeHtml(row.dispute_resolution_note || 'Rejected by seller')}"><i class="fa fa-times-circle"></i> Dispute: Rejected</span>`;
-      } else {
-        // Can dispute if not refunded and not already disputed
+      } else if (row.status === 'successful') {
+        // Can dispute if recharge was successful and not already disputed
         disputeCell = `
           <button type="button" class="btn btn-xs btn-outline-danger btn-raise-dispute"
             data-id="${escapeHtml(row.id)}"
@@ -163,6 +163,8 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
             <i class="fa fa-exclamation-triangle"></i> Dispute
           </button>
         `;
+      } else {
+        disputeCell = '<span class="text-muted small">-</span>';
       }
 
       return `

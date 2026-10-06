@@ -53,6 +53,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
+const net = require('node:net');
 
 // Load environment variables from .env if present
 try {
@@ -81,6 +82,20 @@ const createAdminUserListPage = require('./pages/admin-user-list');
 const createAdminSellerApiRequestsPage = require('./pages/admin-seller-api-requests');
 const createAdminServiceSettingsPage = require('./pages/admin-service-settings');
 const createAdminStaticUi = require('./pages/admin-static-ui');
+const createUserFundRedeemPage = require('./pages/user-fund-redeem');
+const createUserFundStatementPage = require('./pages/user-fund-statement');
+const createAdminBankApprovalPage = require('./pages/admin-bank-approval');
+const createAdminPayoutRequestsPage = require('./pages/admin-payout-requests');
+const createUserBuyerRechargeDisputePage = require('./pages/user-buyer-recharge-dispute');
+const createUserBuyerPurchaseRefundPage = require('./pages/user-buyer-purchase-refund');
+const createUserBuyerOperatorWisePurchasePage = require('./pages/user-buyer-operator-wise-purchase');
+const createUserSellerOperatorWiseSalePage = require('./pages/user-seller-operator-wise-sale');
+const createUserSellerSalesPendingPage = require('./pages/user-seller-sales-pending');
+const createUserReportAccountStatementPage = require('./pages/user-report-account-statement');
+const createUserInvoicePages = require('./pages/user-invoice');
+const createAdminInvoicePage = require('./pages/admin-invoice');
+const createUserSettingIpPage = require('./pages/user-setting-ip');
+const createUserSettingCallbackPage = require('./pages/user-setting-callback');
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
 const { executeStockApiCall, extractValueByPath } = require('./lib/stock-api-helper');
 const createBuyerApiService = require('./lib/buyer-api-service');
@@ -177,6 +192,20 @@ const {
   handleSaveMarginDifferenceSettings,
 } = createAdminServiceSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
 const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
+const { sendUserFundRedeemPage } = createUserFundRedeemPage({ db, formatMinorUnits });
+const { sendUserFundStatementPage } = createUserFundStatementPage({ db, formatMinorUnits });
+const { sendAdminBankApprovalPage } = createAdminBankApprovalPage({ db });
+const { sendAdminPayoutRequestsPage } = createAdminPayoutRequestsPage({ db, formatMinorUnits });
+const { sendUserBuyerRechargeDisputePage } = createUserBuyerRechargeDisputePage({ db, formatMinorUnits, decryptMobile });
+const { sendUserBuyerPurchaseRefundPage } = createUserBuyerPurchaseRefundPage({ db, formatMinorUnits, decryptMobile });
+const { sendUserBuyerOperatorWisePurchasePage } = createUserBuyerOperatorWisePurchasePage({ db, formatMinorUnits });
+const { sendUserSellerOperatorWiseSalePage } = createUserSellerOperatorWiseSalePage({ db, formatMinorUnits });
+const { sendUserSellerSalesPendingPage } = createUserSellerSalesPendingPage({ db, formatMinorUnits, decryptMobile });
+const { sendUserReportAccountStatementPage } = createUserReportAccountStatementPage({ db, formatMinorUnits });
+const { sendUserInvoicePage } = createUserInvoicePages({ db, formatMinorUnits });
+const { sendAdminInvoicePage } = createAdminInvoicePage({ db, formatMinorUnits });
+const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
+const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 
 // PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
 // पैसे की रकम छोटे मुद्रा-इकाइयों में BIGINT है; floating point नहीं।
@@ -524,6 +553,67 @@ const DATABASE_SCHEMA = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
+
+  CREATE TABLE IF NOT EXISTS user_bank_accounts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    bank_name TEXT NOT NULL,
+    account_holder_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    ifsc_code TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    admin_note TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    approved_at TIMESTAMPTZ
+  );
+  CREATE INDEX IF NOT EXISTS user_bank_accounts_user_idx ON user_bank_accounts (user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS user_bank_accounts_status_idx ON user_bank_accounts (status, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS payout_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    bank_account_id UUID REFERENCES user_bank_accounts(id) ON DELETE SET NULL,
+    bank_name TEXT NOT NULL,
+    account_holder_name TEXT NOT NULL,
+    account_number TEXT NOT NULL,
+    ifsc_code TEXT NOT NULL,
+    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'success', 'rejected')),
+    utr_number TEXT,
+    admin_remark TEXT,
+    processed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    processed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS payout_requests_user_idx ON payout_requests (user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS payout_requests_status_idx ON payout_requests (status, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS user_whitelisted_ips (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ip_address TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'approved',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, ip_address)
+  );
+  CREATE INDEX IF NOT EXISTS user_whitelisted_ips_user_idx ON user_whitelisted_ips (user_id);
+
+  CREATE TABLE IF NOT EXISTS seller_gst_invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    month_year TEXT NOT NULL,
+    redeem_amount_minor BIGINT NOT NULL DEFAULT 0,
+    file_name TEXT,
+    file_mime TEXT,
+    file_data BYTEA,
+    status TEXT NOT NULL DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'verified', 'rejected')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, month_year)
+  );
+  CREATE INDEX IF NOT EXISTS seller_gst_invoices_user_idx ON seller_gst_invoices (user_id, month_year);
 `;
 
 async function initializeDatabase() {
@@ -597,7 +687,7 @@ function sendJson(response, statusCode, payload, extraHeaders = {}) {
   response.end(body);
 }
 
-function readJson(request) {
+function readJson(request, maxBytes = MAX_JSON_BYTES) {
   return new Promise((resolve, reject) => {
     const contentType = String(request.headers['content-type'] || '')
       .split(';', 1)[0]
@@ -611,7 +701,7 @@ function readJson(request) {
     }
 
     const declaredLength = Number(request.headers['content-length']);
-    if (Number.isFinite(declaredLength) && declaredLength > MAX_JSON_BYTES) {
+    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
       reject(Object.assign(new Error('अनुरोध का आकार सीमा से बड़ा है।'), { statusCode: 413 }));
       request.resume();
       return;
@@ -621,7 +711,7 @@ function readJson(request) {
     const chunks = [];
     request.on('data', (chunk) => {
       size += chunk.length;
-      if (size > MAX_JSON_BYTES) {
+      if (size > maxBytes) {
         reject(Object.assign(new Error('अनुरोध का आकार सीमा से बड़ा है।'), { statusCode: 413 }));
         request.destroy();
         return;
@@ -2665,10 +2755,38 @@ async function handleRequest(request, response) {
           await sendUserBuyerMarginPage(session, response, url.searchParams);
         } else if (url.pathname === '/seller/sales-txn') {
           await sendUserSellerSalesTxnPage(session, response, url.searchParams);
-        } else if (url.pathname === '/buyer/purchase-txn' || url.pathname === '/buyer/recharge-dispute') {
+        } else if (url.pathname === '/buyer/purchase-txn') {
           await sendUserBuyerPurchaseTxnPage(session, response, url.searchParams);
+        } else if (url.pathname === '/buyer/recharge-dispute') {
+          await sendUserBuyerRechargeDisputePage(session, response, url.searchParams);
+        } else if (url.pathname === '/buyer/purchase-refund') {
+          await sendUserBuyerPurchaseRefundPage(session, response, url.searchParams);
+        } else if (url.pathname === '/buyer/operator-wise-purchase') {
+          await sendUserBuyerOperatorWisePurchasePage(session, response, url.searchParams);
+        } else if (url.pathname === '/seller/operator-wise-sale') {
+          await sendUserSellerOperatorWiseSalePage(session, response, url.searchParams);
+        } else if (url.pathname === '/seller/sales-pending') {
+          await sendUserSellerSalesPendingPage(session, response, url.searchParams);
         } else if (url.pathname === '/seller/sales-dispute') {
           await sendUserSellerSalesDisputePage(session, response, url.searchParams);
+        } else if (url.pathname === '/fund/redeem') {
+          await sendUserFundRedeemPage(session, response, url.searchParams);
+        } else if (url.pathname === '/fund/statement') {
+          await sendUserFundStatementPage(session, response, url.searchParams);
+        } else if (url.pathname === '/report/account-statement') {
+          await sendUserReportAccountStatementPage(session, response, url.searchParams);
+        } else if (url.pathname === '/invoice/buyer-gst-invoice' || url.pathname === '/invoice/buyer-invoice') {
+          await sendUserInvoicePage(session, 'buyer-gst', response, url.searchParams);
+        } else if (url.pathname === '/invoice/seller-gst-invoice' || url.pathname === '/invoice/seller-invoice') {
+          await sendUserInvoicePage(session, 'seller-gst', response, url.searchParams);
+        } else if (url.pathname === '/invoice/buyer-commission-invoice') {
+          await sendUserInvoicePage(session, 'buyer-commission', response, url.searchParams);
+        } else if (url.pathname === '/invoice/seller-commission-invoice') {
+          await sendUserInvoicePage(session, 'seller-commission', response, url.searchParams);
+        } else if (url.pathname === '/setting/ip-setting') {
+          await sendUserSettingIpPage(session, response);
+        } else if (url.pathname === '/setting/add-callback') {
+          await sendUserSettingCallbackPage(session, response);
         } else if (url.pathname === '/available-stock' || url.pathname === '/buyer/available-margin' || url.pathname === '/buyer/available-stock') {
           await sendUserAvailableStockPage(session, response, url.searchParams);
         } else {
@@ -2705,6 +2823,77 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminFundRequestsPage(admin, response);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/payment/bank-approval' || url.pathname === '/admin/fund/bank-approval' || url.pathname === '/admin/payment/bank-approvals') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminBankApprovalPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/payment/payout-request' || url.pathname === '/admin/fund/payout-request' || url.pathname === '/admin/payment/payout-requests') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminPayoutRequestsPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/payment/invoice' || url.pathname === '/admin/payment/invoices') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminInvoicePage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/user/invoices/download') {
+        const user = await getSession(request);
+        if (!user) throw httpError('login required', 401);
+        const month = String(url.searchParams.get('month') || '').trim();
+        if (!month) throw httpError('Month parameter required', 400);
+        const res = await db.query(
+          'SELECT file_name, file_mime, file_data FROM seller_gst_invoices WHERE user_id = $1 AND month_year = $2',
+          [user.id, month],
+        );
+        if (!res.rowCount || !res.rows[0].file_data) {
+          throw httpError('Invoice file not found.', 404);
+        }
+        const file = res.rows[0];
+        response.writeHead(200, {
+          'content-type': file.file_mime || 'application/pdf',
+          'content-disposition': `inline; filename="${encodeURIComponent(file.file_name || 'invoice')}"`,
+          'content-length': file.file_data.length,
+          'cache-control': 'private, max-age=3600',
+        });
+        response.end(file.file_data);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/invoices/download') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const invoiceId = String(url.searchParams.get('id') || '').trim();
+        if (!invoiceId) throw httpError('Invoice ID required', 400);
+        const res = await db.query(
+          'SELECT file_name, file_mime, file_data FROM seller_gst_invoices WHERE id = $1',
+          [invoiceId],
+        );
+        if (!res.rowCount || !res.rows[0].file_data) {
+          throw httpError('Invoice file not found.', 404);
+        }
+        const file = res.rows[0];
+        response.writeHead(200, {
+          'content-type': file.file_mime || 'application/pdf',
+          'content-disposition': `inline; filename="${encodeURIComponent(file.file_name || 'invoice')}"`,
+          'content-length': file.file_data.length,
+          'cache-control': 'private, max-age=3600',
+        });
+        response.end(file.file_data);
         statusCode = 200;
         return;
       }
@@ -3555,7 +3744,7 @@ async function handleRequest(request, response) {
         try {
           await client.query('BEGIN');
           const orderRes = await client.query(
-            'SELECT id, user_id, seller_user_id, amount_minor, cost_minor, margin_minor, status, dispute_status FROM recharge_orders WHERE id = $1 AND seller_user_id = $2 FOR UPDATE',
+            'SELECT id, user_id, seller_user_id, amount_minor, cost_minor, margin_minor, seller_margin_minor, mobile_number, status, dispute_status FROM recharge_orders WHERE id = $1 AND seller_user_id = $2 FOR UPDATE',
             [orderId, session.id],
           );
           if (!orderRes.rowCount) throw httpError('Dispute not found or not assigned to your account.', 404);
@@ -3566,30 +3755,90 @@ async function handleRequest(request, response) {
           }
 
           const buyerId = order.user_id;
-          const refundAmountMinor = BigInt(order.cost_minor || order.amount_minor || '0');
+          const sellerId = order.seller_user_id;
+          const amountMinor = BigInt(order.amount_minor || '0');
+          const buyerMarginMinor = BigInt(order.margin_minor || '0');
+          const sellerMarginMinor = BigInt(order.seller_margin_minor || '0');
+          const mobileStr = order.mobile_number || '';
 
+          // 1. Lock and update Buyer Wallet: Credit recharge amount, Debit buyer commission
           const buyerWalletRes = await client.query(
             "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
             [buyerId],
           );
           if (!buyerWalletRes.rowCount) throw httpError('Buyer wallet not found.', 404);
           const buyerWallet = buyerWalletRes.rows[0];
-          const newBal = BigInt(buyerWallet.balance_minor || 0) + refundAmountMinor;
 
+          // Credit full recharge amount to buyer
           await client.query(
-            "UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-            [newBal, buyerId],
+            "UPDATE wallets SET balance_minor = balance_minor + $1, updated_at = now() WHERE id = $2",
+            [amountMinor, buyerWallet.id],
           );
-
-          const refundKey = `disp_ref_${order.id}`;
           await client.query(
             `INSERT INTO wallet_entries (
-               wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key
+               wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description
              ) VALUES (
-               $1, $2, $3, 'refund', 'recharge_dispute_refund', $4, $5
+               $1, $2, $3, 'refund', 'recharge_refund', $4, $5, $6
              ) ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
-            [buyerWallet.id, buyerId, refundAmountMinor, order.id, refundKey],
+            [buyerWallet.id, buyerId, amountMinor, order.id, `disp_ref_amt_${order.id}`, `Recharge Refund (${mobileStr})`],
           );
+
+          // Debit buyer's commission previously given on this recharge
+          if (buyerMarginMinor > 0n) {
+            await client.query(
+              "UPDATE wallets SET balance_minor = balance_minor - $1, updated_at = now() WHERE id = $2",
+              [buyerMarginMinor, buyerWallet.id],
+            );
+            await client.query(
+              `INSERT INTO wallet_entries (
+                 wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description
+               ) VALUES (
+                 $1, $2, $3, 'debit', 'commission_reversal', $4, $5, $6
+               ) ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
+              [buyerWallet.id, buyerId, buyerMarginMinor, order.id, `disp_comm_rev_${order.id}`, `Recharge Refund Commission Reversal (${mobileStr})`],
+            );
+          }
+
+          // 2. Lock and update Seller Wallet: Debit recharge amount, Credit seller commission
+          if (sellerId) {
+            const sellerWalletRes = await client.query(
+              "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
+              [sellerId],
+            );
+            if (sellerWalletRes.rowCount > 0) {
+              const sellerWallet = sellerWalletRes.rows[0];
+
+              // Debit full recharge amount from seller
+              await client.query(
+                "UPDATE wallets SET balance_minor = balance_minor - $1, updated_at = now() WHERE id = $2",
+                [amountMinor, sellerWallet.id],
+              );
+              await client.query(
+                `INSERT INTO wallet_entries (
+                   wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description
+                 ) VALUES (
+                   $1, $2, $3, 'debit', 'seller_refund_debit', $4, $5, $6
+                 ) ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
+                [sellerWallet.id, sellerId, amountMinor, order.id, `disp_seller_deb_${order.id}`, `Recharge Dispute Refund Debit (${mobileStr})`],
+              );
+
+              // Credit seller's commission/margin back to seller
+              if (sellerMarginMinor > 0n) {
+                await client.query(
+                  "UPDATE wallets SET balance_minor = balance_minor + $1, updated_at = now() WHERE id = $2",
+                  [sellerMarginMinor, sellerWallet.id],
+                );
+                await client.query(
+                  `INSERT INTO wallet_entries (
+                     wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description
+                   ) VALUES (
+                     $1, $2, $3, 'credit', 'seller_commission_return', $4, $5, $6
+                   ) ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
+                  [sellerWallet.id, sellerId, sellerMarginMinor, order.id, `disp_seller_comm_${order.id}`, `Recharge Dispute Margin Return (${mobileStr})`],
+                );
+              }
+            }
+          }
 
           await client.query(
             `UPDATE recharge_orders
@@ -3772,6 +4021,641 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+
+      if (url.pathname === '/api/user/banks') {
+        checkSameOrigin(request);
+        const user = await getSession(request);
+        if (!user) throw httpError('login required', 401);
+
+        if (request.method === 'GET') {
+          const res = await db.query(
+            `SELECT id, bank_name, account_holder_name, account_number, ifsc_code, status, admin_note, created_at
+             FROM user_bank_accounts
+             WHERE user_id = $1
+             ORDER BY created_at DESC`,
+            [user.id],
+          );
+          sendJson(response, 200, { ok: true, banks: res.rows });
+          statusCode = 200;
+          return;
+        }
+
+        const input = await readJson(request);
+        const bankName = String(input.bankName || '').trim();
+        const accountHolderName = String(input.accountHolderName || '').trim();
+        const accountNumber = String(input.accountNumber || '').trim();
+        const ifscCode = String(input.ifscCode || '').trim().toUpperCase();
+
+        if (!bankName || !accountHolderName || !accountNumber || !ifscCode) {
+          throw httpError('All bank details are required.', 400);
+        }
+        if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifscCode)) {
+          throw httpError('Invalid IFSC code format (e.g. SBIN0001234).', 400);
+        }
+        if (accountNumber.length < 6 || accountNumber.length > 35) {
+          throw httpError('Invalid account number length.', 400);
+        }
+
+        await db.query(
+          `INSERT INTO user_bank_accounts (user_id, bank_name, account_holder_name, account_number, ifsc_code, status)
+           VALUES ($1, $2, $3, $4, $5, 'pending')`,
+          [user.id, bankName, accountHolderName, accountNumber, ifscCode],
+        );
+
+        sendJson(response, 201, { ok: true, message: 'Bank account submitted successfully for admin approval.' });
+        statusCode = 201;
+        return;
+      }
+
+      if (url.pathname === '/api/user/payout-request') {
+        checkSameOrigin(request);
+        const user = await getSession(request);
+        if (!user) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const bankAccountId = String(input.bankAccountId || '').trim();
+        const amount = Number(input.amount);
+
+        if (!bankAccountId) throw httpError('Bank account is required.', 400);
+        if (!Number.isFinite(amount) || amount <= 0) throw httpError('Invalid payout amount.', 400);
+
+        const amountMinor = BigInt(Math.round(amount * 100));
+        if (amountMinor <= 0n) throw httpError('Invalid payout amount.', 400);
+
+        const bankRes = await db.query(
+          `SELECT id, bank_name, account_holder_name, account_number, ifsc_code, status
+           FROM user_bank_accounts
+           WHERE id = $1 AND user_id = $2`,
+          [bankAccountId, user.id],
+        );
+        if (!bankRes.rowCount) throw httpError('Bank account not found.', 404);
+        const bank = bankRes.rows[0];
+        if (bank.status !== 'approved') {
+          throw httpError('Selected bank account is not approved yet.', 400);
+        }
+
+        const client = await db.connect();
+        try {
+          await client.query('BEGIN');
+          const walletRes = await client.query(
+            `SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
+            [user.id],
+          );
+          if (!walletRes.rowCount) throw httpError('Wallet not found.', 404);
+          const wallet = walletRes.rows[0];
+          const currentBalance = BigInt(wallet.balance_minor || 0);
+
+          if (currentBalance < amountMinor) {
+            throw httpError('अपर्याप्त बैलेंस (Insufficient wallet balance for this payout).', 400);
+          }
+
+          const newBalance = currentBalance - amountMinor;
+          await client.query(
+            `UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2`,
+            [newBalance, wallet.id],
+          );
+
+          const payoutRes = await client.query(
+            `INSERT INTO payout_requests (
+               user_id, bank_account_id, bank_name, account_holder_name,
+               account_number, ifsc_code, amount_minor, status
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+             RETURNING id`,
+            [user.id, bank.id, bank.bank_name, bank.account_holder_name, bank.account_number, bank.ifsc_code, amountMinor],
+          );
+          const payoutId = payoutRes.rows[0].id;
+
+          const refKey = `payout_req_${payoutId}`;
+          await client.query(
+            `INSERT INTO wallet_entries (
+               wallet_id, user_id, amount_minor, entry_type, reference_type,
+               reference_id, idempotency_key, description
+             ) VALUES ($1, $2, $3, 'debit', 'payout_request', $4, $5, $6)`,
+            [
+              wallet.id,
+              user.id,
+              amountMinor,
+              payoutId,
+              refKey,
+              `Payout redeem to ${bank.bank_name} (${bank.account_number})`,
+            ],
+          );
+
+          await client.query('COMMIT');
+          sendJson(response, 201, {
+            ok: true,
+            message: 'Payout request submitted successfully. Amount debited from wallet.',
+            payoutId,
+          });
+          statusCode = 201;
+          return;
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+
+      if (url.pathname === '/api/admin/payment/banks/review') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const bankId = String(input.id || '').trim();
+        const action = String(input.action || '').trim().toLowerCase();
+        const note = String(input.note || '').trim();
+
+        if (!bankId) throw httpError('Bank ID is required.', 400);
+        if (!['approve', 'reject'].includes(action)) throw httpError('Invalid action.', 400);
+
+        if (action === 'approve') {
+          const res = await db.query(
+            `UPDATE user_bank_accounts
+             SET status = 'approved', admin_note = $1, approved_at = now(), updated_at = now()
+             WHERE id = $2 AND status = 'pending'`,
+            [note || 'Approved by Admin', bankId],
+          );
+          if (!res.rowCount) throw httpError('Bank account not found or already reviewed.', 404);
+        } else {
+          const res = await db.query(
+            `UPDATE user_bank_accounts
+             SET status = 'rejected', admin_note = $1, updated_at = now()
+             WHERE id = $2 AND status = 'pending'`,
+            [note || 'Rejected by Admin', bankId],
+          );
+          if (!res.rowCount) throw httpError('Bank account not found or already reviewed.', 404);
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          message: action === 'approve' ? 'Bank account approved successfully.' : 'Bank account rejected.',
+        });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/admin/payment/payouts/process') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const payoutId = String(input.id || '').trim();
+        const action = String(input.action || '').trim().toLowerCase();
+        const utr = String(input.utr || '').trim();
+        const remark = String(input.remark || '').trim();
+
+        if (!payoutId) throw httpError('Payout ID is required.', 400);
+        if (!['success', 'reject'].includes(action)) throw httpError('Invalid action.', 400);
+        if (action === 'success' && !utr) throw httpError('UTR / Reference number is required for success.', 400);
+
+        const client = await db.connect();
+        try {
+          await client.query('BEGIN');
+          const payoutRes = await client.query(
+            `SELECT * FROM payout_requests WHERE id = $1 FOR UPDATE`,
+            [payoutId],
+          );
+          if (!payoutRes.rowCount) throw httpError('Payout request not found.', 404);
+          const payout = payoutRes.rows[0];
+          if (payout.status !== 'pending') {
+            throw httpError('Payout request is already processed.', 400);
+          }
+
+          if (action === 'success') {
+            await client.query(
+              `UPDATE payout_requests
+               SET status = 'success', utr_number = $1, admin_remark = $2,
+                   processed_by = $3, processed_at = now(), updated_at = now()
+               WHERE id = $4`,
+              [utr, remark || 'Processed successfully', admin.id, payoutId],
+            );
+          } else {
+            const refundAmountMinor = BigInt(payout.amount_minor);
+            const walletRes = await client.query(
+              `SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
+              [payout.user_id],
+            );
+            if (!walletRes.rowCount) throw httpError('User wallet not found.', 404);
+            const wallet = walletRes.rows[0];
+            const newBal = BigInt(wallet.balance_minor || 0) + refundAmountMinor;
+
+            await client.query(
+              `UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2`,
+              [newBal, wallet.id],
+            );
+
+            const refundKey = `payout_refund_${payoutId}`;
+            await client.query(
+              `INSERT INTO wallet_entries (
+                 wallet_id, user_id, amount_minor, entry_type, reference_type,
+                 reference_id, idempotency_key, description
+               ) VALUES ($1, $2, $3, 'credit', 'payout_refund', $4, $5, $6)
+               ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
+              [
+                wallet.id,
+                payout.user_id,
+                refundAmountMinor,
+                payoutId,
+                refundKey,
+                `Refund for rejected payout: ${remark || 'Admin rejected'}`,
+              ],
+            );
+
+            await client.query(
+              `UPDATE payout_requests
+               SET status = 'rejected', admin_remark = $1,
+                   processed_by = $2, processed_at = now(), updated_at = now()
+               WHERE id = $3`,
+              [remark || 'Rejected by Admin', admin.id, payoutId],
+            );
+          }
+
+          await client.query('COMMIT');
+          sendJson(response, 200, {
+            ok: true,
+            message: action === 'success' ? 'Payout marked as success.' : 'Payout rejected and amount refunded to user wallet.',
+          });
+          statusCode = 200;
+          return;
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+
+      if (url.pathname === '/api/user/ip/send-otp') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const action = String(input.action || 'add').toLowerCase();
+        const ip = String(input.ip || '').trim();
+
+        const userRow = await db.query(
+          'SELECT email, phone_ciphertext FROM users WHERE id = $1',
+          [session.id],
+        );
+        if (!userRow.rowCount) throw httpError('User not found.', 404);
+        const user = userRow.rows[0];
+
+        let mobile = '';
+        try {
+          mobile = decryptMobile(user.phone_ciphertext);
+        } catch {}
+        const email = user.email || '';
+
+        if (!mobile && !email) {
+          throw httpError('No registered mobile or email found for this user.', 400);
+        }
+
+        const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+        const challengeKey = `user_ip:${session.id}`;
+        const purpose = action === 'delete' ? 'ip_delete' : 'ip_add';
+
+        await db.query(
+          `INSERT INTO otp_challenges (phone_lookup_hash, otp_hash, purpose, expires_at, attempts, sent_at, consumed_at)
+           VALUES ($1, $2, $3, now() + interval '5 minutes', 0, now(), NULL)
+           ON CONFLICT (phone_lookup_hash) DO UPDATE SET
+             otp_hash = EXCLUDED.otp_hash,
+             purpose = EXCLUDED.purpose,
+             expires_at = EXCLUDED.expires_at,
+             attempts = 0,
+             sent_at = now(),
+             consumed_at = NULL`,
+          [challengeKey, otpDigest(challengeKey, otp, purpose), purpose],
+        );
+
+        const actionText = action === 'delete' ? 'deleting whitelisted IP' : `whitelisting IP ${ip || ''}`.trim();
+        const waMsg = `Exchange Security: Your OTP for ${actionText} is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
+
+        if (mobile) {
+          sendWhatsappNotification({
+            db,
+            decryptServiceConfig,
+            toNumber: mobile,
+            message: waMsg,
+          }).catch((err) => console.warn('[WhatsApp IP OTP Send Error]', err.message));
+        }
+
+        if (email) {
+          sendEmailNotification({
+            db,
+            decryptServiceConfig,
+            toEmail: email,
+            subject: `IP Security OTP: ${otp}`,
+            text: waMsg,
+            html: `<p>Your 6-digit OTP for <strong>${actionText}</strong> is:</p><h2 style="letter-spacing:4px;color:#2563eb;">${otp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+          }).catch((err) => console.warn('[Email IP OTP Send Error]', err.message));
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          message: 'OTP sent successfully to both your WhatsApp and Email.',
+          developmentOtp: !IS_PRODUCTION ? otp : undefined,
+        });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/ip/verify-add') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const ip = String(input.ip || '').trim();
+        const otp = String(input.otp || '').trim();
+
+        if (!ip) throw httpError('IP address is required.', 400);
+        if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
+
+        const isIp = net.isIP(ip);
+        if (!isIp) throw httpError('Invalid IP address format.', 400);
+
+        const challengeKey = `user_ip:${session.id}`;
+        const challenge = await db.query(
+          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+           WHERE phone_lookup_hash = $1`,
+          [challengeKey],
+        );
+        const row = challenge.rows[0];
+        if (!row || row.purpose !== 'ip_add' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+        }
+        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_add'))) {
+          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+          throw httpError('Incorrect OTP entered.', 400);
+        }
+
+        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+
+        await db.query(
+          `INSERT INTO user_whitelisted_ips (user_id, ip_address, status)
+           VALUES ($1, $2, 'active')
+           ON CONFLICT (user_id, ip_address) DO UPDATE SET status = 'active'`,
+          [session.id, ip],
+        );
+
+        sendJson(response, 200, { ok: true, message: `IP ${ip} approved and added successfully.` });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/ip/verify-delete') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const id = String(input.id || '').trim();
+        const otp = String(input.otp || '').trim();
+
+        if (!id) throw httpError('IP ID is required.', 400);
+        if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
+
+        const challengeKey = `user_ip:${session.id}`;
+        const challenge = await db.query(
+          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+           WHERE phone_lookup_hash = $1`,
+          [challengeKey],
+        );
+        const row = challenge.rows[0];
+        if (!row || row.purpose !== 'ip_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+        }
+        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_delete'))) {
+          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+          throw httpError('Incorrect OTP entered.', 400);
+        }
+
+        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+
+        await db.query(
+          `DELETE FROM user_whitelisted_ips WHERE id = $1 AND user_id = $2`,
+          [id, session.id],
+        );
+
+        sendJson(response, 200, { ok: true, message: 'IP address removed successfully.' });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/callback/send-otp') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const action = String(input.action || 'save').toLowerCase();
+
+        const userRow = await db.query(
+          'SELECT email, phone_ciphertext FROM users WHERE id = $1',
+          [session.id],
+        );
+        if (!userRow.rowCount) throw httpError('User not found.', 404);
+        const user = userRow.rows[0];
+
+        let mobile = '';
+        try {
+          mobile = decryptMobile(user.phone_ciphertext);
+        } catch {}
+        const email = user.email || '';
+
+        if (!mobile && !email) {
+          throw httpError('No registered mobile or email found for this user.', 400);
+        }
+
+        const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
+        const challengeKey = `user_cb:${session.id}`;
+        const purpose = action === 'delete' ? 'callback_delete' : 'callback_save';
+
+        await db.query(
+          `INSERT INTO otp_challenges (phone_lookup_hash, otp_hash, purpose, expires_at, attempts, sent_at, consumed_at)
+           VALUES ($1, $2, $3, now() + interval '5 minutes', 0, now(), NULL)
+           ON CONFLICT (phone_lookup_hash) DO UPDATE SET
+             otp_hash = EXCLUDED.otp_hash,
+             purpose = EXCLUDED.purpose,
+             expires_at = EXCLUDED.expires_at,
+             attempts = 0,
+             sent_at = now(),
+             consumed_at = NULL`,
+          [challengeKey, otpDigest(challengeKey, otp, purpose), purpose],
+        );
+
+        const actionText = action === 'delete' ? 'removing callback URL' : 'updating recharge callback URL';
+        const waMsg = `Exchange Security: Your OTP for ${actionText} is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
+
+        if (mobile) {
+          sendWhatsappNotification({
+            db,
+            decryptServiceConfig,
+            toNumber: mobile,
+            message: waMsg,
+          }).catch((err) => console.warn('[WhatsApp Callback OTP Send Error]', err.message));
+        }
+
+        if (email) {
+          sendEmailNotification({
+            db,
+            decryptServiceConfig,
+            toEmail: email,
+            subject: `Callback URL Security OTP: ${otp}`,
+            text: waMsg,
+            html: `<p>Your 6-digit OTP for <strong>${actionText}</strong> is:</p><h2 style="letter-spacing:4px;color:#2563eb;">${otp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+          }).catch((err) => console.warn('[Email Callback OTP Send Error]', err.message));
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          message: 'OTP sent successfully to both your WhatsApp and Email.',
+          developmentOtp: !IS_PRODUCTION ? otp : undefined,
+        });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/callback/verify-save') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const callbackUrl = String(input.callbackUrl || '').trim();
+        const otp = String(input.otp || '').trim();
+
+        if (!callbackUrl || (!callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://'))) {
+          throw httpError('Valid HTTP or HTTPS callback URL is required.', 400);
+        }
+        if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
+
+        const challengeKey = `user_cb:${session.id}`;
+        const challenge = await db.query(
+          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+           WHERE phone_lookup_hash = $1`,
+          [challengeKey],
+        );
+        const row = challenge.rows[0];
+        if (!row || row.purpose !== 'callback_save' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+        }
+        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_save'))) {
+          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+          throw httpError('Incorrect OTP entered.', 400);
+        }
+
+        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+
+        await db.query(
+          'UPDATE users SET callback_url = $1, updated_at = now() WHERE id = $2',
+          [callbackUrl, session.id],
+        );
+
+        sendJson(response, 200, { ok: true, message: 'Callback URL saved and verified successfully.' });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/callback/verify-delete') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request);
+        const otp = String(input.otp || '').trim();
+
+        if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
+
+        const challengeKey = `user_cb:${session.id}`;
+        const challenge = await db.query(
+          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+           WHERE phone_lookup_hash = $1`,
+          [challengeKey],
+        );
+        const row = challenge.rows[0];
+        if (!row || row.purpose !== 'callback_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+        }
+        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_delete'))) {
+          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+          throw httpError('Incorrect OTP entered.', 400);
+        }
+
+        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+
+        await db.query(
+          'UPDATE users SET callback_url = NULL, updated_at = now() WHERE id = $1',
+          [session.id],
+        );
+
+        sendJson(response, 200, { ok: true, message: 'Callback URL deleted successfully.' });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/user/invoices/upload') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request, 10_000_000);
+        const month = String(input.month || '').trim();
+        const fileName = String(input.fileName || 'invoice.pdf').trim();
+        const fileMime = String(input.fileMime || 'application/pdf').trim();
+        const fileDataBase64 = String(input.fileData || '').trim();
+
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+          throw httpError('Valid month (YYYY-MM) is required.', 400);
+        }
+        if (!fileDataBase64) {
+          throw httpError('Invoice file data is required.', 400);
+        }
+
+        const fileBuffer = Buffer.from(fileDataBase64, 'base64');
+        if (fileBuffer.length > 5 * 1024 * 1024) {
+          throw httpError('File exceeds 5MB size limit.', 400);
+        }
+
+        const [yearStr, monthStr] = month.split('-');
+        const y = parseInt(yearStr, 10);
+        const m = parseInt(monthStr, 10) - 1;
+        const start = new Date(Date.UTC(y, m, 1)).toISOString();
+        const end = new Date(Date.UTC(y, m + 1, 1)).toISOString();
+
+        const redeemRes = await db.query(
+          `SELECT COALESCE(SUM(amount_minor), 0) AS total_redeem_minor
+           FROM payout_requests
+           WHERE user_id = $1 AND status = 'success'
+             AND created_at >= $2 AND created_at < $3`,
+          [session.id, start, end],
+        );
+        const redeemAmountMinor = BigInt(redeemRes.rows[0]?.total_redeem_minor || 0);
+
+        await db.query(
+          `INSERT INTO seller_gst_invoices (user_id, month_year, redeem_amount_minor, file_name, file_mime, file_data, status)
+           VALUES ($1, $2, $3, $4, $5, $6, 'uploaded')
+           ON CONFLICT (user_id, month_year) DO UPDATE SET
+             redeem_amount_minor = EXCLUDED.redeem_amount_minor,
+             file_name = EXCLUDED.file_name,
+             file_mime = EXCLUDED.file_mime,
+             file_data = EXCLUDED.file_data,
+             status = 'uploaded',
+             updated_at = now()`,
+          [session.id, month, redeemAmountMinor, fileName, fileMime, fileBuffer],
+        );
+
+        sendJson(response, 200, { ok: true, message: 'GST Invoice uploaded successfully.' });
+        statusCode = 200;
+        return;
+      }
+
       if (url.pathname === '/api/recharge/operator-lookup' || url.pathname === '/api/operator/lookup') {
         const input = await readJson(request).catch(() => ({}));
         const mobile = String(input.mobile || input.number || url.searchParams.get('mobile') || '').trim();

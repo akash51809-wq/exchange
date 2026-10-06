@@ -35,8 +35,10 @@ const USER_PANEL_MENU = [
   ] },
   { label: 'Alerts Setting', path: '/alerts-setting' },
   { label: 'Invoice', path: '/invoice', items: [
-    { label: 'Buyer Invoice', path: '/invoice/buyer-invoice' },
-    { label: 'Seller Invoice', path: '/invoice/seller-invoice' },
+    { label: 'Buyer GST Invoice', path: '/invoice/buyer-gst-invoice' },
+    { label: 'Seller GST Invoice', path: '/invoice/seller-gst-invoice' },
+    { label: 'Buyer Commission Invoice', path: '/invoice/buyer-commission-invoice' },
+    { label: 'Seller Commission Invoice', path: '/invoice/seller-commission-invoice' },
   ] },
   { label: 'Setting', path: '/setting', items: [
     { label: 'IP Setting', path: '/setting/ip-setting' },
@@ -52,6 +54,8 @@ for (const item of USER_PANEL_MENU) {
   if (item.path !== '/dashboard') USER_PANEL_PAGES.set(item.path, { title: item.label, template: templateFor(item.path) });
   for (const child of item.items || []) USER_PANEL_PAGES.set(child.path, { title: child.label, template: templateFor(child.path) });
 }
+USER_PANEL_PAGES.set('/invoice/buyer-invoice', { title: 'Buyer GST Invoice', template: 'invoice-buyer-gst-invoice.html' });
+USER_PANEL_PAGES.set('/invoice/seller-invoice', { title: 'Seller GST Invoice', template: 'invoice-seller-gst-invoice.html' });
 
 function renderUserNavigation() {
   const entries = USER_PANEL_MENU.map((item) => {
