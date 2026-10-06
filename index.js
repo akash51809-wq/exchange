@@ -94,6 +94,7 @@ const createUserSellerSalesPendingPage = require('./pages/user-seller-sales-pend
 const createUserReportAccountStatementPage = require('./pages/user-report-account-statement');
 const createUserInvoicePages = require('./pages/user-invoice');
 const createAdminInvoicePage = require('./pages/admin-invoice');
+const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
 const createUserSettingCallbackPage = require('./pages/user-setting-callback');
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
@@ -205,6 +206,20 @@ const { sendUserSellerSalesPendingPage } = createUserSellerSalesPendingPage({ db
 const { sendUserReportAccountStatementPage } = createUserReportAccountStatementPage({ db, formatMinorUnits });
 const { sendUserInvoicePage } = createUserInvoicePages({ db, formatMinorUnits });
 const { sendAdminInvoicePage } = createAdminInvoicePage({ db, formatMinorUnits });
+const {
+  sendAdminRechargeReportPage,
+  handleMarkFailed,
+  handleUpdateOpeId,
+  handleResendCallback,
+  handleGetLog,
+  handleRaiseDispute,
+} = createAdminRechargeReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 
@@ -3030,6 +3045,14 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/reports/recharge-report' || url.pathname === '/admin/recharge-report') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminRechargeReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/user/invoices/download') {
         const user = await getSession(request);
         if (!user) throw httpError('login required', 401);
@@ -4232,6 +4255,56 @@ async function handleRequest(request, response) {
 
         sendJson(response, 200, { ok: true, message: 'Dispute rejected.' });
         statusCode = 200;
+        return;
+      }
+
+      // Recharge Report Actions
+      if (url.pathname === '/api/admin/recharge-report/mark-failed') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleMarkFailed(request, response, input, admin);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/recharge-report/update-ope-id') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleUpdateOpeId(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/recharge-report/resend-callback') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleResendCallback(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/recharge-report/log') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleGetLog(request, response, url);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/recharge-report/raise-dispute') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleRaiseDispute(request, response, input, admin);
+        statusCode = response.statusCode || 200;
         return;
       }
 

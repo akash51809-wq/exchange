@@ -5,6 +5,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
+const { renderAdminMenuList } = require('../config/admin-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 
 module.exports = function createPageModule({ fs, fsp, path, adminUiRoot, adminAssetsRoot, sendJson }) {
@@ -89,15 +90,11 @@ async function serveAdminUi(urlPath, method, response) {
     }
     if (!['login-2.html', 'register-2.html', 'forgot-password-2.html'].includes(path.basename(filePath))) {
       htmlBody = useFullWidthContainers(htmlBody);
-      // Put the operational user list directly into the dashboard menu markup.
-      // This keeps the entry visible even if the template's menu scripts fail
-      // or the browser delays executing injected scripts.
+      // Replace any existing template menu list with only the created system menus
       htmlBody = htmlBody.replace(
-        /(<ul\s+class=["']horizontalMenu-list["'][^>]*>)/i,
-        '$1\n<li data-exchange-user-list><a href="/admin/users/list">User List</a></li>',
+        /<ul\s+class=["']horizontalMenu-list["'][^>]*>[\s\S]*?<\/ul>/i,
+        `<ul class="horizontalMenu-list">${renderAdminMenuList('/admin/')}</ul>`,
       );
-      const adminMenuScript = `<script>(()=>{const menu=document.querySelector('.horizontalMenu-list');if(!menu)return;if(!menu.querySelector('[data-exchange-users-menu]'))menu.insertAdjacentHTML('beforeend','<li aria-haspopup="true" data-exchange-users-menu><a href="#" class="sub-icon">User <i class="fa fa-angle-down horizontal-icon"></i></a><ul class="sub-menu"><li aria-haspopup="true"><a href="/admin/users/list">List User</a></li></ul></li>');if(!menu.querySelector('[data-exchange-payment-menu]'))menu.insertAdjacentHTML('beforeend','<li aria-haspopup="true" data-exchange-payment-menu><a href="#" class="sub-icon">Payment <i class="fa fa-angle-down horizontal-icon"></i></a><ul class="sub-menu"><li aria-haspopup="true"><a href="/admin/payment/fund-request">Fund Request</a></li><li aria-haspopup="true"><a href="/admin/payment/bank-list">Bank List</a></li></ul></li>');if(!menu.querySelector('[data-exchange-api-menu]'))menu.insertAdjacentHTML('beforeend','<li aria-haspopup="true" data-exchange-api-menu><a href="/admin/seller-api/requests">Request API Approval</a></li>');if(!menu.querySelector('[data-exchange-settings-menu]'))menu.insertAdjacentHTML('beforeend','<li aria-haspopup="true" data-exchange-settings-menu><a href="#" class="sub-icon">Settings <i class="fa fa-angle-down horizontal-icon"></i></a><ul class="sub-menu"><li aria-haspopup="true"><a href="/admin/settings/create-operator">Create Operator</a></li><li aria-haspopup="true"><a href="/admin/settings/show-operator">Show Operator</a></li><li aria-haspopup="true"><a href="/admin/settings/service-settings">Service Settings</a></li></ul></li>');})();</script>\n`;
-      htmlBody = htmlBody.replace(/<\/body>/i, `${adminMenuScript}</body>`);
       htmlBody = await addPanelChrome(htmlBody, { role: 'admin' });
     }
   }
