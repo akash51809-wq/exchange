@@ -95,6 +95,7 @@ const createUserReportAccountStatementPage = require('./pages/user-report-accoun
 const createUserInvoicePages = require('./pages/user-invoice');
 const createAdminInvoicePage = require('./pages/admin-invoice');
 const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
+const createSystemChartPage = require('./pages/system-chart');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
 const createUserSettingCallbackPage = require('./pages/user-setting-callback');
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
@@ -222,6 +223,7 @@ const {
 });
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
+const { sendSystemChartPage } = createSystemChartPage();
 
 // PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
 // पैसे की रकम छोटे मुद्रा-इकाइयों में BIGINT है; floating point नहीं।
@@ -3000,6 +3002,12 @@ async function handleRequest(request, response) {
           'content-security-policy': "default-src 'none';",
         });
         response.end(AUTH_CLIENT_JS);
+        return;
+      }
+
+      if (url.pathname === '/chart') {
+        await sendSystemChartPage(request, response);
+        statusCode = 200;
         return;
       }
 
