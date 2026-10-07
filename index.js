@@ -96,7 +96,6 @@ const createUserInvoicePages = require('./pages/user-invoice');
 const createAdminInvoicePage = require('./pages/admin-invoice');
 const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
 const createSystemChartPage = require('./pages/system-chart');
-const createGooglePage = require('./pages/google');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
 const createUserSettingCallbackPage = require('./pages/user-setting-callback');
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
@@ -228,7 +227,6 @@ const {
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 const { sendSystemChartPage } = createSystemChartPage();
-const { sendGooglePage } = createGooglePage();
 const { checkAndSuspendSellerApiOnDailyRefund } = require('./lib/seller-api-rules');
 
 // PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
@@ -3022,12 +3020,6 @@ async function handleRequest(request, response) {
 
       if (url.pathname === '/chart') {
         await sendSystemChartPage(request, response);
-        statusCode = 200;
-        return;
-      }
-
-      if (url.pathname === '/google' || url.pathname === '/google/' || url.pathname === '/google-messages') {
-        await sendGooglePage(request, response);
         statusCode = 200;
         return;
       }
