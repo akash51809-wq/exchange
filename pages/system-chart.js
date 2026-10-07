@@ -589,23 +589,46 @@ module.exports = function createSystemChartPage() {
           </div>
 
           <div class="row mt-4">
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="logic-box border-primary">
                 <h6><i class="fa fa-envelope text-primary"></i> Email Notification Settings</h6>
-                <p>Google Apps Script Webhook या SMTP सर्वर कॉन्फ़िगरेशन। सिस्टम से OTP, अलर्ट्स और ट्रांजैक्शन मेल्स भेजने हेतु।</p>
+                <p class="mb-0 small">Google Apps Script Webhook या SMTP सर्वर। OTP, अलर्ट्स व ट्रांजैक्शन मेल्स भेजने हेतु।</p>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
               <div class="logic-box border-success">
                 <h6><i class="fa fa-whatsapp text-success"></i> WhatsApp Notification Settings</h6>
-                <p>UltraMsg या Custom Gateway कॉन्फ़िगरेशन। लॉगिन OTP, पेआउट अलर्ट्स और सेलर पेंडिंग रिमाइंडर भेजने हेतु।</p>
+                <p class="mb-0 small">UltraMsg या Custom Gateway। लॉगिन OTP, पेआउट अलर्ट्स व सेलर पेंडिंग रिमाइंडर भेजने हेतु।</p>
               </div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+              <div class="logic-box border-info">
+                <h6><i class="fa fa-search text-info"></i> Plan API (ERS HLR Fetch)</h6>
+                <p class="mb-0 small">बैकएंड में प्री-कॉन्फ़िगर ERS API। बायर मोबाइल नंबर से लाइव ऑपरेटर व सर्कल फेच व ऑटो-राउटिंग।</p>
+              </div>
+            </div>
+            <div class="col-md-3">
               <div class="logic-box border-warning">
                 <h6><i class="fa fa-percent text-warning"></i> Margin Difference Setting</h6>
-                <p>सेलर मार्जिन और बायर मार्जिन के बीच एडमिन का न्यूनतम कमीशन मार्जिन अंतर (%) तय करना।</p>
+                <p class="mb-0 small">सेलर मार्जिन और बायर मार्जिन के बीच एडमिन का न्यूनतम कमीशन मार्जिन अंतर (%) तय करना।</p>
               </div>
+            </div>
+          </div>
+
+          <div class="card-feature mt-4 border-info">
+            <div class="card-feature-header bg-light">
+              <h4><i class="fa fa-search text-info"></i> Plan API (Multi-Brand ERS Operator &amp; Circle Fetch Engine)</h4>
+              <span class="feature-route">/admin/settings/service-settings#tabPlanApi</span>
+            </div>
+            <div class="card-feature-body">
+              <p>रिचार्ज सिस्टम को पूरी तरह ऑटोमैटिक बनाने के लिए <strong>Plan API / HLR Operator Lookup</strong> इंटीग्रेट किया गया है:</p>
+              <ul>
+                <li><strong>मल्टी-ब्रांड आर्किटेक्चर (Multi-Brand Support):</strong> सिस्टम में एक से अधिक ब्रांड्स का Plan API जोड़ने की सुविधा है। वर्तमान में <strong>ERS (Easy Recharge Solution)</strong> ब्रांड लाइव एक्टिव है।</li>
+                <li><strong>बैकएंड में प्री-कॉन्फ़िगर URL:</strong> एडमिन को कोई बड़ा URL लिखने की जरूरत नहीं है। बैकएंड में <code>https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew</code> पहले से कॉन्फ़िगर है। एडमिन को एडमिन पैनल में सिर्फ अपना <strong>User ID (ApiUserID)</strong> और <strong>Token</strong> सबमिट करना होता है।</li>
+                <li><strong>डायनामिक मोबाइल नंबर (Mobileno Replacement):</strong> जब भी कोई Buyer रिचार्ज रिक्वेस्ट भेजता है, उसका 10-अंकों का मोबाइल नंबर ERS API के <code>Mobileno</code> पैरामीटर में लाइव पास होता है।</li>
+                <li><strong>लाइव ऑपरेटर व सर्कल डिटेक्शन:</strong> ERS से प्राप्त ऑपरेटर नाम (उदा. AIRTEL, Reliance Jio, VODAFONE) और सर्कल (उदा. UP East, Mumbai) को सिस्टम डेटाबेस के <code>operator_definitions</code> और सर्कल्स से स्वतः मैच किया जाता है।</li>
+                <li><strong>बेस्ट सेलर मार्जिन ऑटो-राउटिंग:</strong> डिटेक्ट किए गए ऑपरेटर और सर्कल के आधार पर सेलर मार्जिन सेटिंग्स चेक होती हैं और सबसे ज्यादा कमीशन मार्जिन देने वाले सेलर के पास रिचार्ज रिक्वेस्ट वाटरफॉल तरीके से रूट हो जाती है।</li>
+              </ul>
             </div>
           </div>
         </div>

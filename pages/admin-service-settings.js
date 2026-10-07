@@ -914,110 +914,162 @@ module.exports = function createAdminServiceSettingsPage({
             <div class="tab-pane" id="tabPlanApi">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
-                  <h5><i class="fa fa-search text-info"></i> Plan API (planapi.in / Operator &amp; Circle Lookup)</h5>
+                  <div>
+                    <h5 class="mb-1"><i class="fa fa-search text-info"></i> Plan API (Operator &amp; Circle Fetch Engine)</h5>
+                    <small class="text-muted">Multi-Brand live HLR operator and circle lookup service</small>
+                  </div>
                   <div class="custom-control custom-switch custom-switch-lg">
-                    <input type="checkbox" class="custom-control-input" id="planApiEnabled">
-                    <label class="custom-control-label" for="planApiEnabled" id="planApiEnabledLabel">Plan API Disabled</label>
+                    <input type="checkbox" class="custom-control-input" id="planApiEnabled" checked>
+                    <label class="custom-control-label" for="planApiEnabled" id="planApiEnabledLabel">Plan API Enabled</label>
                   </div>
                 </div>
                 <div class="settings-panel-body">
-                  
-                  <div class="help-callout">
-                    <strong><i class="fa fa-spider"></i> PlanAPI.in Automated Web Scraper &amp; Login Engine:</strong>
-                    <p class="mb-1">
-                      यह सिस्टम <code>https://planapi.in</code> वेबसाइट पर डेटाबेस में सुरक्षित <strong>User ID / Mobile</strong> और <strong>Password</strong> के साथ स्वचालित रूप से लॉगिन (Web Session Authentication) करेगा और <code>https://planapi.in/OperatorLook.aspx</code> पेज से मोबाइल नंबर का डेटा (Operator Name &amp; Circle) लाइव <strong>Scrape</strong> करके रिचार्ज प्रोसेस में उपयोग करेगा।
-                    </p>
-                    <ul class="small mb-0">
-                      <li><strong>Target Web Page:</strong> <code>https://planapi.in/OperatorLook.aspx</code></li>
-                      <li><strong>Auto Session:</strong> कुकीज़ और सेशन बैकएंड में ऑटो-मैनेज रहेंगे।</li>
-                    </ul>
+
+                  <!-- Multi-Brand Selector Ribbon -->
+                  <div class="d-flex align-items-center justify-content-between p-2 mb-3 bg-light rounded border">
+                    <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+                      <span class="small font-weight-bold text-dark mr-2"><i class="fa fa-tags text-primary"></i> Available Brands:</span>
+                      <button type="button" class="btn btn-sm btn-primary active brand-select-btn" data-brand="ERS" id="btnBrandErs">
+                        <i class="fa fa-bolt mr-1"></i> ERS (Easy Recharge Solution) <span class="badge badge-light ml-1">Active</span>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary brand-select-btn" data-brand="PLANAPI" id="btnBrandPlanApi">
+                        <i class="fa fa-spider mr-1"></i> PlanAPI.in
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-info" data-toggle="collapse" data-target="#collapseAddBrand">
+                        <i class="fa fa-plus-circle mr-1"></i> + Add Brand
+                      </button>
+                    </div>
+                    <div>
+                      <span class="badge badge-success px-2 py-1" id="activeBrandIndicator"><i class="fa fa-check-circle mr-1"></i> Active: ERS</span>
+                    </div>
+                  </div>
+
+                  <!-- Collapsible: Add Custom Brand Information -->
+                  <div class="collapse mb-3" id="collapseAddBrand">
+                    <div class="card card-body bg-light border p-3">
+                      <h6 class="font-weight-bold mb-1"><i class="fa fa-cube text-info mr-1"></i> Multi-Brand Architecture: Add Custom Plan Provider</h6>
+                      <p class="small text-muted mb-2">
+                        System supports multiple Plan &amp; Operator fetch brands simultaneously. You can configure credentials for each brand and switch active brand at any time.
+                      </p>
+                      <div class="small text-muted">
+                        Currently pre-configured brands: <strong>ERS (Easy Recharge Solution)</strong> and <strong>PlanAPI.in</strong>. Contact developer to bind additional custom brand URLs to backend engine.
+                      </div>
+                    </div>
                   </div>
 
                   <form id="planApiForm">
-                    
-                    <div class="row">
-                      <div class="col-md-6 form-group">
-                        <label for="planApiMode" class="font-weight-bold">Integration Mode *</label>
-                        <select id="planApiMode" class="form-control font-weight-bold">
-                          <option value="scraper" selected>🕷️ Automated Web Scraping (Auto-Login &amp; Scrape OperatorLook.aspx)</option>
-                          <option value="api">🌐 Direct URL / HTTP API Mode</option>
-                        </select>
-                        <small class="form-text text-muted">Web Scraping mode uses browser-like session with your credentials.</small>
+                    <input type="hidden" id="planApiActiveBrand" value="ERS">
+
+                    <!-- ============================================== -->
+                    <!-- 1. BRAND ERS: Easy Recharge Solution (PRIMARY) -->
+                    <!-- ============================================== -->
+                    <div id="brandSectionErs">
+                      <div class="alert alert-info py-2 px-3 mb-3 border d-flex align-items-start">
+                        <i class="fa fa-server text-primary fa-lg mr-2 mt-1"></i>
+                        <div>
+                          <strong>ERS Brand API Configuration (Pre-configured in Backend):</strong>
+                          <div class="mt-1 font-monospace small bg-white p-1 rounded border text-dark">
+                            <strong>API URL:</strong> <code>https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew?ApiUserID=[USER_ID]&amp;token=[TOKEN]&amp;Mobileno=[MOBILE_NO]</code>
+                          </div>
+                          <p class="small text-muted mb-0 mt-1">
+                            <i class="fa fa-check-circle text-success mr-1"></i>
+                            यह URL बैकएंड में पहले से कॉन्फ़िगर है। आपको केवल अपना <strong>User ID</strong> (<code>ApiUserID</code>) और <strong>Token</strong> (<code>token</code>) दर्ज करना है।
+                            रिचार्ज रिक्वेस्ट आने पर <code>Mobileno</code> पैरामीटर यूजर के मोबाइल नंबर से ऑटो-फेच होगा और प्राप्त ऑपरेटर व सर्कल के आधार पर सेलर के बेस्ट मार्जिन पर रिचार्ज रूट होगा।
+                          </p>
+                        </div>
                       </div>
 
-                      <div class="col-md-6 form-group">
-                        <label for="planApiUrl" class="font-weight-bold">Web Page / Scraper URL *</label>
-                        <input type="text" id="planApiUrl" class="form-control font-monospace" value="https://planapi.in/OperatorLook.aspx" required>
-                        <small class="form-text text-muted">Target URL (default: <code>https://planapi.in/OperatorLook.aspx</code>)</small>
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                          <label for="ersApiUserId" class="font-weight-bold">
+                            ERS User ID (ApiUserID) <span class="text-danger">*</span>
+                          </label>
+                          <input type="text" id="ersApiUserId" class="form-control font-monospace font-weight-bold" placeholder="e.g. 9335819686" value="9335819686" required>
+                          <small class="form-text text-muted">Your registered ERS ApiUserID (Mobile No / Account ID)</small>
+                        </div>
+
+                        <div class="col-md-6 form-group">
+                          <label for="ersToken" class="font-weight-bold">
+                            ERS API Token (token) <span class="text-danger">*</span>
+                          </label>
+                          <div class="input-group">
+                            <input type="password" id="ersToken" class="form-control font-monospace font-weight-bold" placeholder="e.g. tok_c7f65f27e096035786e9c851" value="tok_c7f65f27e096035786e9c851" required>
+                            <div class="input-group-append">
+                              <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#ersToken">
+                                <i class="fa fa-eye"></i>
+                              </button>
+                            </div>
+                          </div>
+                          <small class="form-text text-muted">Secret API security token provided by ERS portal</small>
+                        </div>
                       </div>
                     </div>
 
-                    <div class="row">
-                      <div class="col-md-6 form-group">
-                        <label for="planApiMemberId" class="font-weight-bold">Website Username / Mobile No / Member ID *</label>
-                        <input type="text" id="planApiMemberId" class="form-control font-monospace" placeholder="e.g. 9876543210 or Member ID" required autocomplete="username">
-                        <small class="form-text text-muted">PlanAPI.in website login mobile number or username</small>
+                    <!-- ============================================== -->
+                    <!-- 2. BRAND PLANAPI: PlanAPI.in Web Scraper (OPTIONAL) -->
+                    <!-- ============================================== -->
+                    <div id="brandSectionPlanApi" style="display: none;">
+                      <div class="help-callout mb-3">
+                        <strong><i class="fa fa-spider"></i> PlanAPI.in Automated Web Scraper &amp; Login Engine:</strong>
+                        <p class="small mb-1">
+                          <code>https://planapi.in</code> वेबसाइट पर User ID / Password से ऑटो-लॉगिन और <code>OperatorLook.aspx</code> से लाइव डेटा फेच।
+                        </p>
                       </div>
 
-                      <div class="col-md-6 form-group">
-                        <label for="planApiPassword" class="font-weight-bold">Website Login Password *</label>
-                        <div class="input-group">
-                          <input type="password" id="planApiPassword" class="form-control font-monospace" placeholder="••••••••••••" required autocomplete="current-password">
-                          <div class="input-group-append">
-                            <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#planApiPassword">
-                              <i class="fa fa-eye"></i>
-                            </button>
-                          </div>
+                      <div class="row">
+                        <div class="col-md-6 form-group">
+                          <label for="planApiMemberId" class="font-weight-bold">PlanAPI.in Mobile / Member ID</label>
+                          <input type="text" id="planApiMemberId" class="form-control font-monospace" placeholder="e.g. 9876543210">
                         </div>
-                        <small class="form-text text-muted">PlanAPI.in website login password</small>
-                      </div>
-                    </div>
 
-                    <!-- Advanced Parameters / Template (Collapsible) -->
-                    <div class="mb-3">
-                      <a class="small text-muted font-weight-bold" data-toggle="collapse" href="#advancedPlanApiOptions" role="button">
-                        <i class="fa fa-cog mr-1"></i> Advanced Scraper / Parameter Settings (Optional)
-                      </a>
-                      <div class="collapse mt-2" id="advancedPlanApiOptions">
-                        <div class="card card-body bg-light border p-3">
-                          <div class="row">
-                            <div class="col-md-4 form-group">
-                              <label for="paramMemberId" class="small font-weight-bold text-muted">Member ID Param Name</label>
-                              <input type="text" id="paramMemberId" class="form-control font-monospace form-control-sm" value="memberid">
+                        <div class="col-md-6 form-group">
+                          <label for="planApiPassword" class="font-weight-bold">PlanAPI.in Login Password</label>
+                          <div class="input-group">
+                            <input type="password" id="planApiPassword" class="form-control font-monospace" placeholder="••••••••••••">
+                            <div class="input-group-append">
+                              <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#planApiPassword">
+                                <i class="fa fa-eye"></i>
+                              </button>
                             </div>
-                            <div class="col-md-4 form-group">
-                              <label for="paramPassword" class="small font-weight-bold text-muted">Password Param Name</label>
-                              <input type="text" id="paramPassword" class="form-control font-monospace form-control-sm" value="password">
-                            </div>
-                            <div class="col-md-4 form-group">
-                              <label for="paramMobile" class="small font-weight-bold text-muted">Mobile Number Param Name</label>
-                              <input type="text" id="paramMobile" class="form-control font-monospace form-control-sm" value="mobile">
-                            </div>
-                          </div>
-                          <div class="form-group mb-0">
-                            <label for="planApiCustomUrl" class="small font-weight-bold text-muted">Custom URL Template (Optional)</label>
-                            <input type="text" id="planApiCustomUrl" class="form-control font-monospace form-control-sm" placeholder="https://planapi.in/OperatorLook.aspx?memberid=[MEMBER_ID]&password=[PASSWORD]&mobile=[MOBILE_NO]">
                           </div>
                         </div>
+                      </div>
+
+                      <div class="form-group">
+                        <label for="planApiUrl" class="small font-weight-bold text-muted">PlanAPI URL (Optional)</label>
+                        <input type="text" id="planApiUrl" class="form-control font-monospace form-control-sm" value="https://planapi.in/OperatorLook.aspx">
                       </div>
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                       <button type="submit" class="btn btn-primary" id="btnSavePlanApi">
-                        <i class="fa fa-save mr-1"></i> Save Plan API &amp; Scraper Settings
+                        <i class="fa fa-save mr-1"></i> Save Plan API Settings
                       </button>
                       <span class="text-muted small" id="planApiSaveStatus"></span>
                     </div>
                   </form>
 
-                  <!-- Live Test & HLR Lookup Box -->
-                  <div class="test-box-card">
-                    <h6 class="font-weight-bold text-dark mb-2"><i class="fa fa-bolt text-warning mr-1"></i> Live Mobile Operator &amp; Circle Fetch Test</h6>
-                    <p class="text-muted small mb-3">Enter any Indian mobile number to fetch the live operator and circle from PlanAPI.in.</p>
+                  <!-- ============================================== -->
+                  <!-- LIVE TEST & OPERATOR/CIRCLE LOOKUP BOX         -->
+                  <!-- ============================================== -->
+                  <div class="test-box-card mt-4">
+                    <h6 class="font-weight-bold text-dark mb-2">
+                      <i class="fa fa-bolt text-warning mr-1"></i> Live Mobile Operator &amp; Circle Fetch Test
+                    </h6>
+                    <p class="text-muted small mb-3">
+                      Enter any 10-digit Indian mobile number to fetch live Operator and Circle directly from the active brand (<strong>ERS</strong>).
+                    </p>
                     <div class="row align-items-end">
-                      <div class="col-md-8 form-group mb-md-0">
+                      <div class="col-md-3 form-group mb-md-0">
+                        <label for="testPlanApiBrand" class="small font-weight-bold">Select Brand</label>
+                        <select id="testPlanApiBrand" class="form-control font-weight-bold">
+                          <option value="ERS" selected>ERS (Easy Recharge Solution)</option>
+                          <option value="PLANAPI">PlanAPI.in</option>
+                        </select>
+                      </div>
+                      <div class="col-md-5 form-group mb-md-0">
                         <label for="testPlanApiMobile" class="small font-weight-bold">10-Digit Mobile Number</label>
-                        <input type="tel" id="testPlanApiMobile" class="form-control font-weight-bold font-monospace" placeholder="e.g. 9335819686" maxlength="10">
+                        <input type="tel" id="testPlanApiMobile" class="form-control font-weight-bold font-monospace" placeholder="e.g. 9335819686" value="9335819686" maxlength="10">
                       </div>
                       <div class="col-md-4">
                         <button type="button" class="btn btn-info btn-block font-weight-bold text-white" id="btnTestPlanApi">
@@ -1027,22 +1079,25 @@ module.exports = function createAdminServiceSettingsPage({
                     </div>
 
                     <div id="testPlanApiAlert" class="mt-3" style="display: none;"></div>
-                    
+
                     <!-- Dynamic Lookup Result Box -->
-                    <div id="planApiResultContainer" style="display: none;">
-                      <div class="lookup-result-card shadow-sm">
+                    <div id="planApiResultContainer" style="display: none;" class="mt-3">
+                      <div class="lookup-result-card shadow-sm p-3 border rounded bg-white">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                          <h6 class="font-weight-bold text-dark mb-0"><i class="fa fa-check-circle text-success mr-1"></i> Lookup Result</h6>
+                          <h6 class="font-weight-bold text-dark mb-0">
+                            <i class="fa fa-check-circle text-success mr-1"></i> Lookup Result
+                            <span class="badge badge-primary ml-2 py-1 px-2" id="resBrandBadge">Brand: ERS</span>
+                          </h6>
                           <span id="planApiLatency" class="badge badge-secondary py-1 px-2"></span>
                         </div>
                         <div class="row">
                           <div class="col-md-6 mb-2">
                             <span class="text-muted small d-block mb-1">Detected Operator:</span>
-                            <span id="resOperatorName" class="lookup-badge-operator font-weight-bold"></span>
+                            <span id="resOperatorName" class="lookup-badge-operator font-weight-bold px-2 py-1 bg-light border rounded d-inline-block"></span>
                           </div>
                           <div class="col-md-6 mb-2">
                             <span class="text-muted small d-block mb-1">Detected Circle (State):</span>
-                            <span id="resCircleName" class="lookup-badge-circle font-weight-bold"></span>
+                            <span id="resCircleName" class="lookup-badge-circle font-weight-bold px-2 py-1 bg-light border rounded d-inline-block"></span>
                           </div>
                         </div>
                         <div class="row mt-2">
@@ -1416,20 +1471,24 @@ module.exports = function createAdminServiceSettingsPage({
           if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
         }
 
-        // Populate Plan API
+        // Populate Plan API (Multi-Brand: ERS / PlanAPI)
         if (data.plan_api || data.planApi) {
           const p = data.plan_api || data.planApi;
           planApiSwitch.checked = Boolean(p.isEnabled);
           planApiLabel.textContent = planApiSwitch.checked ? 'Plan API Enabled' : 'Plan API Disabled';
           planApiLabel.style.color = planApiSwitch.checked ? '#16a34a' : '#64748b';
-          document.getElementById('planApiUrl').value = p.apiUrl || 'https://planapi.in/OperatorLook.aspx';
-          document.getElementById('planApiRequestType').value = (p.requestType || 'GET').toUpperCase();
-          document.getElementById('planApiMemberId').value = p.memberId || p.userId || '';
-          document.getElementById('planApiPassword').value = p.password || p.apiKey || '';
-          document.getElementById('paramMemberId').value = p.paramMemberId || 'memberid';
-          document.getElementById('paramPassword').value = p.paramPassword || 'password';
-          document.getElementById('paramMobile').value = p.paramMobile || 'mobile';
-          document.getElementById('planApiCustomUrl').value = p.customUrlTemplate || '';
+
+          const activeBrand = (p.activeBrand || 'ERS').toUpperCase();
+          const ersUserId = p.apiUserId || (p.brands && p.brands.ERS && p.brands.ERS.apiUserId) || '9335819686';
+          const ersToken = p.token || (p.brands && p.brands.ERS && p.brands.ERS.token) || 'tok_c7f65f27e096035786e9c851';
+
+          if (document.getElementById('ersApiUserId')) document.getElementById('ersApiUserId').value = ersUserId;
+          if (document.getElementById('ersToken')) document.getElementById('ersToken').value = ersToken;
+          if (document.getElementById('planApiMemberId')) document.getElementById('planApiMemberId').value = p.memberId || '';
+          if (document.getElementById('planApiPassword')) document.getElementById('planApiPassword').value = p.password || '';
+          if (document.getElementById('planApiUrl')) document.getElementById('planApiUrl').value = p.planApiUrl || p.apiUrl || 'https://planapi.in/OperatorLook.aspx';
+
+          selectPlanBrand(activeBrand);
         }
 
         // Populate Margin Difference
@@ -1678,6 +1737,48 @@ module.exports = function createAdminServiceSettingsPage({
     });
 
     // Save Plan API Form
+    // Multi-Brand Selection Logic for Plan API
+    function selectPlanBrand(brand) {
+      const activeBrand = String(brand || 'ERS').toUpperCase();
+      const activeBrandInput = document.getElementById('planApiActiveBrand');
+      if (activeBrandInput) activeBrandInput.value = activeBrand;
+      const testBrandSelect = document.getElementById('testPlanApiBrand');
+      if (testBrandSelect) testBrandSelect.value = activeBrand;
+
+      const activeBrandIndicator = document.getElementById('activeBrandIndicator');
+      if (activeBrandIndicator) {
+        activeBrandIndicator.innerHTML = '<i class="fa fa-check-circle mr-1"></i> Active: ' + escapeHtml(activeBrand);
+      }
+
+      document.querySelectorAll('.brand-select-btn').forEach(btn => {
+        if (btn.dataset.brand === activeBrand) {
+          btn.className = 'btn btn-sm btn-primary active brand-select-btn';
+          if (!btn.querySelector('.badge')) {
+            const span = document.createElement('span');
+            span.className = 'badge badge-light ml-1';
+            span.textContent = 'Active';
+            btn.appendChild(span);
+          }
+        } else {
+          btn.className = 'btn btn-sm btn-outline-secondary brand-select-btn';
+          const b = btn.querySelector('.badge');
+          if (b) b.remove();
+        }
+      });
+
+      const ersSec = document.getElementById('brandSectionErs');
+      const planSec = document.getElementById('brandSectionPlanApi');
+      if (ersSec) ersSec.style.display = activeBrand === 'ERS' ? 'block' : 'none';
+      if (planSec) planSec.style.display = activeBrand === 'PLANAPI' ? 'block' : 'none';
+    }
+
+    document.querySelectorAll('.brand-select-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectPlanBrand(btn.dataset.brand);
+      });
+    });
+
+    // Save Plan API Form
     const planApiForm = document.getElementById('planApiForm');
     const planApiSaveBtn = document.getElementById('btnSavePlanApi');
     const planApiSaveStatus = document.getElementById('planApiSaveStatus');
@@ -1688,16 +1789,15 @@ module.exports = function createAdminServiceSettingsPage({
       planApiSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
       planApiSaveStatus.textContent = '';
 
+      const activeBrand = document.getElementById('planApiActiveBrand') ? document.getElementById('planApiActiveBrand').value : 'ERS';
       const payload = {
         isEnabled: planApiSwitch.checked,
-        apiUrl: document.getElementById('planApiUrl').value.trim(),
-        requestType: document.getElementById('planApiRequestType').value,
-        memberId: document.getElementById('planApiMemberId').value.trim(),
-        password: document.getElementById('planApiPassword').value.trim(),
-        paramMemberId: document.getElementById('paramMemberId').value.trim(),
-        paramPassword: document.getElementById('paramPassword').value.trim(),
-        paramMobile: document.getElementById('paramMobile').value.trim(),
-        customUrlTemplate: document.getElementById('planApiCustomUrl').value.trim(),
+        activeBrand,
+        apiUserId: document.getElementById('ersApiUserId') ? document.getElementById('ersApiUserId').value.trim() : '9335819686',
+        token: document.getElementById('ersToken') ? document.getElementById('ersToken').value.trim() : 'tok_c7f65f27e096035786e9c851',
+        memberId: document.getElementById('planApiMemberId') ? document.getElementById('planApiMemberId').value.trim() : '',
+        password: document.getElementById('planApiPassword') ? document.getElementById('planApiPassword').value.trim() : '',
+        planApiUrl: document.getElementById('planApiUrl') ? document.getElementById('planApiUrl').value.trim() : '',
       };
 
       try {
@@ -1710,11 +1810,11 @@ module.exports = function createAdminServiceSettingsPage({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed to save Plan API settings.');
         planApiSaveStatus.textContent = '✓ Saved successfully!';
-        planApiSaveStatus.className = 'text-success font-weight-bold';
+        planApiSaveStatus.className = 'text-success font-weight-bold ml-2';
         setTimeout(() => planApiSaveStatus.textContent = '', 3000);
       } catch (err) {
         planApiSaveStatus.textContent = '✗ ' + err.message;
-        planApiSaveStatus.className = 'text-danger font-weight-bold';
+        planApiSaveStatus.className = 'text-danger font-weight-bold ml-2';
       } finally {
         planApiSaveBtn.disabled = false;
         planApiSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save Plan API Settings';
@@ -1780,16 +1880,15 @@ module.exports = function createAdminServiceSettingsPage({
       testPlanApiAlert.style.display = 'none';
       planApiResultContainer.style.display = 'none';
 
+      const selectedBrand = document.getElementById('testPlanApiBrand') ? document.getElementById('testPlanApiBrand').value : 'ERS';
       const payload = {
         mobile,
-        apiUrl: document.getElementById('planApiUrl').value.trim(),
-        requestType: document.getElementById('planApiRequestType').value,
-        memberId: document.getElementById('planApiMemberId').value.trim(),
-        password: document.getElementById('planApiPassword').value.trim(),
-        paramMemberId: document.getElementById('paramMemberId').value.trim(),
-        paramPassword: document.getElementById('paramPassword').value.trim(),
-        paramMobile: document.getElementById('paramMobile').value.trim(),
-        customUrlTemplate: document.getElementById('planApiCustomUrl').value.trim(),
+        brand: selectedBrand,
+        apiUserId: document.getElementById('ersApiUserId') ? document.getElementById('ersApiUserId').value.trim() : '',
+        token: document.getElementById('ersToken') ? document.getElementById('ersToken').value.trim() : '',
+        memberId: document.getElementById('planApiMemberId') ? document.getElementById('planApiMemberId').value.trim() : '',
+        password: document.getElementById('planApiPassword') ? document.getElementById('planApiPassword').value.trim() : '',
+        apiUrl: document.getElementById('planApiUrl') ? document.getElementById('planApiUrl').value.trim() : '',
       };
 
       try {
@@ -1806,6 +1905,8 @@ module.exports = function createAdminServiceSettingsPage({
         document.getElementById('resOperatorName').textContent = data.operator || 'Unknown';
         document.getElementById('resCircleName').textContent = data.circle || 'All Circle';
         document.getElementById('planApiLatency').textContent = (data.latencyMs || 0) + ' ms';
+        const brandBadge = document.getElementById('resBrandBadge');
+        if (brandBadge) brandBadge.textContent = 'Brand: ' + (data.brand || selectedBrand);
 
         let matchHtml = '';
         if (data.matchedOperator) {
@@ -1814,11 +1915,11 @@ module.exports = function createAdminServiceSettingsPage({
           matchHtml = '<span class="text-warning"><i class="fa fa-exclamation-triangle mr-1"></i> Note: Operator "' + escapeHtml(data.operator || '') + '" not yet in system Operator Definitions. You can create it in Settings &rarr; Create Operator.</span>';
         }
         document.getElementById('resDbMatch').innerHTML = matchHtml;
-        document.getElementById('resRawPayload').textContent = data.rawResponse || JSON.stringify(data, null, 2);
+        document.getElementById('resRawPayload').textContent = typeof data.rawResponse === 'string' ? data.rawResponse : JSON.stringify(data.rawResponse || data, null, 2);
 
         planApiResultContainer.style.display = 'block';
         testPlanApiAlert.className = 'alert alert-success mt-3';
-        testPlanApiAlert.innerHTML = '<strong>✓ Operator &amp; Circle Details Fetched Successfully!</strong> Mobile: ' + data.mobile;
+        testPlanApiAlert.innerHTML = '<strong>✓ Live Operator &amp; Circle Details Fetched Successfully!</strong> Brand: ' + escapeHtml(data.brand || selectedBrand) + ' | Mobile: ' + escapeHtml(data.mobile);
         testPlanApiAlert.style.display = 'block';
       } catch (err) {
         testPlanApiAlert.className = 'alert alert-danger mt-3';
@@ -1976,6 +2077,30 @@ module.exports = function createAdminServiceSettingsPage({
         stopSameNumberAmountEnabled: true,
         stopSameNumberAmountMinutes: 3,
       };
+    }
+    if (!result.plan_api) {
+      result.plan_api = {
+        isEnabled: true,
+        activeBrand: 'ERS',
+        apiUserId: '9335819686',
+        token: 'tok_c7f65f27e096035786e9c851',
+        apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
+        brands: {
+          ERS: {
+            name: 'ERS',
+            label: 'Easy Recharge Solution (ERS)',
+            apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
+            apiUserId: '9335819686',
+            token: 'tok_c7f65f27e096035786e9c851',
+            isEnabled: true,
+          },
+        },
+      };
+    } else {
+      if (!result.plan_api.activeBrand) result.plan_api.activeBrand = 'ERS';
+      if (!result.plan_api.apiUserId && !result.plan_api.ersApiUserId) result.plan_api.apiUserId = '9335819686';
+      if (!result.plan_api.token && !result.plan_api.ersToken) result.plan_api.token = 'tok_c7f65f27e096035786e9c851';
+      if (!result.plan_api.apiUrl) result.plan_api.apiUrl = 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew';
     }
     sendJson(response, 200, result);
   }
@@ -2417,25 +2542,67 @@ module.exports = function createAdminServiceSettingsPage({
    * POST /api/admin/settings/services/plan-api - Save Plan API / Operator Look configuration
    */
   async function handleSavePlanApiSettings(request, response, input) {
-    const isEnabled = Boolean(input.isEnabled);
-    const apiUrl = String(input.apiUrl || 'https://planapi.in/OperatorLook.aspx').trim();
+    const isEnabled = input.isEnabled !== false;
+    const activeBrand = String(input.activeBrand || input.brand || 'ERS').trim().toUpperCase();
+
+    // ERS Brand configuration (Pre-configured URL)
+    const ersApiUserId = String(input.apiUserId || input.ersApiUserId || input.userId || '9335819686').trim();
+    const ersToken = String(input.token || input.ersToken || input.apiKey || 'tok_c7f65f27e096035786e9c851').trim();
+    const ersApiUrl = 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew';
+
+    if (isEnabled && activeBrand === 'ERS') {
+      if (!ersApiUserId || !ersToken) {
+        throw httpError('ERS User ID (ApiUserID) and Token are required when ERS Plan API is active.', 400);
+      }
+    }
+
+    // Secondary / PlanAPI fields
+    const memberId = String(input.memberId || '').trim();
+    const password = String(input.password || '').trim();
+    const planApiUrl = String(input.apiUrl || input.planApiUrl || 'https://planapi.in/OperatorLook.aspx').trim();
     const requestType = String(input.requestType || 'GET').trim().toUpperCase();
-    const memberId = String(input.memberId || input.userId || '').trim();
-    const password = String(input.password || input.apiKey || '').trim();
     const paramMemberId = String(input.paramMemberId || 'memberid').trim();
     const paramPassword = String(input.paramPassword || 'password').trim();
     const paramMobile = String(input.paramMobile || 'mobile').trim();
     const customUrlTemplate = String(input.customUrlTemplate || '').trim();
 
-    if (isEnabled && (!apiUrl || !memberId || !password)) {
-      throw httpError('API URL, Member ID, and Password are required when Plan API service is enabled.', 400);
-    }
+    const brands = {
+      ERS: {
+        name: 'ERS',
+        label: 'Easy Recharge Solution (ERS)',
+        apiUrl: ersApiUrl,
+        apiUserId: ersApiUserId,
+        token: ersToken,
+        isEnabled: activeBrand === 'ERS',
+      },
+      PLANAPI: {
+        name: 'PlanAPI',
+        label: 'PlanAPI.in (Web Scraper)',
+        apiUrl: planApiUrl,
+        memberId,
+        password,
+        requestType,
+        paramMemberId,
+        paramPassword,
+        paramMobile,
+        customUrlTemplate,
+        isEnabled: activeBrand === 'PLANAPI',
+      },
+    };
 
     const config = {
-      apiUrl,
-      requestType,
+      isEnabled,
+      activeBrand,
+      // Default / active credentials at top level
+      apiUserId: ersApiUserId,
+      token: ersToken,
+      apiUrl: ersApiUrl,
+      brands,
+      // Legacy compatibility
       memberId,
       password,
+      planApiUrl,
+      requestType,
       paramMemberId,
       paramPassword,
       paramMobile,
@@ -2452,7 +2619,7 @@ module.exports = function createAdminServiceSettingsPage({
       [isEnabled, ciphertext],
     );
 
-    sendJson(response, 200, { ok: true, message: 'Plan API settings saved successfully.' });
+    sendJson(response, 200, { ok: true, message: 'Plan API settings saved successfully.', planApi: config });
   }
 
   /**
@@ -2464,10 +2631,22 @@ module.exports = function createAdminServiceSettingsPage({
       throw httpError('Valid 10-digit mobile number is required for Operator Look.', 400);
     }
 
+    const brand = String(input.brand || input.activeBrand || 'ERS').trim().toUpperCase();
     let overrideConfig = null;
-    if (input.apiUrl && input.memberId && input.password) {
+
+    if (brand === 'ERS') {
+      const apiUserId = String(input.apiUserId || input.ersApiUserId || '9335819686').trim();
+      const token = String(input.token || input.ersToken || 'tok_c7f65f27e096035786e9c851').trim();
       overrideConfig = {
-        apiUrl: String(input.apiUrl).trim(),
+        activeBrand: 'ERS',
+        apiUserId,
+        token,
+        apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
+      };
+    } else if (brand === 'PLANAPI' && input.memberId && input.password) {
+      overrideConfig = {
+        activeBrand: 'PLANAPI',
+        apiUrl: String(input.apiUrl || 'https://planapi.in/OperatorLook.aspx').trim(),
         requestType: String(input.requestType || 'GET').trim().toUpperCase(),
         memberId: String(input.memberId).trim(),
         password: String(input.password).trim(),
