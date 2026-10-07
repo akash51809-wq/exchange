@@ -96,8 +96,21 @@ const createUserInvoicePages = require('./pages/user-invoice');
 const createAdminInvoicePage = require('./pages/admin-invoice');
 const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
 const createSystemChartPage = require('./pages/system-chart');
+const { sendNotFoundPage } = require('./pages/not-found');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
 const createUserSettingCallbackPage = require('./pages/user-setting-callback');
+
+function isApiRequest(request, url) {
+  if (!url) return false;
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/webservices/api/')) {
+    return true;
+  }
+  const accept = String(request.headers?.accept || '');
+  if (accept.includes('application/json') && !accept.includes('text/html')) {
+    return true;
+  }
+  return false;
+}
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
 const { executeStockApiCall, extractValueByPath } = require('./lib/stock-api-helper');
 const createBuyerApiService = require('./lib/buyer-api-service');
@@ -5057,7 +5070,12 @@ async function handleRequest(request, response) {
     const route = routes.get(routeKey);
     if (!route) {
       statusCode = 404;
-      sendJson(response, statusCode, { error: 'यह रास्ता उपलब्ध नहीं है।' });
+      if (isApiRequest(request, url)) {
+        sendJson(response, statusCode, { error: 'यह रास्ता उपलब्ध नहीं है।' });
+      } else {
+        const session = await getSession(request).catch(() => null);
+        sendNotFoundPage(response, { requestedUrl: url.pathname, session });
+      }
       return;
     }
 
@@ -5088,7 +5106,12 @@ async function handleRequest(request, response) {
     }
     if (!response.headersSent && !response.destroyed) {
       const message = statusCode === 500 ? 'सर्वर में आंतरिक त्रुटि हुई।' : error.message;
-      sendJson(response, statusCode, { error: message });
+      if (statusCode === 404 && !isApiRequest(request, url)) {
+        const session = await getSession(request).catch(() => null);
+        sendNotFoundPage(response, { requestedUrl: url?.pathname, session });
+      } else {
+        sendJson(response, statusCode, { error: message });
+      }
     }
   } finally {
     // संवेदनशील query/body के बिना छोटा संचालन लॉग।

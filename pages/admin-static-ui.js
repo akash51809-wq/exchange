@@ -7,6 +7,7 @@ const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
 const { renderAdminMenuList } = require('../config/admin-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { sendNotFoundPage } = require('./not-found');
 
 module.exports = function createPageModule({ fs, fsp, path, adminUiRoot, adminAssetsRoot, sendJson }) {
   const ADMIN_UI_ROOT = adminUiRoot;
@@ -37,6 +38,15 @@ async function serveAdminUi(urlPath, method, response) {
     return false;
   }
 
+  function handleNotFound() {
+    if (urlPath.startsWith('/assets/')) {
+      sendJson(response, 404, { error: 'यह फाइल उपलब्ध नहीं है।' });
+    } else {
+      sendNotFoundPage(response, { requestedUrl: urlPath });
+    }
+    return true;
+  }
+
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(requestedPath);
@@ -47,20 +57,17 @@ async function serveAdminUi(urlPath, method, response) {
 
   const filePath = path.resolve(root, decodedPath);
   if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
-    sendJson(response, 404, { error: 'यह पृष्ठ उपलब्ध नहीं है।' });
-    return true;
+    return handleNotFound();
   }
 
   let fileInfo;
   try {
     fileInfo = await fsp.stat(filePath);
   } catch {
-    sendJson(response, 404, { error: 'यह पृष्ठ उपलब्ध नहीं है।' });
-    return true;
+    return handleNotFound();
   }
   if (!fileInfo.isFile()) {
-    sendJson(response, 404, { error: 'यह पृष्ठ उपलब्ध नहीं है।' });
-    return true;
+    return handleNotFound();
   }
 
   const contentTypes = {
