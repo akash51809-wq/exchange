@@ -224,6 +224,7 @@ const {
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 const { sendSystemChartPage } = createSystemChartPage();
+const { checkAndSuspendSellerApiOnDailyRefund } = require('./lib/seller-api-rules');
 
 // PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
 // पैसे की रकम छोटे मुद्रा-इकाइयों में BIGINT है; floating point नहीं।
@@ -490,6 +491,9 @@ const DATABASE_SCHEMA = `
   ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS callback_ip TEXT DEFAULT '';
   ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS valid_till TIMESTAMPTZ;
   ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+  ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS fail_count INTEGER DEFAULT 0;
+  ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS auto_disabled_at TIMESTAMPTZ;
+  ALTER TABLE seller_api_settings ADD COLUMN IF NOT EXISTS auto_disabled_reason TEXT DEFAULT '';
   ALTER TABLE seller_api_settings ALTER COLUMN short_name DROP NOT NULL;
   ALTER TABLE seller_api_settings ALTER COLUMN services DROP NOT NULL;
   ALTER TABLE seller_api_settings ALTER COLUMN mode DROP NOT NULL;
@@ -2588,7 +2592,7 @@ async function handleRequest(request, response) {
       if (ourTxnId || supplierTxnId) {
         const orderRes = await db.query(
           `SELECT id, user_id, amount_minor, cost_minor, status, provider_reference, idempotency_key,
-                  seller_user_id, seller_margin_minor, mobile_number
+                  seller_user_id, seller_api_id, seller_margin_minor, mobile_number
            FROM recharge_orders
            WHERE (id::text = $1 OR idempotency_key = $1 OR provider_reference = $1 OR provider_reference = $2)
            LIMIT 1`,
@@ -2669,6 +2673,12 @@ async function handleRequest(request, response) {
             [newDbStatus, operatorTxnId || supplierTxnId, JSON.stringify(incomingPayload), order.id],
           );
           orderUpdated = true;
+          if (newDbStatus === 'failed') {
+            const apiToTest = order.seller_api_id || apiId;
+            if (apiToTest) {
+              checkAndSuspendSellerApiOnDailyRefund(db, apiToTest).catch(() => {});
+            }
+          }
         }
       }
 
@@ -3988,7 +3998,7 @@ async function handleRequest(request, response) {
         try {
           await client.query('BEGIN');
           const orderRes = await client.query(
-            'SELECT id, user_id, seller_user_id, amount_minor, cost_minor, margin_minor, seller_margin_minor, mobile_number, status, dispute_status FROM recharge_orders WHERE id = $1 AND seller_user_id = $2 FOR UPDATE',
+            'SELECT id, user_id, seller_user_id, seller_api_id, amount_minor, cost_minor, margin_minor, seller_margin_minor, mobile_number, status, dispute_status FROM recharge_orders WHERE id = $1 AND seller_user_id = $2 FOR UPDATE',
             [orderId, session.id],
           );
           if (!orderRes.rowCount) throw httpError('Dispute not found or not assigned to your account.', 404);
@@ -4100,6 +4110,9 @@ async function handleRequest(request, response) {
           ).catch(() => {});
 
           await client.query('COMMIT');
+          if (order.seller_api_id) {
+            checkAndSuspendSellerApiOnDailyRefund(db, order.seller_api_id).catch(() => {});
+          }
           sendJson(response, 200, { ok: true, message: 'Dispute accepted and full refund credited to Buyer successfully.' });
           statusCode = 200;
           return;
@@ -4164,7 +4177,7 @@ async function handleRequest(request, response) {
         try {
           await client.query('BEGIN');
           const orderRes = await client.query(
-            'SELECT id, user_id, seller_user_id, amount_minor, cost_minor, margin_minor, status, dispute_status FROM recharge_orders WHERE id = $1 FOR UPDATE',
+            'SELECT id, user_id, seller_user_id, seller_api_id, amount_minor, cost_minor, margin_minor, status, dispute_status FROM recharge_orders WHERE id = $1 FOR UPDATE',
             [orderId],
           );
           if (!orderRes.rowCount) throw httpError('Transaction not found.', 404);
@@ -4216,6 +4229,9 @@ async function handleRequest(request, response) {
           ).catch(() => {});
 
           await client.query('COMMIT');
+          if (order.seller_api_id) {
+            checkAndSuspendSellerApiOnDailyRefund(db, order.seller_api_id).catch(() => {});
+          }
           sendJson(response, 200, { ok: true, message: 'Dispute accepted and refunded successfully.' });
           statusCode = 200;
           return;

@@ -3,6 +3,7 @@
 const { escapeHtml } = require('../lib/page-utils');
 const { renderAdminNavigation } = require('../config/admin-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { checkAndSuspendSellerApiOnDailyRefund } = require('../lib/seller-api-rules');
 
 const CIRCLES = [
   'All', 'Andhra Pradesh', 'Assam', 'Bihar & Jharkhand', 'Chennai', 'Delhi', 'Gujarat',
@@ -920,6 +921,9 @@ module.exports = function createAdminRechargeReportPage({
       );
 
       await client.query('COMMIT');
+      if (order.seller_api_id) {
+        checkAndSuspendSellerApiOnDailyRefund(db, order.seller_api_id).catch(() => {});
+      }
       sendJson(response, 200, { ok: true, message: 'Transaction marked as failed and buyer wallet refunded successfully.' });
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});

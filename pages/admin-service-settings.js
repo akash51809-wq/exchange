@@ -636,6 +636,64 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
                     </div>
 
+                    <!-- 8. API Disable After Number of Fail Txn -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle API Disable After Number of Fail Txn">
+                            <input type="checkbox" id="apiDisableFailTxnEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="apiDisableFailTxnEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-power-off text-danger"></i> API Disable After Number of Fail Txn
+                          </h6>
+                          <p class="general-item-desc">
+                            यदि किसी Seller API से लगातार अथवा तय संख्या में रिचार्ज फेल होते हैं, तो वह API ऑटोमैटिक Disable (निष्क्रिय) हो जाएगी ताकि आगे के नए ट्रांजेक्शन उस API पर न जाएं।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="apiDisableFailTxnCount" class="form-control font-weight-bold text-center" value="5" min="1" max="500">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Fail Txn</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 9. API Suspend After % on Refund Txn in a Day -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle API Suspend After % on Refund Txn in a Day">
+                            <input type="checkbox" id="apiSuspendRefundPercentEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="apiSuspendRefundPercentEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-exclamation-triangle text-warning"></i> API Suspend After % on Refund Txn in a Day
+                          </h6>
+                          <p class="general-item-desc">
+                            यदि 1 दिन (24 घंटे) में किसी Seller API के कुल ट्रांजेक्शन में से रिफंड (Refund / Dispute) ट्रांजेक्शन का प्रतिशत तय % या उससे अधिक हो जाता है, तो वह API ऑटोमैटिक Suspend हो जाएगी।
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="apiSuspendRefundPercent" class="form-control font-weight-bold text-center" value="25" min="1" max="100">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">% (Percent)</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1432,6 +1490,10 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('stopRehitAfterMinutes', g.stopRehitAfterMinutes ?? 2);
           setSwitch('stopSameNumberAmountEnabled', g.stopSameNumberAmountEnabled !== false);
           setVal('stopSameNumberAmountMinutes', g.stopSameNumberAmountMinutes ?? 3);
+          setSwitch('apiDisableFailTxnEnabled', g.apiDisableFailTxnEnabled !== false);
+          setVal('apiDisableFailTxnCount', g.apiDisableFailTxnCount ?? 5);
+          setSwitch('apiSuspendRefundPercentEnabled', g.apiSuspendRefundPercentEnabled !== false);
+          setVal('apiSuspendRefundPercent', g.apiSuspendRefundPercent ?? 25);
           updateComplainDelayVisibility();
         }
 
@@ -1939,7 +2001,9 @@ module.exports = function createAdminServiceSettingsPage({
       'complainMaxAgeEnabled',
       'notifyPendingTxnEnabled',
       'stopRehitAfterEnabled',
-      'stopSameNumberAmountEnabled'
+      'stopSameNumberAmountEnabled',
+      'apiDisableFailTxnEnabled',
+      'apiSuspendRefundPercentEnabled'
     ];
 
     function updateToggleBadge(id) {
@@ -2000,6 +2064,10 @@ module.exports = function createAdminServiceSettingsPage({
           stopRehitAfterMinutes: Number(document.getElementById('stopRehitAfterMinutes').value) || 2,
           stopSameNumberAmountEnabled: document.getElementById('stopSameNumberAmountEnabled').checked,
           stopSameNumberAmountMinutes: Number(document.getElementById('stopSameNumberAmountMinutes').value) || 3,
+          apiDisableFailTxnEnabled: document.getElementById('apiDisableFailTxnEnabled').checked,
+          apiDisableFailTxnCount: Math.max(1, parseInt(document.getElementById('apiDisableFailTxnCount').value, 10) || 5),
+          apiSuspendRefundPercentEnabled: document.getElementById('apiSuspendRefundPercentEnabled').checked,
+          apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(document.getElementById('apiSuspendRefundPercent').value) || 25)),
         };
 
         try {
@@ -2076,6 +2144,10 @@ module.exports = function createAdminServiceSettingsPage({
         stopRehitAfterMinutes: 2,
         stopSameNumberAmountEnabled: true,
         stopSameNumberAmountMinutes: 3,
+        apiDisableFailTxnEnabled: true,
+        apiDisableFailTxnCount: 5,
+        apiSuspendRefundPercentEnabled: true,
+        apiSuspendRefundPercent: 25,
       };
     }
     if (!result.plan_api) {
@@ -2125,6 +2197,10 @@ module.exports = function createAdminServiceSettingsPage({
       stopRehitAfterMinutes: Math.max(1, parseInt(input.stopRehitAfterMinutes, 10) || 2),
       stopSameNumberAmountEnabled: Boolean(input.stopSameNumberAmountEnabled),
       stopSameNumberAmountMinutes: Math.max(1, parseInt(input.stopSameNumberAmountMinutes, 10) || 3),
+      apiDisableFailTxnEnabled: Boolean(input.apiDisableFailTxnEnabled),
+      apiDisableFailTxnCount: Math.max(1, parseInt(input.apiDisableFailTxnCount, 10) || 5),
+      apiSuspendRefundPercentEnabled: Boolean(input.apiSuspendRefundPercentEnabled),
+      apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(input.apiSuspendRefundPercent) || 25)),
     };
 
     const ciphertext = encryptServiceConfig(config);

@@ -302,7 +302,7 @@ module.exports = function createSystemChartPage() {
         <i class="fa fa-shield text-danger"></i> 1. एडमिन पैनल (Admin Features)
       </a>
       <a href="#section-general-settings" class="nav-tab-btn" onclick="activateTab(event, 'section-general-settings')">
-        <i class="fa fa-sliders text-warning"></i> 2. सर्विस सेटिंग्स (7 General Rules)
+        <i class="fa fa-sliders text-warning"></i> 2. सर्विस सेटिंग्स (9 General Rules)
       </a>
       <a href="#section-user" class="nav-tab-btn" onclick="activateTab(event, 'section-user')">
         <i class="fa fa-user text-primary"></i> 3. यूज़र पैनल (Buyer &amp; Seller)
@@ -503,7 +503,7 @@ module.exports = function createSystemChartPage() {
     <div id="section-general-settings" class="chart-section mt-5">
       <div class="section-header">
         <span class="badge-role badge-admin">SYSTEM RULES</span>
-        <h2>2. सर्विस सेटिंग्स (General Rules &amp; 7 System Switches)</h2>
+        <h2>2. सर्विस सेटिंग्स (General Rules &amp; 9 System Switches)</h2>
       </div>
 
       <div class="card-feature">
@@ -512,7 +512,7 @@ module.exports = function createSystemChartPage() {
           <span class="feature-route">/admin/settings/service-settings</span>
         </div>
         <div class="card-feature-body">
-          <p>यह 7 सेटिंग्स पूरे एक्सचेंज सिस्टम की आत्मा हैं। प्रत्येक सेटिंग के आगे कॉम्पैक्ट <b>ON/OFF</b> टॉगल स्विच दिया गया है:</p>
+          <p>यह 9 सेटिंग्स पूरे एक्सचेंज सिस्टम की आत्मा हैं। प्रत्येक सेटिंग के आगे कॉम्पैक्ट <b>ON/OFF</b> टॉगल स्विच दिया गया है:</p>
 
           <div class="table-responsive">
             <table class="table table-bordered table-striped">
@@ -582,6 +582,24 @@ module.exports = function createSystemChartPage() {
                   <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (उदा. 3 Min)</small></td>
                   <td>
                     • <b>डुप्लीकेट रिचार्ज सुरक्षा:</b> जो रिचार्ज एक बार Success हो चुका है, उसी समान मोबाइल नंबर और समान अमाउंट का नया रिक्वेस्ट उतने सेट मिनट में किसी भी यूजर से दोबारा स्वीकार नहीं होगा। इससे गलती से दो बार रिचार्ज होने का नुकसान रुक जाता है।
+                  </td>
+                </tr>
+                <tr>
+                  <td class="font-weight-bold text-center">8</td>
+                  <td><strong>API Disable After Number of Fail Txn</strong></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Fail Txn (उदा. 5)</small></td>
+                  <td>
+                    • <b>लॉजिक:</b> यदि किसी Seller API से लगातार अथवा तय संख्या में रिचार्ज फेल (Fail) होते हैं, तो सिस्टम तुरंत उस Seller API को ऑटोमैटिक Disable (is_active = false) कर देता है।<br>
+                    • इससे नए रिचार्ज लगातार फेल हो रही API पर नहीं जाते और तुरंत अगले स्वस्थ सेलर पर रूट हो जाते हैं। जब सेलर अपनी समस्या ठीक कर लेगा तब उसे दोबारा Enable किया जा सकता है।
+                  </td>
+                </tr>
+                <tr>
+                  <td class="font-weight-bold text-center">9</td>
+                  <td><strong>API Suspend After % on Refund Txn in a Day</strong></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">% (उदा. 25%)</small></td>
+                  <td>
+                    • <b>लॉजिक:</b> यदि 1 दिन (24 घंटे) में किसी Seller API के कुल ट्रांजेक्शन में से रिफंड (Refund / Dispute) ट्रांजेक्शन का प्रतिशत सेट किए गए % (उदा. 25%) या उससे अधिक हो जाता है, तो वह API ऑटोमैटिक Suspend (is_active = false) हो जाएगी।<br>
+                    • इससे खराब क्वालिटी या फेक सक्सेस देकर बाद में रिफंड कराने वाली API से सिस्टम व बायर्स दोनों का नुकसान तुरंत रुक जाता है।
                   </td>
                 </tr>
               </tbody>
