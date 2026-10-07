@@ -471,10 +471,60 @@ module.exports = function createSystemChartPage() {
         </div>
       </div>
 
+      <!-- Feature: Live Recharge Report -->
+      <div class="card-feature">
+        <div class="card-feature-header">
+          <h4><i class="fa fa-bolt text-danger"></i> 1.5 लाइव रिचार्ज रिपोर्ट (Live Recharge Report - 10s Auto Refresh)</h4>
+          <span class="feature-route">/admin/reports/live-recharge</span>
+        </div>
+        <div class="card-feature-body">
+          <p class="font-weight-bold text-dark">रीयल-टाइम ऑटोमैटिक ट्रांजैक्शन फीड (No Manual Touch):</p>
+          <div class="logic-grid">
+            <div class="logic-box">
+              <h6><i class="fa fa-eye-slash text-secondary"></i> कोई फ़िल्टर नहीं (Filter-free Clean View)</h6>
+              <p>पेज खोलने पर ऊपर कोई फ़िल्टर बार नहीं दिखता — स्क्रीन सीधे लाइव ट्रांजैक्शन टेबल और रीयल-टाइम आँकड़ों पर केंद्रित रहती है।</p>
+            </div>
+            <div class="logic-box">
+              <h6><i class="fa fa-refresh text-success"></i> हर 10 सेकंड में ऑटो-रिफ्रेश (10s Polling)</h6>
+              <p>बिना पेज रीलोड किए बैकग्राउंड में हर 10 सेकंड में नवीनतम 50 ट्रांजैक्शन स्वतः फेच होते हैं। साथ में 10 सेकंड का काउंटडाउन टिकर व पल्स इंडिकेटर लाइव रहता है।</p>
+            </div>
+            <div class="logic-box">
+              <h6><i class="fa fa-pause-circle text-warning"></i> स्मार्ट मोडल पॉज़ (Modal Protection)</h6>
+              <p>यदि एडमिन किसी ट्रांजैक्शन पर Fail, Dispute, Log या Update Ope ID का मोडल खोलता है, तो ऑटो-रिफ्रेश अपने-आप पॉज़ हो जाता है ताकि काम में रुकावट न आए।</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature: Pending Recharge Report -->
+      <div class="card-feature">
+        <div class="card-feature-header">
+          <h4><i class="fa fa-clock-o text-warning"></i> 1.6 पेंडिंग रिचार्ज रिपोर्ट (Pending Recharge Report)</h4>
+          <span class="feature-route">/admin/reports/pending-recharge</span>
+        </div>
+        <div class="card-feature-body">
+          <p class="font-weight-bold text-dark">सभी अटके हुए (Pending) ट्रांजैक्शन्स की त्वरित निगरानी व समाधान:</p>
+          <div class="logic-grid">
+            <div class="logic-box">
+              <h6><i class="fa fa-hourglass-half text-warning"></i> डिफ़ॉल्ट पेंडिंग स्टेटस (Default Pending Filter)</h6>
+              <p>यह पेज मास्टर रिपोर्ट जैसा ही सभी फ़िल्टर प्रदान करता है, लेकिन डिफ़ॉल्ट रूप से स्टेटस <b>Pending</b> सेट रहता है और टेबल में केवल पेंडिंग रिचार्ज ही लोड होते हैं।</p>
+            </div>
+            <div class="logic-box">
+              <h6><i class="fa fa-search text-primary"></i> सभी 9 फ़िल्टर्स उपलब्ध</h6>
+              <p>Top entries, Date Range, Buyer/Client ID, Operator, Circle, Mobile Number व Amount द्वारा पेंडिंग ऑर्डर्स को तुरंत खोजा जा सकता है।</p>
+            </div>
+            <div class="logic-box">
+              <h6><i class="fa fa-wrench text-danger"></i> त्वरित समाधान एक्शन</h6>
+              <p>पेंडिंग ट्रांजैक्शन का रॉ लॉग देखना, सप्लायर या ऑपरेटर से बात करके Ope ID अपडेट करना, अथवा आवश्यकता पड़ने पर तुरंत फेल व रिफंड करना।</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Feature: Operators -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-cogs text-secondary"></i> 1.5 ऑपरेटर मैनेजमेंट (Create &amp; Show Operators)</h4>
+          <h4><i class="fa fa-cogs text-secondary"></i> 1.7 ऑपरेटर मैनेजमेंट (Create &amp; Show Operators)</h4>
           <span class="feature-route">/admin/settings/create-operator | /admin/settings/show-operator</span>
         </div>
         <div class="card-feature-body">

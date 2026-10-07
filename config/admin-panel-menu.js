@@ -17,6 +17,8 @@ const ADMIN_PANEL_MENU = [
   { label: 'Request API Approval', path: '/admin/seller-api/requests' },
   { label: 'Reports', path: '#', items: [
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },
+    { label: 'Live Recharge Report', path: '/admin/reports/live-recharge' },
+    { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
   { label: 'Settings', path: '#', items: [

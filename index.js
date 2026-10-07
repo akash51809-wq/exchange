@@ -209,6 +209,9 @@ const { sendUserInvoicePage } = createUserInvoicePages({ db, formatMinorUnits })
 const { sendAdminInvoicePage } = createAdminInvoicePage({ db, formatMinorUnits });
 const {
   sendAdminRechargeReportPage,
+  sendAdminPendingRechargeReportPage,
+  sendAdminLiveRechargeReportPage,
+  handleGetLiveRechargeData,
   handleMarkFailed,
   handleUpdateOpeId,
   handleResendCallback,
@@ -3071,6 +3074,22 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/reports/live-recharge' || url.pathname === '/admin/reports/live-recharge-report') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminLiveRechargeReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/pending-recharge' || url.pathname === '/admin/reports/pending-recharge-report') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminPendingRechargeReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/user/invoices/download') {
         const user = await getSession(request);
         if (!user) throw httpError('login required', 401);
@@ -4283,6 +4302,14 @@ async function handleRequest(request, response) {
       }
 
       // Recharge Report Actions
+      if (url.pathname === '/api/admin/reports/live-recharge/data') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleGetLiveRechargeData(request, response);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       if (url.pathname === '/api/admin/recharge-report/mark-failed') {
         checkSameOrigin(request);
         const admin = await getSession(request);
