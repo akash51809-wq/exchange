@@ -19,6 +19,9 @@ const ADMIN_PANEL_MENU = [
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },
     { label: 'Live Recharge Report', path: '/admin/reports/live-recharge' },
     { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },
+    { label: 'Admin Earning', path: '/admin/reports/admin-earning' },
+    { label: 'Refund Report', path: '/admin/reports/refund-report' },
+    { label: 'Recharge Log', path: '/admin/reports/recharge-log' },
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
   { label: 'Settings', path: '#', items: [

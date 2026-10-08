@@ -95,6 +95,9 @@ const createUserReportAccountStatementPage = require('./pages/user-report-accoun
 const createUserInvoicePages = require('./pages/user-invoice');
 const createAdminInvoicePage = require('./pages/admin-invoice');
 const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
+const createAdminEarningPage = require('./pages/admin-earning');
+const createAdminRefundReportPage = require('./pages/admin-refund-report');
+const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
 const createSystemChartPage = require('./pages/system-chart');
 const { sendNotFoundPage } = require('./pages/not-found');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
@@ -231,6 +234,28 @@ const {
   handleGetLog,
   handleRaiseDispute,
 } = createAdminRechargeReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminEarningPage } = createAdminEarningPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  decryptServiceConfig,
+  sendJson,
+  httpError,
+});
+const { sendAdminRefundReportPage } = createAdminRefundReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminRechargeLogPage } = createAdminRechargeLogPage({
   db,
   formatMinorUnits,
   decryptMobile,
@@ -3100,6 +3125,30 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminPendingRechargeReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/admin-earning' || url.pathname === '/admin/reports/earning' || url.pathname === '/admin/earning' || url.pathname === '/admin/admin-earning') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminEarningPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/refund-report' || url.pathname === '/admin/refund-report' || url.pathname === '/admin/reports/refunds') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminRefundReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/recharge-log' || url.pathname === '/admin/recharge-log' || url.pathname === '/admin/reports/recharge-logs') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminRechargeLogPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
