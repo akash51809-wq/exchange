@@ -98,6 +98,12 @@ const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
 const createAdminEarningPage = require('./pages/admin-earning');
 const createAdminRefundReportPage = require('./pages/admin-refund-report');
 const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
+const createAdminDailySalesReportPage = require('./pages/admin-daily-sales-report');
+const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
+const createAdminWalletRedeemPage = require('./pages/admin-wallet-redeem');
+const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
+const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-history');
+const { parseUserAgent, resolveLocation } = require('./lib/user-agent-parser');
 const createSystemChartPage = require('./pages/system-chart');
 const { sendNotFoundPage } = require('./pages/not-found');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
@@ -262,6 +268,37 @@ const { sendAdminRechargeLogPage } = createAdminRechargeLogPage({
   sendJson,
   httpError,
 });
+const { sendAdminDailySalesReportPage } = createAdminDailySalesReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminWalletUpdatePage } = createAdminWalletUpdatePage({
+  db,
+  formatMinorUnits,
+  decryptFundField,
+  sendJson,
+  httpError,
+});
+const { sendAdminWalletRedeemPage } = createAdminWalletRedeemPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminWalletExchangePage } = createAdminWalletExchangePage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminUserLoginHistoryPage } = createAdminUserLoginHistoryPage({
+  db,
+  sendJson,
+  httpError,
+});
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 const { sendSystemChartPage } = createSystemChartPage();
@@ -332,6 +369,31 @@ const DATABASE_SCHEMA = `
     revoked_at TIMESTAMPTZ
   );
   CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx ON user_sessions (user_id, expires_at) WHERE revoked_at IS NULL;
+
+  CREATE TABLE IF NOT EXISTS user_login_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    username TEXT NOT NULL,
+    name TEXT,
+    role TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    device_type TEXT,
+    device_name TEXT,
+    os_name TEXT,
+    browser_name TEXT,
+    browser_version TEXT,
+    location TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    failure_reason TEXT,
+    session_token_hash BYTEA,
+    login_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    logout_at TIMESTAMPTZ,
+    details JSONB
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_user_id ON user_login_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_login_at ON user_login_logs(login_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_status ON user_login_logs(status);
 
   CREATE TABLE IF NOT EXISTS wallets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -677,6 +739,31 @@ const DATABASE_SCHEMA = `
     UNIQUE (user_id, month_year)
   );
   CREATE INDEX IF NOT EXISTS seller_gst_invoices_user_idx ON seller_gst_invoices (user_id, month_year);
+
+  CREATE TABLE IF NOT EXISTS user_login_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    username TEXT NOT NULL,
+    name TEXT,
+    role TEXT,
+    ip_address TEXT,
+    user_agent TEXT,
+    device_type TEXT,
+    device_name TEXT,
+    os_name TEXT,
+    browser_name TEXT,
+    browser_version TEXT,
+    location TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    failure_reason TEXT,
+    session_token_hash BYTEA,
+    login_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    logout_at TIMESTAMPTZ,
+    details JSONB
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_user_id ON user_login_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_login_at ON user_login_logs(login_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_user_login_logs_status ON user_login_logs(status);
 `;
 
 async function initializeDatabase() {
@@ -1357,14 +1444,44 @@ async function loginUser(request, response) {
   if (userId.length > 80 || password.length > 256) throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
 
   const result = await db.query(
-    'SELECT id, username, name, role, password_hash FROM users WHERE lower(username) = lower($1) AND status = \'active\' AND deleted_at IS NULL',
+    'SELECT id, username, name, role, city, state, password_hash FROM users WHERE lower(username) = lower($1) AND status = \'active\' AND deleted_at IS NULL',
     [userId],
   );
   const user = result.rows[0];
   const passwordMatches = user
     ? await argon2.verify(user.password_hash, password).catch(() => false)
     : await argon2.hash(password || 'invalid-password', { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 }).then(() => false);
-  if (!user || !passwordMatches) throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
+  if (!user || !passwordMatches) {
+    try {
+      const clientIp = request.headers['x-forwarded-for'] ? String(request.headers['x-forwarded-for']).split(',')[0].trim() : clientAddress(request);
+      const uaStr = String(request.headers['user-agent'] || '').slice(0, 500);
+      const parsed = parseUserAgent(uaStr);
+      const loc = resolveLocation(clientIp, user || null);
+      await db.query(
+        `INSERT INTO user_login_logs (
+          user_id, username, name, role, ip_address, user_agent,
+          device_type, device_name, os_name, browser_name, browser_version,
+          location, status, failure_reason, login_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'failed', $13, now())`,
+        [
+          user ? user.id : null,
+          user ? user.username : userId,
+          user ? user.name : 'Unknown User',
+          user ? user.role : 'user',
+          clientIp,
+          uaStr,
+          parsed.deviceType,
+          parsed.deviceName,
+          parsed.osName,
+          parsed.browserName,
+          parsed.browserVersion,
+          loc,
+          !user ? 'User not found or inactive' : 'Incorrect password',
+        ]
+      ).catch(() => {});
+    } catch (_) {}
+    throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
+  }
 
   // Check Login OTP general setting
   const genSettings = await getGeneralSettings();
@@ -1444,6 +1561,39 @@ async function loginUser(request, response) {
     'INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + interval \'12 hours\')',
     [user.id, tokenHash],
   );
+
+  // Record successful login in user_login_logs
+  try {
+    const clientIp = request.headers['x-forwarded-for'] ? String(request.headers['x-forwarded-for']).split(',')[0].trim() : clientAddress(request);
+    const uaStr = String(request.headers['user-agent'] || '').slice(0, 500);
+    const parsed = parseUserAgent(uaStr);
+    const loc = resolveLocation(clientIp, user);
+    await db.query(
+      `INSERT INTO user_login_logs (
+        user_id, username, name, role, ip_address, user_agent,
+        device_type, device_name, os_name, browser_name, browser_version,
+        location, status, session_token_hash, login_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'success', $13, now())`,
+      [
+        user.id,
+        user.username,
+        user.name,
+        user.role,
+        clientIp,
+        uaStr,
+        parsed.deviceType,
+        parsed.deviceName,
+        parsed.osName,
+        parsed.browserName,
+        parsed.browserVersion,
+        loc,
+        tokenHash,
+      ]
+    ).catch((logErr) => console.warn('[user_login_logs insert error]', logErr.message));
+  } catch (err) {
+    console.warn('[user_login_logs error]', err.message);
+  }
+
   sendJson(response, 200, {
     message: 'लॉगिन सफल।',
     redirect: user.role === 'admin' ? '/admin/' : '/dashboard',
@@ -1457,6 +1607,7 @@ async function logoutUser(request, response) {
   if (token) {
     const tokenHash = crypto.createHash('sha256').update(token).digest();
     await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
+    await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
   }
   sendJson(response, 200, { message: 'लॉगआउट हो गया।' }, { 'set-cookie': sessionCookie('', 0) });
 }
@@ -3096,11 +3247,43 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/payment/wallet-update' || url.pathname === '/admin/payment/list-wallet-update') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminWalletUpdatePage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/payment/wallet-redeem' || url.pathname === '/admin/payment/list-wallet-redeem') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminWalletRedeemPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/payment/wallet-exchange' || url.pathname === '/admin/payment/list-wallet-exchange') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminWalletExchangePage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/admin/payment/invoice' || url.pathname === '/admin/payment/invoices' || url.pathname === '/admin/invoice' || url.pathname === '/admin/invoices') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminInvoicePage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/daily-sales-report' || url.pathname === '/admin/reports/daily-sales') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminDailySalesReportPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
@@ -3270,6 +3453,21 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminUserListPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (
+        url.pathname === '/admin/users/login-history' ||
+        url.pathname === '/admin/users/log-history' ||
+        url.pathname === '/admin/user/login-history' ||
+        url.pathname === '/admin/user/log-history' ||
+        url.pathname === '/admin/reports/user-log-history' ||
+        url.pathname === '/admin/reports/login-history'
+      ) {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminUserLoginHistoryPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
@@ -4678,6 +4876,81 @@ async function handleRequest(request, response) {
           sendJson(response, 200, {
             ok: true,
             message: action === 'success' ? 'Payout marked as success.' : 'Payout rejected and amount refunded to user wallet.',
+          });
+          statusCode = 200;
+          return;
+        } catch (err) {
+          await client.query('ROLLBACK').catch(() => {});
+          throw err;
+        } finally {
+          client.release();
+        }
+      }
+
+      if (url.pathname === '/api/admin/wallet/manual-update') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const username = String(input.username || '').trim();
+        const actionType = String(input.actionType || 'credit').trim().toLowerCase();
+        const amount = Number(input.amount || 0);
+        const remark = String(input.remark || '').trim();
+
+        if (!username) throw httpError('Username or User ID is required.', 400);
+        if (!['credit', 'debit'].includes(actionType)) throw httpError('Action type must be credit or debit.', 400);
+        if (isNaN(amount) || amount <= 0) throw httpError('A valid positive amount is required.', 400);
+        const amountMinor = BigInt(Math.round(amount * 100));
+
+        const userRes = await db.query(
+          "SELECT id, username, name FROM users WHERE (username = $1 OR id::text = $1) AND deleted_at IS NULL",
+          [username]
+        );
+        if (!userRes.rowCount) throw httpError('User not found with this username.', 404);
+        const targetUser = userRes.rows[0];
+
+        const client = await db.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query(
+            "INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR') ON CONFLICT (user_id, currency) DO NOTHING",
+            [targetUser.id]
+          );
+          const walletRes = await client.query(
+            "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
+            [targetUser.id]
+          );
+          const wallet = walletRes.rows[0];
+          const currentBal = BigInt(wallet.balance_minor || 0);
+
+          if (actionType === 'debit' && currentBal < amountMinor) {
+            throw httpError(`Insufficient balance. Current balance is ₹${formatMinorUnits(currentBal)}.`, 400);
+          }
+
+          const newBal = actionType === 'credit' ? currentBal + amountMinor : currentBal - amountMinor;
+          await client.query("UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2", [newBal, wallet.id]);
+
+          const refKey = `manual_${actionType}_${Date.now()}`;
+          await client.query(
+            `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description)
+             VALUES ($1, $2, $3, $4, 'manual_admin_update', $5, $6, $7)`,
+            [wallet.id, targetUser.id, amountMinor, actionType, admin.id, refKey, remark || `Manual admin ${actionType} by ${admin.username}`]
+          );
+
+          await client.query(
+            "INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1, $2, 'user_wallet', $3, $4)",
+            [admin.id, `manual_wallet_${actionType}`, targetUser.id, JSON.stringify({ amountMinor: amountMinor.toString(), remark, prevBal: currentBal.toString(), newBal: newBal.toString() })]
+          );
+
+          await client.query('COMMIT');
+          sendJson(response, 200, {
+            ok: true,
+            message: `Wallet ${actionType === 'credit' ? 'credited' : 'debited'} successfully.`,
+            user: targetUser.username,
+            amount: (Number(amountMinor) / 100).toFixed(2),
+            newBalance: (Number(newBal) / 100).toFixed(2),
           });
           statusCode = 200;
           return;

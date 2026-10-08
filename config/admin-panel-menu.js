@@ -6,16 +6,21 @@ const ADMIN_PANEL_MENU = [
   { label: 'Dashboard', path: '/admin/' },
   { label: 'User', path: '#', items: [
     { label: 'List User', path: '/admin/users/list' },
+    { label: 'User Log History', path: '/admin/users/login-history' },
   ] },
   { label: 'Payment', path: '#', items: [
     { label: 'Fund Request', path: '/admin/payment/fund-request' },
     { label: 'Bank List', path: '/admin/payment/bank-list' },
     { label: 'Bank Approval', path: '/admin/payment/bank-approval' },
     { label: 'Payout Requests', path: '/admin/payment/payout-requests' },
+    { label: 'List of Wallet Update', path: '/admin/payment/wallet-update' },
+    { label: 'List of Wallet Redeem', path: '/admin/payment/wallet-redeem' },
+    { label: 'List of Wallet Exchange', path: '/admin/payment/wallet-exchange' },
   ] },
   { label: 'Disputes', path: '/admin/disputes' },
   { label: 'Request API Approval', path: '/admin/seller-api/requests' },
   { label: 'Reports', path: '#', items: [
+    { label: 'Daily Sales Report', path: '/admin/reports/daily-sales-report' },
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },
     { label: 'Live Recharge Report', path: '/admin/reports/live-recharge' },
     { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },
