@@ -103,6 +103,9 @@ const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
 const createAdminWalletRedeemPage = require('./pages/admin-wallet-redeem');
 const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
 const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-history');
+const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
+const createFrontLandingPage = require('./pages/front-landing-page');
+const { getDefaultLogoSvg, getDefaultFaviconSvg } = require('./lib/default-brand-assets');
 const { parseUserAgent, resolveLocation } = require('./lib/user-agent-parser');
 const createSystemChartPage = require('./pages/system-chart');
 const { sendNotFoundPage } = require('./pages/not-found');
@@ -298,6 +301,18 @@ const { sendAdminUserLoginHistoryPage } = createAdminUserLoginHistoryPage({
   db,
   sendJson,
   httpError,
+});
+const {
+  sendAdminWebsiteSettingsPage,
+  handleSaveWebsiteSettings,
+} = createAdminWebsiteSettingsPage({
+  db,
+  sendJson,
+  httpError,
+});
+const { sendFrontLandingPage, getWebsiteSettings } = createFrontLandingPage({
+  db,
+  sendJson,
 });
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
@@ -764,6 +779,29 @@ const DATABASE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_user_login_logs_user_id ON user_login_logs(user_id);
   CREATE INDEX IF NOT EXISTS idx_user_login_logs_login_at ON user_login_logs(login_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_login_logs_status ON user_login_logs(status);
+
+  CREATE TABLE IF NOT EXISTS website_settings (
+    id INT PRIMARY KEY DEFAULT 1,
+    website_name TEXT NOT NULL DEFAULT 'Easy Recharge Solution',
+    website_tagline TEXT DEFAULT 'India''s Leading B2B Multi-Recharge & LAPU Stock Exchange Platform',
+    logo_data BYTEA,
+    logo_mime TEXT,
+    logo_url TEXT,
+    favicon_data BYTEA,
+    favicon_mime TEXT,
+    favicon_url TEXT,
+    support_phone TEXT DEFAULT '+91 98765 43210',
+    support_whatsapp TEXT DEFAULT '+91 98765 43210',
+    support_email TEXT DEFAULT 'support@easyrechargesolution.com',
+    office_address TEXT DEFAULT 'Cyber City, Tower B, Sector 62, Noida, Uttar Pradesh, India - 201309',
+    working_hours TEXT DEFAULT '24x7 Customer & Stock Support',
+    footer_about TEXT DEFAULT 'Empowering telecom retailers and master distributors across India with lightning-fast multi-recharge services, automated LAPU stock swapping, and bank-grade APIs.',
+    social_telegram TEXT DEFAULT 'https://t.me/easyrechargesolution',
+    meta_title TEXT DEFAULT 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
+    meta_description TEXT DEFAULT 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  INSERT INTO website_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 `;
 
 async function initializeDatabase() {
@@ -3054,10 +3092,82 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
-      if (url.pathname === '/') {
-        statusCode = 302;
-        response.writeHead(statusCode, { location: '/admin/login' });
-        response.end();
+      if (url.pathname === '/' || url.pathname === '/home') {
+        await sendFrontLandingPage(request, response);
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/logo' || url.pathname === '/assets/website-logo' || url.pathname === '/api/website/logo') {
+        try {
+          const res = await db.query('SELECT logo_data, logo_mime, logo_url FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.logo_data) {
+            response.writeHead(200, {
+              'content-type': row.logo_mime || 'image/png',
+              'content-length': row.logo_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.logo_data);
+            statusCode = 200;
+            return;
+          }
+          if (row && row.logo_url) {
+            response.writeHead(302, { location: row.logo_url });
+            response.end();
+            statusCode = 302;
+            return;
+          }
+        } catch (_) {}
+        const defaultLogo = getDefaultLogoSvg('Easy Recharge', 'EXCHANGE PLATFORM');
+        response.writeHead(200, {
+          'content-type': 'image/svg+xml; charset=utf-8',
+          'content-length': Buffer.byteLength(defaultLogo),
+          'cache-control': 'public, max-age=300',
+        });
+        response.end(defaultLogo);
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/favicon' || url.pathname === '/favicon.ico' || url.pathname === '/assets/website-favicon') {
+        try {
+          const res = await db.query('SELECT favicon_data, favicon_mime, favicon_url FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.favicon_data) {
+            response.writeHead(200, {
+              'content-type': row.favicon_mime || 'image/x-icon',
+              'content-length': row.favicon_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.favicon_data);
+            statusCode = 200;
+            return;
+          }
+          if (row && row.favicon_url) {
+            response.writeHead(302, { location: row.favicon_url });
+            response.end();
+            statusCode = 302;
+            return;
+          }
+        } catch (_) {}
+        const defaultFavicon = getDefaultFaviconSvg();
+        response.writeHead(200, {
+          'content-type': 'image/svg+xml; charset=utf-8',
+          'content-length': Buffer.byteLength(defaultFavicon),
+          'cache-control': 'public, max-age=300',
+        });
+        response.end(defaultFavicon);
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/website/settings') {
+        const settings = await getWebsiteSettings();
+        sendJson(response, 200, settings);
+        statusCode = 200;
         return;
       }
 
@@ -3403,6 +3513,14 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminServiceSettingsPage(admin, response);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/settings/website-settings' || url.pathname === '/admin/website-settings') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminWebsiteSettingsPage(admin, response);
         statusCode = 200;
         return;
       }
@@ -4110,6 +4228,15 @@ async function handleRequest(request, response) {
         }
 
         throw httpError('अमान्य action।', 400);
+      }
+      if (url.pathname === '/api/admin/settings/website') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleSaveWebsiteSettings(request, response);
+        statusCode = response.statusCode || 200;
+        return;
       }
       if (url.pathname === '/api/admin/settings/services/general') {
         checkSameOrigin(request);

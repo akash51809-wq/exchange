@@ -110,6 +110,12 @@ async function serveAdminUi(urlPath, method, response) {
         );
       }
       htmlBody = await addPanelChrome(htmlBody, { role: 'admin', currentPath: urlPath || '/admin/' });
+    } else {
+      // Replace logo, favicon in login, register, and forgot-password pages
+      htmlBody = htmlBody
+        .replace(/src=["'][^"']*assets\/images\/brand\/(?:favicon|logo(?:-[0-9]+)?)\.png["']/gi, 'src="/api/logo"')
+        .replace(/class=["']header-brand-img dark-logo["']/gi, 'class="header-brand-img dark-logo" style="max-height:55px;max-width:220px;object-fit:contain;"')
+        .replace(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]*>/gi, '<link rel="icon" type="image/x-icon" href="/api/favicon">');
     }
   }
   const contentLength = htmlBody === undefined ? fileInfo.size : Buffer.byteLength(htmlBody);
