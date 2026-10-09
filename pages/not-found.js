@@ -12,11 +12,11 @@ function renderNotFoundHtml({ requestedUrl = '', session = null } = {}) {
   const roleName = session ? (session.role === 'admin' ? 'Admin' : 'User') : 'Guest';
 
   return `<!DOCTYPE html>
-<html lang="hi" dir="ltr">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0">
-  <title>404 - यह रास्ता उपलब्ध नहीं है (Page Not Found)</title>
+  <title>404 - Page Not Found</title>
   
   <!-- Favicon -->
   <link rel="icon" href="/assets/images/brand/favicon.ico" type="image/x-icon">
@@ -196,11 +196,11 @@ function renderNotFoundHtml({ requestedUrl = '', session = null } = {}) {
     </div>
 
     <!-- Headline -->
-    <h1 class="error-headline">यह रास्ता उपलब्ध नहीं है</h1>
+    <h1 class="error-headline">Page Not Found</h1>
     
-    <!-- Explanation in Hindi & English -->
+    <!-- Explanation in English -->
     <p class="error-subtext">
-      माफ़ कीजिए, आप जिस पेज या लिंक पर जाने का प्रयास कर रहे हैं वह सर्वर पर मौजूद नहीं है, हटा दिया गया है या उसका URL बदल चुका है।
+      Sorry, the page or link you are looking for does not exist on this server, has been removed, or the URL has changed.
     </p>
 
     <!-- Requested URL Box -->
@@ -214,13 +214,13 @@ function renderNotFoundHtml({ requestedUrl = '', session = null } = {}) {
     <!-- Action Buttons -->
     <div class="btn-action-group">
       <a href="${dashboardLink}" class="btn-action-primary">
-        <i class="fa fa-home"></i> डैशबोर्ड पर जाएं (Go to Dashboard)
+        <i class="fa fa-home"></i> Go to Dashboard
       </a>
       <button type="button" class="btn-action-secondary" onclick="window.history.length > 1 ? window.history.back() : window.location.href='/'">
-        <i class="fa fa-arrow-left"></i> वापस जाएं (Go Back)
+        <i class="fa fa-arrow-left"></i> Go Back
       </button>
       <a href="/admin/login" class="btn-action-secondary">
-        <i class="fa fa-sign-in"></i> लॉगिन पेज (Login)
+        <i class="fa fa-sign-in"></i> Login Page
       </a>
     </div>
 

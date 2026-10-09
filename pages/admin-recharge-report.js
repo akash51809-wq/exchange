@@ -4,6 +4,12 @@ const { escapeHtml } = require('../lib/page-utils');
 const { renderAdminNavigation } = require('../config/admin-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { checkAndSuspendSellerApiOnDailyRefund } = require('../lib/seller-api-rules');
+const {
+  getWalletMode,
+  holdDisputeLien,
+  releaseDisputeLien,
+  applyDisputeRefundPenalty,
+} = require('../lib/wallet-helper');
 
 const CIRCLES = [
   'All', 'Andhra Pradesh', 'Assam', 'Bihar & Jharkhand', 'Chennai', 'Delhi', 'Gujarat',
@@ -1243,7 +1249,7 @@ module.exports = function createAdminRechargeReportPage({
                 <h4 class="mb-0 font-weight-bold text-white">Live Recharge Report</h4>
               </div>
               <p class="text-white-50 mb-0 small">
-                बिना किसी क्लिक के हर 10 सेकंड में ऑटो-रिफ्रेश होने वाला लाइव ट्रांजेक्शन बोर्ड (Real-time Transaction Feed).
+                Live real-time transaction board auto-refreshing every 10 seconds (Real-time Transaction Feed).
               </p>
             </div>
             <div class="d-flex align-items-center flex-wrap" style="gap: 10px;">
@@ -1489,19 +1495,30 @@ module.exports = function createAdminRechargeReportPage({
       const buyerId = order.user_id;
       const refundAmountMinor = BigInt(order.cost_minor || order.amount_minor || '0');
 
+      const walletMode = await getWalletMode(client);
+      const isSeparate = (walletMode === 'separate');
+
       // 1. Credit refund to Buyer's wallet
       const buyerWalletRes = await client.query(
-        "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
+        "SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
         [buyerId],
       );
       if (!buyerWalletRes.rowCount) throw httpError('Buyer wallet not found.', 404);
       const buyerWallet = buyerWalletRes.rows[0];
-      const newBuyerBal = BigInt(buyerWallet.balance_minor || 0) + refundAmountMinor;
 
-      await client.query(
-        "UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2",
-        [newBuyerBal, buyerWallet.id],
-      );
+      if (isSeparate) {
+        const newBuyerBal = BigInt(buyerWallet.buyer_balance_minor || 0) + refundAmountMinor;
+        await client.query(
+          "UPDATE wallets SET buyer_balance_minor = $1, balance_minor = balance_minor + $2, updated_at = now() WHERE id = $3",
+          [newBuyerBal, refundAmountMinor, buyerWallet.id],
+        );
+      } else {
+        const newBuyerBal = BigInt(buyerWallet.balance_minor || 0) + refundAmountMinor;
+        await client.query(
+          "UPDATE wallets SET balance_minor = $1, buyer_balance_minor = buyer_balance_minor + $2, updated_at = now() WHERE id = $3",
+          [newBuyerBal, refundAmountMinor, buyerWallet.id],
+        );
+      }
 
       await client.query(
         `INSERT INTO wallet_entries (
@@ -1523,16 +1540,24 @@ module.exports = function createAdminRechargeReportPage({
 
         if (sellerCreditMinor > 0n) {
           const sellerWalletRes = await client.query(
-            "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
+            "SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
             [order.seller_user_id],
           );
           if (sellerWalletRes.rowCount > 0) {
             const sellerWallet = sellerWalletRes.rows[0];
-            const newSellerBal = BigInt(sellerWallet.balance_minor || 0) - sellerCreditMinor;
-            await client.query(
-              "UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2",
-              [newSellerBal, sellerWallet.id],
-            );
+            if (isSeparate) {
+              const newSellerBal = BigInt(sellerWallet.seller_balance_minor || 0) - sellerCreditMinor;
+              await client.query(
+                "UPDATE wallets SET seller_balance_minor = GREATEST(0, $1), balance_minor = GREATEST(0, balance_minor - $2), updated_at = now() WHERE id = $3",
+                [newSellerBal, sellerCreditMinor, sellerWallet.id],
+              );
+            } else {
+              const newSellerBal = BigInt(sellerWallet.balance_minor || 0) - sellerCreditMinor;
+              await client.query(
+                "UPDATE wallets SET balance_minor = GREATEST(0, $1), seller_balance_minor = GREATEST(0, seller_balance_minor - $2), updated_at = now() WHERE id = $3",
+                [newSellerBal, sellerCreditMinor, sellerWallet.id],
+              );
+            }
             await client.query(
               `INSERT INTO wallet_entries (
                  wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description
@@ -1563,6 +1588,15 @@ module.exports = function createAdminRechargeReportPage({
          WHERE id = $3`,
         [reason, JSON.stringify(updatedPayload), order.id],
       );
+
+      if (order.seller_user_id) {
+        await applyDisputeRefundPenalty(client, {
+          orderId: order.id,
+          sellerId: order.seller_user_id,
+          rechargeAmountMinor: order.amount_minor,
+          reason,
+        }).catch(() => {});
+      }
 
       await client.query('COMMIT');
       if (order.seller_api_id) {
@@ -1737,6 +1771,14 @@ module.exports = function createAdminRechargeReportPage({
        ON CONFLICT DO NOTHING`,
       [order.id, order.user_id, order.seller_user_id, dispCode, reason],
     ).catch(() => {});
+
+    if (order.seller_user_id) {
+      await holdDisputeLien(db, {
+        orderId: order.id,
+        sellerId: order.seller_user_id,
+        rechargeAmountMinor: order.amount_minor,
+      }).catch(() => {});
+    }
 
     sendJson(response, 200, { ok: true, message: 'Dispute recorded successfully.', disputeCode: dispCode });
   }

@@ -6,13 +6,24 @@ const path = require('node:path');
 const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { getWalletMode } = require('../lib/wallet-helper');
 
 module.exports = function createPageModule({ db, adminUiRoot }) {
   const ADMIN_UI_ROOT = adminUiRoot;
 async function sendUserDashboard(user, response) {
-  const result = await db.query("SELECT balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR'", [user.id]);
-  const balance = BigInt(result.rows[0]?.balance_minor || 0);
-  const rupees = (balance / 100n).toString() + '.' + String(balance % 100n).padStart(2, '0');
+  const walletMode = await getWalletMode(db);
+  const result = await db.query(
+    "SELECT balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR'",
+    [user.id]
+  );
+  const row = result.rows[0] || {};
+  const totalBalance = BigInt(row.balance_minor || 0);
+  const totalRupees = (totalBalance / 100n).toString() + '.' + String(totalBalance % 100n).padStart(2, '0');
+  const buyerBalance = BigInt(row.buyer_balance_minor || 0);
+  const buyerRupees = (buyerBalance / 100n).toString() + '.' + String(buyerBalance % 100n).padStart(2, '0');
+  const sellerBalance = BigInt(row.seller_balance_minor || 0);
+  const sellerRupees = (sellerBalance / 100n).toString() + '.' + String(sellerBalance % 100n).padStart(2, '0');
+
   const dashboardPath = path.join(ADMIN_UI_ROOT, 'index.html');
   let html = await fsp.readFile(dashboardPath, 'utf8');
   const menuStart = html.indexOf('<!-- Horizontal-menu -->');
@@ -21,13 +32,18 @@ async function sendUserDashboard(user, response) {
     html = html.slice(0, menuStart) + renderUserNavigation() + html.slice(menuEnd + '<!-- Horizontal-menu end -->'.length);
   }
   html = useFullWidthContainers(html);
+
+  const bannerText = walletMode === 'separate'
+    ? `User ID: ${escapeHtml(user.username)} · 🛒 Buyer Wallet: ₹${buyerRupees} (For Recharge) · 📈 Seller Wallet: ₹${sellerRupees} (Sales Earnings & Redeem)`
+    : `User ID: ${escapeHtml(user.username)} · Wallet balance: ₹${totalRupees}. Live recharge and account overview.`;
+
   html = html
     .replace('<title>Exchange - Recharge Admin</title>', '<title>Exchange - Recharge Dashboard</title>')
     .replaceAll('Logan Oliver', escapeHtml(user.name))
     .replace('Manage Director', 'User Account')
     .replace(
       'Dashboard preview: figures are sample data. Live recharge and account data are not connected yet.',
-      'User ID: ' + escapeHtml(user.username) + ' · Wallet balance: ₹' + rupees + '. Recharge figures below are sample data until recharge history is connected.',
+      bannerText,
     )
     .replace(/href="([^"#][^"]*\.html(?:#[^"]*)?)"/gi, (match, target) => {
       if (/^(?:\/|[a-z][a-z\d+.-]*:)/i.test(target)) return match;

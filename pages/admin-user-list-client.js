@@ -28,7 +28,7 @@
       headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'अनुरोध पूरा नहीं हुआ।');
+    if (!response.ok) throw new Error(result.error || 'Request could not be completed.');
     return result;
   }
   function showError(error) {
@@ -62,12 +62,12 @@
 
   document.querySelectorAll('[data-password]').forEach((button) => button.addEventListener('click', () => {
     selectedId = button.dataset.password;
-    open(`Change Password · ${button.dataset.user}`, `<form id="passwordForm"><div class="user-modal-error" id="userModalError"></div><p class="text-muted">नया पासवर्ड छह अंकों का होना चाहिए।</p><label>New Password</label><input name="password" type="password" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" class="form-control" required autocomplete="new-password"><div class="user-modal-actions"><button type="button" class="btn btn-outline-secondary" data-close>Cancel</button><button class="user-save">Set Password</button></div></form>`);
+    open(`Change Password · ${button.dataset.user}`, `<form id="passwordForm"><div class="user-modal-error" id="userModalError"></div><p class="text-muted">New password must be between 6 and 128 characters (letters, numbers, and special characters allowed).</p><label>New Password</label><input name="password" type="password" minlength="6" maxlength="128" placeholder="New password (letters, numbers, special characters)" class="form-control" required autocomplete="new-password"><div class="user-modal-actions"><button type="button" class="btn btn-outline-secondary" data-close>Cancel</button><button class="user-save">Set Password</button></div></form>`);
     body.querySelector('#passwordForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       try {
         await post(`/api/admin/users/${selectedId}/password`, { password: event.currentTarget.elements.namedItem('password').value });
-        window.alert('पासवर्ड बदल दिया गया।'); close();
+        window.alert('Password has been updated successfully.'); close();
       } catch (error) { showError(error.message); }
     });
   }));
@@ -91,11 +91,11 @@
   }));
 
   document.querySelectorAll('[data-margin]').forEach((button) => button.addEventListener('click', async () => {
-    open(`User Margins · ${button.dataset.user}`, 'लोड हो रहा है…');
+    open(`User Margins · ${button.dataset.user}`, 'Loading...');
     try {
       const response = await fetch(`/api/admin/users/${button.dataset.margin}/margins`, { credentials: 'same-origin' });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Margin विवरण नहीं मिला।');
+      if (!response.ok) throw new Error(result.error || 'Margin details not found.');
       const render = (heading, items) => `<h5 class="mt-3">${heading}</h5><div class="table-responsive"><table class="table table-bordered margin-table"><thead><tr><th>Operator</th><th>Circle</th><th>Commission</th><th>Status</th></tr></thead><tbody>${items.length ? items.map((item) => `<tr><td>${escape(item.operatorName)}</td><td>${escape(item.circleName)}</td><td>${escape(item.commissionPercent)}%</td><td>${item.active ? 'On' : 'Off'}</td></tr>`).join('') : '<tr><td colspan="4">No margin setting</td></tr>'}</tbody></table></div>`;
       body.innerHTML = render('Buyer Margin', result.buyer) + render('Seller Margin', result.seller) + '<div class="user-modal-actions"><button type="button" class="btn btn-secondary" data-close>Close</button></div>';
       body.querySelectorAll('[data-close]').forEach((closeButton) => closeButton.addEventListener('click', close));
@@ -103,7 +103,7 @@
   }));
 
   document.querySelectorAll('[data-delete]').forEach((button) => button.addEventListener('click', async () => {
-    if (!window.confirm(`User ${button.dataset.user} को सूची से हटाकर account block करना है?`)) return;
+    if (!window.confirm(`Are you sure you want to remove user ${button.dataset.user} and block the account?`)) return;
     button.disabled = true;
     try {
       await post(`/api/admin/users/${button.dataset.delete}/delete`, {});

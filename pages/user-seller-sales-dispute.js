@@ -84,9 +84,21 @@ module.exports = function createUserSellerSalesDisputePage({ db, formatMinorUnit
              r.status, r.idempotency_key, r.provider_reference, r.with_gst,
              r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.dispute_created_at, r.dispute_resolved_at, r.created_at,
-             u.username AS buyer_username, u.name AS buyer_name
+             u.username AS buyer_username, u.name AS buyer_name,
+             l.amount_minor AS lien_amount_minor,
+             l.multiplier AS lien_multiplier,
+             l.status AS lien_status,
+             l.lien_type,
+             l.expires_at AS lien_expires_at
       FROM recharge_orders r
       LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN LATERAL (
+        SELECT amount_minor, multiplier, status, lien_type, expires_at
+        FROM seller_wallet_liens
+        WHERE order_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) l ON TRUE
       WHERE ${conditions.join(' AND ')}
       ORDER BY r.dispute_created_at DESC NULLS LAST, r.created_at DESC
       ${limitClause}
@@ -157,6 +169,26 @@ module.exports = function createUserSellerSalesDisputePage({ db, formatMinorUnit
         `;
       }
 
+      let lienBadgeHtml = '';
+      if (row.lien_amount_minor) {
+        const lienAmt = `₹${formatMinorUnits(row.lien_amount_minor)}`;
+        const mult = row.lien_multiplier ? `${Number(row.lien_multiplier)}x` : '';
+        if (row.lien_status === 'active') {
+          if (row.lien_type === 'refund_penalty') {
+            lienBadgeHtml = `<span class="badge badge-danger" style="font-size:10px;" title="Penalized Hold"><i class="fa fa-lock mr-1"></i>Penalty Lien ${lienAmt} (${mult})</span>`;
+            if (row.lien_expires_at) {
+              lienBadgeHtml += `<div class="small text-danger font-italic" style="font-size:9px;">Release: ${escapeHtml(formatDateTime(row.lien_expires_at))}</div>`;
+            }
+          } else {
+            lienBadgeHtml = `<span class="badge badge-warning text-dark font-weight-bold" style="font-size:10px; background:#fbbf24;" title="Lien Frozen Balance"><i class="fa fa-lock mr-1"></i>Lien Hold ${lienAmt} (${mult})</span>`;
+          }
+        } else if (row.lien_status === 'released') {
+          lienBadgeHtml = `<span class="badge badge-secondary" style="font-size:10px;" title="Lien Released"><i class="fa fa-unlock mr-1"></i>Lien Released</span>`;
+        } else if (row.lien_status === 'deducted') {
+          lienBadgeHtml = `<span class="badge badge-dark" style="font-size:10px;" title="Lien Settled"><i class="fa fa-check mr-1"></i>Lien Settled</span>`;
+        }
+      }
+
       return `
         <tr>
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
@@ -178,7 +210,10 @@ module.exports = function createUserSellerSalesDisputePage({ db, formatMinorUnit
           <td class="small text-dark" style="max-width: 250px;">
             <div class="p-1 bg-light border rounded">${escapeHtml(row.dispute_reason || 'No reason specified')}</div>
           </td>
-          <td class="text-center">${statusBadge}</td>
+          <td class="text-center">
+            ${statusBadge}
+            ${lienBadgeHtml ? `<div class="mt-1">${lienBadgeHtml}</div>` : ''}
+          </td>
           <td class="text-center" style="white-space: nowrap;">${actionCell}</td>
         </tr>
       `;

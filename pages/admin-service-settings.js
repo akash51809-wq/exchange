@@ -442,7 +442,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-shield text-primary"></i> Login OTP
                           </h6>
                           <p class="general-item-desc">
-                            इसे ON करने से यूज़र जितनी भी बार लॉगिन करेगा उसे Mail व WhatsApp पर OTP जाएगी। OTP Fill करने पर ही लॉगिन होगा। OFF करने पर डायरेक्ट पासवर्ड से लॉगिन हो जाएगा।
+                            When enabled, users receive an OTP via email and WhatsApp on each login attempt. Login succeeds only after entering the OTP. When disabled, login proceeds directly with password.
                           </p>
                         </div>
                       </div>
@@ -468,7 +468,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-bolt text-warning"></i> Instant Response Time
                           </h6>
                           <p class="general-item-desc">
-                            Buyer जब कोई रिचार्ज रिक्वेस्ट भेजेगा तो जितना सेकंड टाइम सेट है अगर उतनी देर में हमें सेलर से Success या Fail रिस्पॉन्स मिला तो वह Live रिस्पॉन्स जाएगा। उस सेट टाइम के बाद रिस्पॉन्स आया सेलर से तो फिर यूज़र ने जो Callback URL सेट किया है उसपे रिस्पॉन्स जाएगा।
+                            When a buyer sends a recharge request, if a Success or Fail response is received from the seller within this configured window, it will be returned as an instant response. Responses received after this window will be sent to the buyer's Callback URL.
                           </p>
                         </div>
                       </div>
@@ -497,7 +497,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-clock-o text-danger"></i> Complain Accept After
                           </h6>
                           <p class="general-item-desc">
-                            Instant में रिचार्ज करते ही Buyer कम्प्लेन/विवाद दर्ज कर सकता है। सेकंड या मिनट सेट होने से केवल उतने समय के बाद ही Dispute/Complain स्वीकार होगा।
+                            In Instant mode, buyers can lodge disputes immediately after recharge. In Set Time mode, disputes will only be accepted after the specified delay has passed.
                           </p>
                         </div>
                       </div>
@@ -535,7 +535,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-calendar-times-o text-secondary"></i> Do not Accept Complain After
                           </h6>
                           <p class="general-item-desc">
-                            इसमें जितने Days भरे होंगे, सिर्फ उतने दिन पुराने ट्रांजैक्शन का ही Complain प्राप्त होगा, उससे पुरानी तारीख के रिचार्ज का कम्प्लेन स्वीकार नहीं होगा।
+                            Disputes will only be accepted for recharges within the specified number of days. Transactions older than this limit cannot be disputed.
                           </p>
                         </div>
                       </div>
@@ -543,7 +543,7 @@ module.exports = function createAdminServiceSettingsPage({
                         <div class="input-group input-group-sm" style="max-width: 175px;">
                           <input type="number" id="complainMaxAgeDays" class="form-control font-weight-bold text-center" value="7" min="1" max="90">
                           <div class="input-group-append">
-                            <span class="input-group-text font-weight-bold">Days (दिन)</span>
+                            <span class="input-group-text font-weight-bold">Days</span>
                           </div>
                         </div>
                       </div>
@@ -564,7 +564,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-whatsapp text-success"></i> Notify Pending Txn After
                           </h6>
                           <p class="general-item-desc">
-                            रिचार्ज जिस भी Seller के पास गया है, यदि रिचार्ज Pending रहता है तो उतने सेट मिनट के बाद Seller को WhatsApp पर पेंडिंग रिचार्ज क्लियर करने का रिमाइंडर मैसेज जाएगा।
+                            If a recharge assigned to a seller remains pending beyond the configured minutes, an automated WhatsApp reminder will be sent to the seller to clear the transaction.
                           </p>
                         </div>
                       </div>
@@ -593,7 +593,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-ban text-danger"></i> Stop Rehit After
                           </h6>
                           <p class="general-item-desc">
-                            इसमें जितने मिनट सेट होंगे, अगर पहली API से रिचार्ज फेल होने में उतने मिनट या उससे अधिक समय लगा तो रिचार्ज Buyer को भी सीधा Fail रिस्पॉन्स जाएगा, अगले सेलर पर Re-hit नहीं होगा।
+                            If the primary seller API fails after this duration, a Fail response is immediately returned to the buyer rather than re-hitting another seller.
                           </p>
                         </div>
                       </div>
@@ -622,7 +622,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-clone text-info"></i> Stop Same Number/Amount for
                           </h6>
                           <p class="general-item-desc">
-                            जो रिचार्ज 1 बार Success हो चुका है, उसी समान नंबर और समान अमाउंट का नया रिक्वेस्ट उतने सेट मिनट में किसी भी यूज़र से दोबारा स्वीकार नहीं होगा (डुप्लीकेट रिचार्ज ब्लॉक)।
+                            Blocks duplicate recharge requests for the same mobile number and same amount from any user within the configured time window once successfully processed.
                           </p>
                         </div>
                       </div>
@@ -651,7 +651,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-power-off text-danger"></i> API Disable After Number of Fail Txn
                           </h6>
                           <p class="general-item-desc">
-                            यदि किसी Seller API से लगातार अथवा तय संख्या में रिचार्ज फेल होते हैं, तो वह API ऑटोमैटिक Disable (निष्क्रिय) हो जाएगी ताकि आगे के नए ट्रांजेक्शन उस API पर न जाएं।
+                            Automatically disables a seller API if it experiences consecutive failures reaching this threshold, preventing further routing to that seller.
                           </p>
                         </div>
                       </div>
@@ -680,7 +680,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-exclamation-triangle text-warning"></i> API Suspend After % on Refund Txn in a Day
                           </h6>
                           <p class="general-item-desc">
-                            यदि 1 दिन (24 घंटे) में किसी Seller API के कुल ट्रांजेक्शन में से रिफंड (Refund / Dispute) ट्रांजेक्शन का प्रतिशत तय % या उससे अधिक हो जाता है, तो वह API ऑटोमैटिक Suspend हो जाएगी।
+                            Automatically suspends a seller API if the percentage of refunded/disputed transactions exceeds this limit within a 24-hour window.
                           </p>
                         </div>
                       </div>
@@ -1031,8 +1031,8 @@ module.exports = function createAdminServiceSettingsPage({
                           </div>
                           <p class="small text-muted mb-0 mt-1">
                             <i class="fa fa-check-circle text-success mr-1"></i>
-                            यह URL बैकएंड में पहले से कॉन्फ़िगर है। आपको केवल अपना <strong>User ID</strong> (<code>ApiUserID</code>) और <strong>Token</strong> (<code>token</code>) दर्ज करना है।
-                            रिचार्ज रिक्वेस्ट आने पर <code>Mobileno</code> पैरामीटर यूजर के मोबाइल नंबर से ऑटो-फेच होगा और प्राप्त ऑपरेटर व सर्कल के आधार पर सेलर के बेस्ट मार्जिन पर रिचार्ज रूट होगा।
+                            This URL is pre-configured in the backend. You only need to enter your <strong>User ID</strong> (<code>ApiUserID</code>) and <strong>Token</strong> (<code>token</code>).
+                            Upon incoming recharge requests, the <code>Mobileno</code> parameter will be auto-populated from the user's mobile number, and recharge will be routed to the best seller margin according to fetched operator and circle.
                           </p>
                         </div>
                       </div>
@@ -1070,7 +1070,7 @@ module.exports = function createAdminServiceSettingsPage({
                       <div class="help-callout mb-3">
                         <strong><i class="fa fa-spider"></i> PlanAPI.in Automated Web Scraper &amp; Login Engine:</strong>
                         <p class="small mb-1">
-                          <code>https://planapi.in</code> वेबसाइट पर User ID / Password से ऑटो-लॉगिन और <code>OperatorLook.aspx</code> से लाइव डेटा फेच।
+                          Automated web session login on <code>https://planapi.in</code> using User ID and Password, with live data lookup via <code>OperatorLook.aspx</code>.
                         </p>
                       </div>
 
@@ -2413,7 +2413,7 @@ module.exports = function createAdminServiceSettingsPage({
         pass,
       },
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: process.env.SMTP_REJECT_UNAUTHORIZED === 'false' ? false : true,
       },
       connectionTimeout: 8000,
       greetingTimeout: 6000,

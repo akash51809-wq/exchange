@@ -225,19 +225,19 @@ module.exports = function createAdminWebsiteSettingsPage({
       <div class="container-fluid settings-page">
         <!-- Toast Feedback -->
         <div id="toast-box" class="toast-popup alert alert-success alert-dismissible fade show shadow-lg" role="alert">
-          <strong id="toast-title"><i class="fa fa-check-circle"></i> सफलता!</strong>
-          <span id="toast-msg" class="d-block mt-1">सेटिंग्स सुरक्षित कर दी गई हैं।</span>
+          <strong id="toast-title"><i class="fa fa-check-circle"></i> Success!</strong>
+          <span id="toast-msg" class="d-block mt-1">Settings have been saved successfully.</span>
         </div>
 
         <!-- Page Header -->
         <div class="settings-header">
           <div>
-            <h3><i class="fa fa-globe text-primary"></i> Website Settings (वेबसाइट एवं ब्रांड सेटिंग्स)</h3>
-            <p>फ्रंट वेबसाइट, लॉगिन पेज और डैशबोर्ड के लोगो, फेविकॉन, वेबसाइट का नाम और सपोर्ट डिटेल्स यहाँ से मैनेज करें।</p>
+            <h3><i class="fa fa-globe text-primary"></i> Website Settings (Brand &amp; Portal Identity)</h3>
+            <p>Manage logo, favicon, website name, and support details for the front website, login page, and dashboard.</p>
           </div>
           <div class="d-flex gap-2">
             <a href="/" target="_blank" class="btn btn-outline-primary btn-sm font-weight-bold">
-              <i class="fa fa-external-link"></i> फ्रंट वेबसाइट देखें (Live Website)
+              <i class="fa fa-external-link"></i> View Live Website
             </a>
           </div>
         </div>
@@ -250,18 +250,18 @@ module.exports = function createAdminWebsiteSettingsPage({
               <div class="card-settings">
                 <div class="card-settings-header">
                   <i class="fa fa-paint-brush text-primary"></i>
-                  <h5>1. ब्रांड एवं वेबसाइट नाम (Brand Identity)</h5>
+                  <h5>1. Brand &amp; Website Identity</h5>
                 </div>
                 <div class="card-settings-body">
                   <div class="form-group mb-3">
-                    <label for="website_name">वेबसाइट / ब्रांड का नाम (Website Name) <span class="text-danger">*</span></label>
-                    <input type="text" class="form-control" id="website_name" name="website_name" value="${escapeHtml(s.website_name || '')}" placeholder="उदा. Easy Recharge Solution" required>
-                    <small class="text-muted">यह नाम फ्रंट वेबसाइट हेडर, लॉगिन स्क्रीन और सभी पेज टाइटल्स में दिखाई देगा।</small>
+                    <label for="website_name">Website / Brand Name <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="website_name" name="website_name" value="${escapeHtml(s.website_name || '')}" placeholder="e.g. Easy Recharge Solution" required>
+                    <small class="text-muted">This name appears in the front website header, login screen, and page titles.</small>
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="website_tagline">वेबसाइट टैगलाइन (Tagline / Slogan)</label>
-                    <input type="text" class="form-control" id="website_tagline" name="website_tagline" value="${escapeHtml(s.website_tagline || '')}" placeholder="उदा. India's Leading B2B Recharge & LAPU Stock Exchange">
+                    <label for="website_tagline">Website Tagline / Slogan</label>
+                    <input type="text" class="form-control" id="website_tagline" name="website_tagline" value="${escapeHtml(s.website_tagline || '')}" placeholder="e.g. India's Leading B2B Recharge &amp; LAPU Stock Exchange">
                   </div>
                 </div>
               </div>
@@ -270,7 +270,7 @@ module.exports = function createAdminWebsiteSettingsPage({
               <div class="card-settings">
                 <div class="card-settings-header">
                   <i class="fa fa-image text-success"></i>
-                  <h5>2. वेबसाइट लोगो (Upload Logo)</h5>
+                  <h5>2. Website Logo (Upload Logo)</h5>
                   <span class="badge badge-status-pill ${hasCustomLogo ? 'badge-success' : 'badge-secondary'} ml-auto" id="logo-status-badge">
                     ${hasCustomLogo ? 'Custom Logo Active' : 'Default Logo Active'}
                   </span>
@@ -279,20 +279,20 @@ module.exports = function createAdminWebsiteSettingsPage({
                   <div class="upload-box mb-3" id="logo-drop-area">
                     <input type="file" id="logo_file" name="logo_file" accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif">
                     <i class="fa fa-cloud-upload fa-3x text-primary mb-2"></i>
-                    <h6 class="font-weight-bold mb-1">नया लोगो यहाँ खींचें या क्लिक करके चुनें</h6>
-                    <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (सुझावित साइज़: 250×60px, पारदर्शी बैकग्राउंड)</p>
+                    <h6 class="font-weight-bold mb-1">Drag &amp; drop new logo here or click to browse</h6>
+                    <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Recommended: 250×60px, transparent background)</p>
                   </div>
 
                   <!-- Live Previews -->
                   <div class="row">
                     <div class="col-md-6 mb-2">
-                      <small class="font-weight-bold text-muted d-block mb-1">लाइट बैकग्राउंड (फ्रंट वेबसाइट)</small>
+                      <small class="font-weight-bold text-muted d-block mb-1">Light Background (Front Website)</small>
                       <div class="preview-canvas-card preview-light">
                         <img id="logo-preview-light" src="/api/logo?t=${Date.now()}" alt="Logo Preview Light" style="max-height: 48px; max-width: 100%; object-fit: contain;">
                       </div>
                     </div>
                     <div class="col-md-6 mb-2">
-                      <small class="font-weight-bold text-muted d-block mb-1">डार्क बैकग्राउंड (एडमिन/डैशबोर्ड)</small>
+                      <small class="font-weight-bold text-muted d-block mb-1">Dark Background (Admin / Dashboard)</small>
                       <div class="preview-canvas-card preview-dark">
                         <img id="logo-preview-dark" src="/api/logo?t=${Date.now()}" alt="Logo Preview Dark" style="max-height: 44px; max-width: 100%; object-fit: contain;">
                       </div>
@@ -301,7 +301,7 @@ module.exports = function createAdminWebsiteSettingsPage({
 
                   <div class="custom-control custom-checkbox mt-3">
                     <input type="checkbox" class="custom-control-input" id="reset_logo" name="reset_logo" value="1">
-                    <label class="custom-control-label text-danger font-weight-bold" for="reset_logo">कस्टम लोगो हटाकर सिस्टम का डिफ़ॉल्ट 3D लोगो लागू करें</label>
+                    <label class="custom-control-label text-danger font-weight-bold" for="reset_logo">Reset custom logo to system default 3D logo</label>
                   </div>
                 </div>
               </div>
@@ -310,7 +310,7 @@ module.exports = function createAdminWebsiteSettingsPage({
               <div class="card-settings">
                 <div class="card-settings-header">
                   <i class="fa fa-bookmark text-warning"></i>
-                  <h5>3. फेविकॉन आइकन (Upload Favicon)</h5>
+                  <h5>3. Favicon Icon (Upload Favicon)</h5>
                   <span class="badge badge-status-pill ${hasCustomFavicon ? 'badge-success' : 'badge-secondary'} ml-auto" id="favicon-status-badge">
                     ${hasCustomFavicon ? 'Custom Favicon' : 'Default Favicon'}
                   </span>
@@ -320,13 +320,13 @@ module.exports = function createAdminWebsiteSettingsPage({
                     <div class="upload-box flex-grow-1 p-3">
                       <input type="file" id="favicon_file" name="favicon_file" accept=".ico,image/x-icon,image/png,image/svg+xml">
                       <i class="fa fa-upload text-warning mr-2"></i>
-                      <span class="font-weight-bold">फेविकॉन चुनें (.ico, .png, .svg)</span>
-                      <small class="d-block text-muted">आकार: 32×32 या 64×64 पिक्सल</small>
+                      <span class="font-weight-bold">Choose Favicon (.ico, .png, .svg)</span>
+                      <small class="d-block text-muted">Size: 32×32 or 64×64 pixels</small>
                     </div>
 
                     <!-- Browser Tab Mockup -->
                     <div class="text-center pl-3">
-                      <small class="text-muted font-weight-bold d-block mb-1">ब्राउज़र टैब मॉकअप</small>
+                      <small class="text-muted font-weight-bold d-block mb-1">Browser Tab Preview</small>
                       <div class="preview-mockup-tab border">
                         <img id="favicon-preview-img" src="/api/favicon?t=${Date.now()}" alt="Favicon" style="width: 18px; height: 18px; object-fit: contain;">
                         <span id="tab-title-preview" class="text-truncate" style="max-width: 120px;">${escapeHtml(s.website_name || 'Exchange')}</span>
@@ -336,7 +336,7 @@ module.exports = function createAdminWebsiteSettingsPage({
 
                   <div class="custom-control custom-checkbox">
                     <input type="checkbox" class="custom-control-input" id="reset_favicon" name="reset_favicon" value="1">
-                    <label class="custom-control-label text-danger" for="reset_favicon">डिफ़ॉल्ट फेविकॉन पर रीसेट करें</label>
+                    <label class="custom-control-label text-danger" for="reset_favicon">Reset to default favicon</label>
                   </div>
                 </div>
               </div>
@@ -348,37 +348,37 @@ module.exports = function createAdminWebsiteSettingsPage({
               <div class="card-settings">
                 <div class="card-settings-header">
                   <i class="fa fa-phone text-info"></i>
-                  <h5>4. संपर्क विवरण (Contact Us Details)</h5>
+                  <h5>4. Contact Us Details</h5>
                 </div>
                 <div class="card-settings-body">
                   <div class="row">
                     <div class="col-md-6 form-group mb-3">
-                      <label for="support_phone"><i class="fa fa-phone mr-1 text-primary"></i> सपोर्ट फोन नंबर (Support Phone)</label>
+                      <label for="support_phone"><i class="fa fa-phone mr-1 text-primary"></i> Support Phone Number</label>
                       <input type="text" class="form-control" id="support_phone" name="support_phone" value="${escapeHtml(s.support_phone || '')}" placeholder="+91 98765 43210">
                     </div>
                     <div class="col-md-6 form-group mb-3">
-                      <label for="support_whatsapp"><i class="fa fa-whatsapp mr-1 text-success"></i> व्हाट्सएप नंबर (WhatsApp Support)</label>
+                      <label for="support_whatsapp"><i class="fa fa-whatsapp mr-1 text-success"></i> WhatsApp Support Number</label>
                       <input type="text" class="form-control" id="support_whatsapp" name="support_whatsapp" value="${escapeHtml(s.support_whatsapp || '')}" placeholder="+91 98765 43210">
                     </div>
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="support_email"><i class="fa fa-envelope mr-1 text-danger"></i> आधिकारिक सपोर्ट ईमेल (Support Email)</label>
+                    <label for="support_email"><i class="fa fa-envelope mr-1 text-danger"></i> Official Support Email</label>
                     <input type="email" class="form-control" id="support_email" name="support_email" value="${escapeHtml(s.support_email || '')}" placeholder="support@easyrechargesolution.com">
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="office_address"><i class="fa fa-map-marker mr-1 text-danger"></i> हेड ऑफिस का पता (Office Address)</label>
-                    <textarea class="form-control" id="office_address" name="office_address" rows="2" placeholder="पूरा पता लिखें...">${escapeHtml(s.office_address || '')}</textarea>
+                    <label for="office_address"><i class="fa fa-map-marker mr-1 text-danger"></i> Head Office Address</label>
+                    <textarea class="form-control" id="office_address" name="office_address" rows="2" placeholder="Enter complete office address...">${escapeHtml(s.office_address || '')}</textarea>
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="working_hours"><i class="fa fa-clock-o mr-1 text-info"></i> सपोर्ट कार्य समय (Working Hours)</label>
-                    <input type="text" class="form-control" id="working_hours" name="working_hours" value="${escapeHtml(s.working_hours || '')}" placeholder="उदा. 24x7 Customer & Stock Support">
+                    <label for="working_hours"><i class="fa fa-clock-o mr-1 text-info"></i> Support Working Hours</label>
+                    <input type="text" class="form-control" id="working_hours" name="working_hours" value="${escapeHtml(s.working_hours || '')}" placeholder="e.g. 24x7 Customer &amp; Stock Support">
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="social_telegram"><i class="fa fa-telegram mr-1 text-primary"></i> टेलीग्राम चैनल / सपोर्ट लिंक</label>
+                    <label for="social_telegram"><i class="fa fa-telegram mr-1 text-primary"></i> Telegram Channel / Support Link</label>
                     <input type="text" class="form-control" id="social_telegram" name="social_telegram" value="${escapeHtml(s.social_telegram || '')}" placeholder="https://t.me/easyrechargesolution">
                   </div>
                 </div>
@@ -388,22 +388,22 @@ module.exports = function createAdminWebsiteSettingsPage({
               <div class="card-settings">
                 <div class="card-settings-header">
                   <i class="fa fa-search text-purple"></i>
-                  <h5>5. फूटर व सर्च इंजन विवरण (Footer &amp; SEO)</h5>
+                  <h5>5. Footer &amp; SEO Details</h5>
                 </div>
                 <div class="card-settings-body">
                   <div class="form-group mb-3">
-                    <label for="footer_about">फूटर कंपनी विवरण (Footer About)</label>
-                    <textarea class="form-control" id="footer_about" name="footer_about" rows="3" placeholder="वेबसाइट फूटर में दिखने वाला संक्षिप्त विवरण...">${escapeHtml(s.footer_about || '')}</textarea>
+                    <label for="footer_about">Footer Company About</label>
+                    <textarea class="form-control" id="footer_about" name="footer_about" rows="3" placeholder="Brief company summary shown in website footer...">${escapeHtml(s.footer_about || '')}</textarea>
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="meta_title">पेज मेटा टाइटल (Meta Title for SEO)</label>
-                    <input type="text" class="form-control" id="meta_title" name="meta_title" value="${escapeHtml(s.meta_title || '')}" placeholder="Easy Recharge Solution | B2B Recharge & Stock Exchange">
+                    <label for="meta_title">Page Meta Title (for SEO)</label>
+                    <input type="text" class="form-control" id="meta_title" name="meta_title" value="${escapeHtml(s.meta_title || '')}" placeholder="Easy Recharge Solution | B2B Recharge &amp; Stock Exchange">
                   </div>
 
                   <div class="form-group mb-3">
-                    <label for="meta_description">पेज मेटा विवरण (Meta Description for SEO)</label>
-                    <textarea class="form-control" id="meta_description" name="meta_description" rows="2" placeholder="गूगल सर्च में दिखने वाला विवरण...">${escapeHtml(s.meta_description || '')}</textarea>
+                    <label for="meta_description">Page Meta Description (for SEO)</label>
+                    <textarea class="form-control" id="meta_description" name="meta_description" rows="2" placeholder="Summary description for search engines...">${escapeHtml(s.meta_description || '')}</textarea>
                   </div>
                 </div>
               </div>
@@ -411,9 +411,9 @@ module.exports = function createAdminWebsiteSettingsPage({
               <!-- Submit Button Bar -->
               <div class="card-settings p-4 text-right bg-white sticky-bottom" style="position: sticky; bottom: 16px; z-index: 100;">
                 <div class="d-flex align-items-center justify-content-between">
-                  <span id="save-status-msg" class="text-muted small">परिवर्तन तुरंत पूरे सिस्टम पर लागू होंगे।</span>
+                  <span id="save-status-msg" class="text-muted small">Changes will take effect across the entire portal immediately.</span>
                   <button type="submit" id="btn-submit" class="btn btn-save-main">
-                    <i class="fa fa-save mr-2"></i> सेटिंग्स सुरक्षित करें (Save Website Settings)
+                    <i class="fa fa-save mr-2"></i> Save Website Settings
                   </button>
                 </div>
               </div>
@@ -487,7 +487,7 @@ module.exports = function createAdminWebsiteSettingsPage({
       form.addEventListener('submit', async function(e) {
         e.preventDefault();
         btnSubmit.disabled = true;
-        btnSubmit.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> सेव हो रहा है...';
+        btnSubmit.innerHTML = '<i class="fa fa-spinner fa-spin mr-2"></i> Saving...';
 
         try {
           const formData = new FormData(form);
@@ -535,7 +535,7 @@ module.exports = function createAdminWebsiteSettingsPage({
             throw new Error(data.message || data.error || 'Failed to save settings.');
           }
 
-          showToast('सफलता!', 'वेबसाइट सेटिंग्स और लोगो सफलतापूर्वक सुरक्षित कर दिए गए हैं। यह तुरंत लाइव हो चुका है!', true);
+          showToast('Success!', 'Website settings and logo saved successfully. Changes are now live!', true);
           
           // Refresh previews with cache buster
           const timestamp = Date.now();
@@ -553,10 +553,10 @@ module.exports = function createAdminWebsiteSettingsPage({
           }
 
         } catch (err) {
-          showToast('त्रुटि (Error)', err.message, false);
+          showToast('Error', err.message, false);
         } finally {
           btnSubmit.disabled = false;
-          btnSubmit.innerHTML = '<i class="fa fa-save mr-2"></i> सेटिंग्स सुरक्षित करें (Save Website Settings)';
+          btnSubmit.innerHTML = '<i class="fa fa-save mr-2"></i> Save Website Settings';
         }
       });
 
@@ -688,7 +688,7 @@ module.exports = function createAdminWebsiteSettingsPage({
 
     sendJson(response, 200, {
       ok: true,
-      message: 'वेबसाइट सेटिंग्स और लोगो सफलतापूर्वक सुरक्षित कर दिए गए हैं।',
+      message: 'Website settings and logo saved successfully.',
     });
   }
 

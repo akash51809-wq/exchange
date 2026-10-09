@@ -82,10 +82,22 @@ module.exports = function createAdminDisputesPage({ db, formatMinorUnits, decryp
              r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.dispute_created_at, r.dispute_resolved_at, r.created_at,
              b.username AS buyer_username, b.name AS buyer_name,
-             s.username AS seller_username, s.name AS seller_name
+             s.username AS seller_username, s.name AS seller_name,
+             l.amount_minor AS lien_amount_minor,
+             l.multiplier AS lien_multiplier,
+             l.status AS lien_status,
+             l.lien_type,
+             l.expires_at AS lien_expires_at
       FROM recharge_orders r
       LEFT JOIN users b ON b.id = r.user_id
       LEFT JOIN users s ON s.id = r.seller_user_id
+      LEFT JOIN LATERAL (
+        SELECT amount_minor, multiplier, status, lien_type, expires_at
+        FROM seller_wallet_liens
+        WHERE order_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) l ON TRUE
       WHERE ${conditions.join(' AND ')}
       ORDER BY r.dispute_created_at DESC NULLS LAST, r.created_at DESC
       ${limitClause}
@@ -163,6 +175,26 @@ module.exports = function createAdminDisputesPage({ db, formatMinorUnits, decryp
         `;
       }
 
+      let lienBadgeHtml = '';
+      if (row.lien_amount_minor) {
+        const lienAmt = `₹${formatMinorUnits(row.lien_amount_minor)}`;
+        const mult = row.lien_multiplier ? `${Number(row.lien_multiplier)}x` : '';
+        if (row.lien_status === 'active') {
+          if (row.lien_type === 'refund_penalty') {
+            lienBadgeHtml = `<span class="badge badge-danger" style="font-size:10px;" title="Penalty Lien Active"><i class="fa fa-lock mr-1"></i>Penalty ${lienAmt} (${mult})</span>`;
+            if (row.lien_expires_at) {
+              lienBadgeHtml += `<div class="small text-danger font-italic" style="font-size:9px;">Till: ${escapeHtml(formatDateTime(row.lien_expires_at))}</div>`;
+            }
+          } else {
+            lienBadgeHtml = `<span class="badge badge-warning text-dark font-weight-bold" style="font-size:10px; background:#fbbf24;" title="Dispute Lien Active"><i class="fa fa-lock mr-1"></i>Lien ${lienAmt} (${mult})</span>`;
+          }
+        } else if (row.lien_status === 'released') {
+          lienBadgeHtml = `<span class="badge badge-secondary" style="font-size:10px;" title="Lien Released"><i class="fa fa-unlock mr-1"></i>Lien Freed</span>`;
+        } else if (row.lien_status === 'deducted') {
+          lienBadgeHtml = `<span class="badge badge-dark" style="font-size:10px;" title="Lien Settled/Deducted"><i class="fa fa-check mr-1"></i>Lien Settled</span>`;
+        }
+      }
+
       return `
         <tr>
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
@@ -191,7 +223,10 @@ module.exports = function createAdminDisputesPage({ db, formatMinorUnits, decryp
           <td class="small" style="max-width:240px;">
             <div class="p-1 bg-light border rounded text-dark">${escapeHtml(row.dispute_reason || 'Dispute raised')}</div>
           </td>
-          <td class="text-center">${disputeBadge}</td>
+          <td class="text-center">
+            ${disputeBadge}
+            ${lienBadgeHtml ? `<div class="mt-1">${lienBadgeHtml}</div>` : ''}
+          </td>
           <td class="text-center">${orderBadge}</td>
           <td class="text-center" style="white-space:nowrap;">${adminActionCell}</td>
         </tr>

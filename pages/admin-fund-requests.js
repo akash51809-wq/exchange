@@ -21,7 +21,7 @@ async function sendAdminFundRequestsPage(admin, response) {
      ORDER BY CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END, r.created_at DESC LIMIT 500`,
   );
   const rows = result.rows.map((row) => {
-    const proof = row.proof_mime ? `<a class="btn btn-sm btn-outline-info" target="_blank" rel="noopener" href="/admin/payment/fund-request/proof/${row.id}">प्रूफ देखें</a>` : '—';
+    const proof = row.proof_mime ? `<a class="btn btn-sm btn-outline-info" target="_blank" rel="noopener" href="/admin/payment/fund-request/proof/${row.id}">View Proof</a>` : '—';
     const accountNumber = row.source_account_ciphertext ? decryptFundField(row.source_account_ciphertext, 'account') : '—';
     const transactionId = row.transaction_id_ciphertext ? decryptFundField(row.transaction_id_ciphertext, 'transaction') : '—';
     const actions = row.status === 'pending'

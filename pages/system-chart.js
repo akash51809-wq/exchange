@@ -3,11 +3,11 @@
 module.exports = function createSystemChartPage() {
   async function sendSystemChartPage(request, response) {
     const html = `<!DOCTYPE html>
-<html lang="hi" dir="ltr">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Exchange System Architecture & Feature Chart (सिस्टम फीचर व लॉजिक चार्ट)</title>
+  <title>Exchange System Architecture & Feature Chart</title>
   <link rel="stylesheet" href="/assets/plugins/bootstrap/css/bootstrap.css">
   <link rel="stylesheet" href="/assets/css/icons.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -286,9 +286,9 @@ module.exports = function createSystemChartPage() {
           <span class="badge badge-light px-3 py-1 font-weight-bold text-dark mb-2" style="font-size:11.5px; letter-spacing:0.5px;">
             <i class="fa fa-book mr-1 text-primary"></i> SYSTEM KNOWLEDGE BASE &amp; FLOW CHART
           </span>
-          <h1 class="hero-title">Exchange सिस्टम फीचर, सेटिंग्स एवं लॉजिक चार्ट</h1>
+          <h1 class="hero-title">Exchange System Architecture, Features &amp; Logic Chart</h1>
           <p class="hero-subtitle">
-            यह पेज केवल डायरेक्ट यूआरएल <code>/chart</code> से खुलता है (यूज़र या एडमिन मेनू में इसका कोई लिंक नहीं है)। इसमें सिस्टम के प्रत्येक फीचर, गणितीय फॉर्मूले, सिक्योरिटी रूल्स और बैकएंड फ्लो को बेहद सरल हिंदी भाषा में समझाया गया है।
+            This internal page is accessed directly via <code>/chart</code> (it is not linked in public user or admin navigation menus). It provides a complete reference for system features, mathematical formulas, security rules, and backend workflows.
           </p>
         </div>
       </div>
@@ -299,16 +299,16 @@ module.exports = function createSystemChartPage() {
   <div class="nav-tabs-wrapper">
     <div class="custom-nav">
       <a href="#section-admin" class="nav-tab-btn active" onclick="activateTab(event, 'section-admin')">
-        <i class="fa fa-shield text-danger"></i> 1. एडमिन पैनल (Admin Features)
+        <i class="fa fa-shield text-danger"></i> 1. Admin Features
       </a>
       <a href="#section-general-settings" class="nav-tab-btn" onclick="activateTab(event, 'section-general-settings')">
-        <i class="fa fa-sliders text-warning"></i> 2. सर्विस सेटिंग्स (9 General Rules)
+        <i class="fa fa-sliders text-warning"></i> 2. Service Settings (9 General Rules)
       </a>
       <a href="#section-user" class="nav-tab-btn" onclick="activateTab(event, 'section-user')">
-        <i class="fa fa-user text-primary"></i> 3. यूज़र पैनल (Buyer &amp; Seller)
+        <i class="fa fa-user text-primary"></i> 3. User Panel (Buyer &amp; Seller)
       </a>
       <a href="#section-engine" class="nav-tab-btn" onclick="activateTab(event, 'section-engine')">
-        <i class="fa fa-bolt text-success"></i> 4. रिचार्ज इंजन व वॉटरफॉल फ्लो
+        <i class="fa fa-bolt text-success"></i> 4. Recharge Engine &amp; Waterfall Flow
       </a>
     </div>
   </div>
@@ -321,29 +321,29 @@ module.exports = function createSystemChartPage() {
     <div id="section-admin" class="chart-section">
       <div class="section-header">
         <span class="badge-role badge-admin">ADMINISTRATOR</span>
-        <h2>1. एडमिन पैनल (Admin Panel) के सभी फीचर्स व कार्यप्रणाली</h2>
+        <h2>1. Administrator Panel Features &amp; Workflow</h2>
       </div>
 
       <!-- Feature: User Management -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-users text-primary"></i> 1.1 यूजर मैनेजमेंट (User List)</h4>
+          <h4><i class="fa fa-users text-primary"></i> 1.1 User Management (User List)</h4>
           <span class="feature-route">/admin/users/list</span>
         </div>
         <div class="card-feature-body">
-          <p class="font-weight-bold text-dark">सभी रजिस्टर्ड Buyers और Sellers का केंद्रीय नियंत्रण:</p>
+          <p class="font-weight-bold text-dark">Central control over all registered Buyers and Sellers:</p>
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-money text-success"></i> लाइव वॉलेट बैलेंस</h6>
-              <p>प्रत्येक यूजर का लाइव INR प्रीपेड बैलेंस दिखता है। यूजर का बैलेंस डेटाबेस के <code>wallets</code> टेबल से 1-क्लिक रिफ्रेश होता है।</p>
+              <h6><i class="fa fa-money text-success"></i> Real-time Wallet Balances</h6>
+              <p>View each user's live INR prepaid balance, refreshed directly from the <code>wallets</code> database table with one click.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-toggle-on text-primary"></i> स्टेटस नियंत्रण (Active / Inactive / Pending)</h6>
-              <p>एडमिन किसी भी यूजर को तुरंत <b>Active</b>, <b>Blocked</b> (Inactive) या <b>Pending</b> कर सकता है। ब्लॉक होने पर यूजर का लॉगिन व API कॉल दोनों बंद हो जाते हैं।</p>
+              <h6><i class="fa fa-toggle-on text-primary"></i> Status Control (Active / Inactive / Pending)</h6>
+              <p>Admins can toggle any user between <b>Active</b>, <b>Blocked</b> (Inactive), and <b>Pending</b>. When blocked, user login and API requests are immediately restricted.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-key text-danger"></i> पासवर्ड रीसेट एवं सेटिंग्स</h6>
-              <p>बिना पुराने पासवर्ड के एडमिन यूजर का नया पासवर्ड सेट कर सकता है, साथ ही यूजर की प्रोफाइल, एड्रेस व पेरेंट यूजर असाइन कर सकता है।</p>
+              <h6><i class="fa fa-key text-danger"></i> Password Reset &amp; Profile Updates</h6>
+              <p>Admins can set new passwords without needing old passwords, as well as manage user profile details, contact info, and parent accounts.</p>
             </div>
           </div>
         </div>
@@ -352,26 +352,26 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Payment & Fund Requests -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-bank text-success"></i> 1.2 फंड रिक्वेस्ट व बैंक अप्रूवल (Payment &amp; Banking)</h4>
+          <h4><i class="fa fa-bank text-success"></i> 1.2 Fund Requests &amp; Bank Approvals (Payment &amp; Banking)</h4>
           <span class="feature-route">/admin/payment/fund-request | /admin/payment/bank-list | /admin/payment/payout-requests</span>
         </div>
         <div class="card-feature-body">
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-arrow-down text-success"></i> फंड टॉप-अप रिक्वेस्ट (Wallet Topup)</h6>
-              <p>यूजर जब बैंक में पैसे भेजकर UTR व प्रूफ सबमिट करता है, तो एडमिन उसे वेरिफाई करके <b>Approve</b> (वॉलेट में तुरंत बैलेंस क्रेडिट) या <b>Reject</b> (कारण सहित) करता है।</p>
+              <h6><i class="fa fa-arrow-down text-success"></i> Wallet Top-up Requests</h6>
+              <p>When users transfer money and submit their UTR proof, the admin verifies details and either <b>Approves</b> (instantly crediting the wallet) or <b>Rejects</b> with a reason.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-building text-primary"></i> एडमिन बैंक लिस्ट (Admin Bank List)</h6>
-              <p>एडमिन अपने वो बैंक खाते व UPI QR कोड जोड़ता है जो यूजर्स को वॉलेट लोड करते समय स्क्रीन पर दिखाई देते हैं।</p>
+              <h6><i class="fa fa-building text-primary"></i> Admin Bank Accounts (Admin Bank List)</h6>
+              <p>Admins configure receiving bank accounts and UPI QR codes that display to users when depositing funds.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-check-square-o text-info"></i> यूजर बैंक अप्रूवल (Bank Approval)</h6>
-              <p>यूजर विथड्रॉल के लिए जो बैंक खाता जोड़ता है, एडमिन उसे पहले अप्रूव करता है। बिना अप्रूवल के यूजर उस खाते में पेआउट नहीं ले सकता।</p>
+              <h6><i class="fa fa-check-square-o text-info"></i> User Bank Account Approval</h6>
+              <p>When users register a bank account for payouts, admins must approve it before withdrawals can be initiated.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-arrow-up text-danger"></i> पेआउट रिक्वेस्ट (Payout / Redeem)</h6>
-              <p>यूजर के वॉलेट से बैंक ट्रांसफर रिक्वेस्ट। एडमिन बैंक में ट्रांसफर करके UTR नंबर डालकर <b>Approve</b> करता है, या <b>Reject</b> करने पर यूजर का बैलेंस स्वतः रिफंड हो जाता है।</p>
+              <h6><i class="fa fa-arrow-up text-danger"></i> Payout Requests (Redeem)</h6>
+              <p>Redeem requests from user wallets to banks. Admins approve transfers with a reference UTR, or reject requests to automatically refund the user's wallet.</p>
             </div>
           </div>
         </div>
@@ -380,31 +380,31 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Disputes -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-gavel text-warning"></i> 1.3 विवाद समाधान (Disputes Resolution)</h4>
+          <h4><i class="fa fa-gavel text-warning"></i> 1.3 Dispute Resolution</h4>
           <span class="feature-route">/admin/disputes</span>
         </div>
         <div class="card-feature-body">
-          <p>Buyer और Seller के बीच विवादित रिचार्ज का सुप्रीम एडमिन फैसला:</p>
+          <p>Final administrative adjudication between Buyer and Seller over disputed recharges:</p>
           <div class="step-flow">
             <div class="step-item">
               <div class="step-num">1</div>
               <div class="step-text">
-                <h6>विवाद की समीक्षा (Review Dispute)</h6>
-                <p>एडमिन बायर का कम्प्लेन रीज़न और सेलर द्वारा दिया गया ऑपरेटर रिस्पॉन्स व प्रूफ एक स्क्रीन पर देखता है।</p>
+                <h6>Review Dispute</h6>
+                <p>Admins examine the buyer's complaint reason, the seller's operator response, and proof of transaction on a unified screen.</p>
               </div>
             </div>
             <div class="step-item">
               <div class="step-num">2</div>
               <div class="step-text">
-                <h6>एक्सेप्ट व रिफंड (Accept &amp; Refund)</h6>
-                <p>एडमिन द्वारा <b>Accept</b> करने पर: Buyer के वॉलेट में रिचार्ज की पूरी लागत तुरंत रिफंड हो जाती है, और Seller के वॉलेट से क्रेडिट अमाउंट रिवर्स (कटौती) हो जाता है।</p>
+                <h6>Accept &amp; Refund</h6>
+                <p>When an admin clicks <b>Accept</b>: the full recharge cost is refunded to the Buyer's wallet, and the credited amount is reversed (debited) from the Seller's wallet.</p>
               </div>
             </div>
             <div class="step-item">
               <div class="step-num">3</div>
               <div class="step-text">
-                <h6>रिजेक्ट (Reject Dispute)</h6>
-                <p>यदि सेलर का रिचार्ज ऑपरेटर एंड पर सफल साबित होता है, तो एडमिन विवाद को रिमार्क लिखकर Reject कर देता है (कोई रिफंड नहीं दिया जाता)।</p>
+                <h6>Reject Dispute</h6>
+                <p>If the seller's recharge is verified as successful at the operator level, the admin rejects the dispute with an explanatory remark (no refund is issued).</p>
               </div>
             </div>
           </div>
@@ -414,56 +414,56 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Recharge Report -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-list-alt text-info"></i> 1.4 मास्टर रिचार्ज रिपोर्ट (Recharge Report)</h4>
+          <h4><i class="fa fa-list-alt text-info"></i> 1.4 Master Recharge Report</h4>
           <span class="feature-route">/admin/reports/recharge-report</span>
         </div>
         <div class="card-feature-body">
-          <p class="font-weight-bold text-dark">सभी लाइव रिचार्ज ट्रांजैक्शन की ऑडिट रिपोर्ट और 5 एक्शन बटन्स:</p>
+          <p class="font-weight-bold text-dark">Audit log of all live recharge transactions with 5 action buttons:</p>
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-filter text-primary"></i> 9 स्मार्ट फिल्टर्स</h6>
-              <p>Top 20/50/100/500, From Date, To Date, Client ID, Operator, Circle, Status, Mobile Number और Exact Amount द्वारा 1-क्लिक सर्च।</p>
+              <h6><i class="fa fa-filter text-primary"></i> 9 Smart Filters</h6>
+              <p>Top 20/50/100/500, From Date, To Date, Client ID, Operator, Circle, Status, Mobile Number, and Exact Amount 1-click search.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-download text-success"></i> CSV/Excel डाउनलोड</h6>
-              <p>फ़िल्टर किए गए सभी डेटा को डेट-रेंज के साथ एक क्लिक में CSV फाइल में डाउनलोड करना।</p>
+              <h6><i class="fa fa-download text-success"></i> CSV / Excel Export</h6>
+              <p>Download all filtered records across any date range into CSV format with one click.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-clock-o text-warning"></i> समय व सटीक अवधि (Duration in Seconds)</h6>
-              <p>तारीख व समय सेकंड्स सहित (<code>hh:mm:ss</code>) और रिचार्ज सक्सेस होने में कितने सेकंड लगे (उदा. <code>⏱️ 2.4s</code>)।</p>
+              <h6><i class="fa fa-clock-o text-warning"></i> Precision Timing &amp; Duration</h6>
+              <p>Timestamps formatted to the second (<code>hh:mm:ss</code>) alongside exact execution turnaround time (e.g. <code>⏱️ 2.4s</code>).</p>
             </div>
           </div>
           <div class="mt-3">
-            <h6 class="font-weight-bold text-dark">टेबल में उपलब्ध 5 एक्शन बटन (Action Controls):</h6>
+            <h6 class="font-weight-bold text-dark">Available Action Controls in Table:</h6>
             <div class="row">
               <div class="col-md-4 mb-2">
                 <div class="p-2 border rounded bg-light">
-                  <strong class="text-danger"><i class="fa fa-times"></i> Fail Button (केवल Success ट्रांजैक्शन हेतु):</strong>
-                  <p class="small mb-0">यदि ऑपरेटर से बाद में रिचार्ज फेल हो जाए, तो एडमिन इस बटन से ट्रांजैक्शन को FAILED कर सकता है। बायर के वॉलेट में तुरंत रिफंड चला जाता है और सेलर का क्रेडिट वापस कट जाता है।</p>
+                  <strong class="text-danger"><i class="fa fa-times"></i> Fail Button (Success records only):</strong>
+                  <p class="small mb-0">If a recharge fails later at the operator level, admins can mark it FAILED. The buyer receives an immediate refund and the seller's credit is reversed.</p>
                 </div>
               </div>
               <div class="col-md-4 mb-2">
                 <div class="p-2 border rounded bg-light">
                   <strong class="text-warning"><i class="fa fa-gavel"></i> Dispute Button:</strong>
-                  <p class="small mb-0">ट्रांजैक्शन पर सीधे विवाद दर्ज करने या विवाद की स्थिति देखने की सुविधा।</p>
+                  <p class="small mb-0">Directly raise or inspect a dispute for this specific transaction.</p>
                 </div>
               </div>
               <div class="col-md-4 mb-2">
                 <div class="p-2 border rounded bg-light">
                   <strong class="text-info"><i class="fa fa-paper-plane"></i> Resend Callback (CB):</strong>
-                  <p class="small mb-0">Buyer के Callback URL पर ताज़ा रिचार्ज स्थिति, ऑपरेटर ID और रिस्पॉन्स कोड के साथ दोबारा वेबहुक भेजना।</p>
+                  <p class="small mb-0">Re-dispatch a webhook callback to the Buyer's Callback URL with updated status, operator ID, and response code.</p>
                 </div>
               </div>
               <div class="col-md-6 mb-2">
                 <div class="p-2 border rounded bg-light">
                   <strong class="text-dark"><i class="fa fa-file-text-o"></i> Recharge Log:</strong>
-                  <p class="small mb-0">मोडल में पूरा कच्चा (Raw) JSON पेलोड, प्रोवाइडर का मूल रिस्पॉन्स, टाइमस्टैम्प्स, बायर/सेलर की जानकारी देखना।</p>
+                  <p class="small mb-0">Modal displaying raw JSON payloads, original provider response, timestamps, and full buyer/seller transaction data.</p>
                 </div>
               </div>
               <div class="col-md-6 mb-2">
                 <div class="p-2 border rounded bg-light">
                   <strong class="text-primary"><i class="fa fa-pencil"></i> Update Ope ID:</strong>
-                  <p class="small mb-0">ऑपरेटर रेफरेंस ID (opeid) को सीधे मोडल में एडिट करके सेव करना।</p>
+                  <p class="small mb-0">Edit and save operator reference IDs (opeid) directly in an interactive modal.</p>
                 </div>
               </div>
             </div>
@@ -474,23 +474,23 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Live Recharge Report -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-bolt text-danger"></i> 1.5 लाइव रिचार्ज रिपोर्ट (Live Recharge Report - 10s Auto Refresh)</h4>
+          <h4><i class="fa fa-bolt text-danger"></i> 1.5 Live Recharge Report (10s Auto Refresh)</h4>
           <span class="feature-route">/admin/reports/live-recharge</span>
         </div>
         <div class="card-feature-body">
-          <p class="font-weight-bold text-dark">रीयल-टाइम ऑटोमैटिक ट्रांजैक्शन फीड (No Manual Touch):</p>
+          <p class="font-weight-bold text-dark">Real-time automatic transaction feed without manual intervention:</p>
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-eye-slash text-secondary"></i> कोई फ़िल्टर नहीं (Filter-free Clean View)</h6>
-              <p>पेज खोलने पर ऊपर कोई फ़िल्टर बार नहीं दिखता — स्क्रीन सीधे लाइव ट्रांजैक्शन टेबल और रीयल-टाइम आँकड़ों पर केंद्रित रहती है।</p>
+              <h6><i class="fa fa-eye-slash text-secondary"></i> Filter-free Clean View</h6>
+              <p>No cluttered filter bars on load — directly focused on real-time transaction streaming and live metrics.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-refresh text-success"></i> हर 10 सेकंड में ऑटो-रिफ्रेश (10s Polling)</h6>
-              <p>बिना पेज रीलोड किए बैकग्राउंड में हर 10 सेकंड में नवीनतम 50 ट्रांजैक्शन स्वतः फेच होते हैं। साथ में 10 सेकंड का काउंटडाउन टिकर व पल्स इंडिकेटर लाइव रहता है।</p>
+              <h6><i class="fa fa-refresh text-success"></i> 10-Second Auto Refresh</h6>
+              <p>Background polling automatically loads the latest 50 transactions every 10 seconds with a countdown ticker and heartbeat indicator.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-pause-circle text-warning"></i> स्मार्ट मोडल पॉज़ (Modal Protection)</h6>
-              <p>यदि एडमिन किसी ट्रांजैक्शन पर Fail, Dispute, Log या Update Ope ID का मोडल खोलता है, तो ऑटो-रिफ्रेश अपने-आप पॉज़ हो जाता है ताकि काम में रुकावट न आए।</p>
+              <h6><i class="fa fa-pause-circle text-warning"></i> Modal Protection</h6>
+              <p>Opening Fail, Dispute, Log, or Update Ope ID modals automatically pauses auto-refresh to prevent interruptions during actions.</p>
             </div>
           </div>
         </div>
@@ -499,23 +499,23 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Pending Recharge Report -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-clock-o text-warning"></i> 1.6 पेंडिंग रिचार्ज रिपोर्ट (Pending Recharge Report)</h4>
+          <h4><i class="fa fa-clock-o text-warning"></i> 1.6 Pending Recharge Report</h4>
           <span class="feature-route">/admin/reports/pending-recharge</span>
         </div>
         <div class="card-feature-body">
-          <p class="font-weight-bold text-dark">सभी अटके हुए (Pending) ट्रांजैक्शन्स की त्वरित निगरानी व समाधान:</p>
+          <p class="font-weight-bold text-dark">Focused oversight and rapid resolution for pending transactions:</p>
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-hourglass-half text-warning"></i> डिफ़ॉल्ट पेंडिंग स्टेटस (Default Pending Filter)</h6>
-              <p>यह पेज मास्टर रिपोर्ट जैसा ही सभी फ़िल्टर प्रदान करता है, लेकिन डिफ़ॉल्ट रूप से स्टेटस <b>Pending</b> सेट रहता है और टेबल में केवल पेंडिंग रिचार्ज ही लोड होते हैं।</p>
+              <h6><i class="fa fa-hourglass-half text-warning"></i> Default Pending Filter</h6>
+              <p>Pre-filtered to display exclusively Pending transactions for fast administrative triage.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-search text-primary"></i> सभी 9 फ़िल्टर्स उपलब्ध</h6>
-              <p>Top entries, Date Range, Buyer/Client ID, Operator, Circle, Mobile Number व Amount द्वारा पेंडिंग ऑर्डर्स को तुरंत खोजा जा सकता है।</p>
+              <h6><i class="fa fa-search text-primary"></i> Full Search Suite</h6>
+              <p>Filter by Top entries, Date Range, Buyer/Client ID, Operator, Circle, Mobile Number, or Amount.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-wrench text-danger"></i> त्वरित समाधान एक्शन</h6>
-              <p>पेंडिंग ट्रांजैक्शन का रॉ लॉग देखना, सप्लायर या ऑपरेटर से बात करके Ope ID अपडेट करना, अथवा आवश्यकता पड़ने पर तुरंत फेल व रिफंड करना।</p>
+              <h6><i class="fa fa-wrench text-danger"></i> Quick Resolution Actions</h6>
+              <p>Inspect raw logs, update Operator IDs, or mark failed to immediately refund the buyer where necessary.</p>
             </div>
           </div>
         </div>
@@ -524,22 +524,22 @@ module.exports = function createSystemChartPage() {
       <!-- Feature: Operators -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-cogs text-secondary"></i> 1.7 ऑपरेटर मैनेजमेंट (Create &amp; Show Operators)</h4>
+          <h4><i class="fa fa-cogs text-secondary"></i> 1.7 Operator Management (Create &amp; Show Operators)</h4>
           <span class="feature-route">/admin/settings/create-operator | /admin/settings/show-operator</span>
         </div>
         <div class="card-feature-body">
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-plus-circle text-primary"></i> ऑपरेटर कॉन्फ़िगरेशन</h6>
-              <p>ऑपरेटर नाम, कोड (उदा. AT, JIO, VI), सर्विस प्रकार (Mobile, DTH, Bill Payment, FASTag, आदि), मिनिमम व मैक्सिमम अमाउंट सीमा।</p>
+              <h6><i class="fa fa-plus-circle text-primary"></i> Operator Configuration</h6>
+              <p>Operator name, code (e.g. AT, JIO, VI), service category (Mobile, DTH, Bill Payment, FASTag, etc.), and amount bounds.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-ban text-danger"></i> स्टॉप अमाउंट्स (Stop Amounts)</h6>
-              <p>कॉमा-सेपरेटेड अमाउंट्स (उदा. 101, 501, 1001) जिन्हें ब्लॉक करना हो, ताकि कोई यूजर गलती से इन अमाउंट्स का रिचार्ज न कर सके।</p>
+              <h6><i class="fa fa-ban text-danger"></i> Stop Amounts</h6>
+              <p>Comma-separated prohibited denominations (e.g. 101, 501, 1001) that cannot be submitted for processing.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-list text-info"></i> बिल पेमेंट पैरामीटर्स</h6>
-              <p>बिजली/गैस/पानी के लिए कस्टम फ़ील्ड्स (उदा. Consumer Number, Account ID, Sub-division) जोड़ना।</p>
+              <h6><i class="fa fa-list text-info"></i> Bill Payment Parameters</h6>
+              <p>Custom field schemas for utility payments (e.g. Consumer Number, Account ID, Sub-division).</p>
             </div>
           </div>
         </div>
@@ -553,25 +553,25 @@ module.exports = function createSystemChartPage() {
     <div id="section-general-settings" class="chart-section mt-5">
       <div class="section-header">
         <span class="badge-role badge-admin">SYSTEM RULES</span>
-        <h2>2. सर्विस सेटिंग्स (General Rules &amp; 9 System Switches)</h2>
+        <h2>2. Service Settings (General Rules &amp; 9 System Switches)</h2>
       </div>
 
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-sliders text-warning"></i> सर्विस सेटिंग्स का General Tab</h4>
+          <h4><i class="fa fa-sliders text-warning"></i> Service Settings - General Tab</h4>
           <span class="feature-route">/admin/settings/service-settings</span>
         </div>
         <div class="card-feature-body">
-          <p>यह 9 सेटिंग्स पूरे एक्सचेंज सिस्टम की आत्मा हैं। प्रत्येक सेटिंग के आगे कॉम्पैक्ट <b>ON/OFF</b> टॉगल स्विच दिया गया है:</p>
+          <p>These 9 settings govern the core workflow of the exchange system. Each setting features a compact <b>ON/OFF</b> toggle switch:</p>
 
           <div class="table-responsive">
             <table class="table table-bordered table-striped">
               <thead class="bg-dark text-white">
                 <tr>
                   <th style="width: 50px;">#</th>
-                  <th style="width: 220px;">सेटिंग का नाम</th>
-                  <th style="width: 140px;">स्विच / इनपुट</th>
-                  <th>विस्तृत कार्यप्रणाली एवं लॉजिक (How it Works)</th>
+                  <th style="width: 220px;">Setting Name</th>
+                  <th style="width: 140px;">Switch / Input</th>
+                  <th>Workflow &amp; Logic (How it Works)</th>
                 </tr>
               </thead>
               <tbody>
@@ -580,17 +580,17 @@ module.exports = function createSystemChartPage() {
                   <td><strong>Login OTP</strong></td>
                   <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span></td>
                   <td>
-                    • <b>ON होने पर:</b> जब भी कोई यूजर (Admin, Buyer या Seller) अपना यूजर आईडी व पासवर्ड डालेगा, सिस्टम तुरंत 6 अंकों का सुरक्षित OTP जनरेट करके उसके रजिस्टर्ड <b>Email</b> और <b>WhatsApp</b> दोनों पर भेजेगा। OTP भरने पर ही लॉगिन होगा।<br>
-                    • <b>OFF होने पर:</b> OTP नहीं मांगा जाएगा, यूजर सीधे पासवर्ड से तुरंत लॉगिन हो जाएगा।
+                    • <b>When ON:</b> Whenever any user (Admin, Buyer, or Seller) enters their user ID and password, the system immediately generates a secure 6-digit OTP and dispatches it to both their registered <b>Email</b> and <b>WhatsApp</b>. Login completes only after OTP verification.<br>
+                    • <b>When OFF:</b> OTP verification is bypassed, and users log in directly with their credentials.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">2</td>
                   <td><strong>Instant Response Time</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Seconds (उदा. 15s)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Seconds (e.g., 15s)</small></td>
                   <td>
-                    • <b>लॉजिक:</b> Buyer जब API से कोई रिचार्ज रिक्वेस्ट भेजेगा, तो यहाँ सेट किए गए सेकंड्स (उदा. 15 सेकंड) के अंदर यदि सेलर से Success या Fail रिस्पॉन्स मिल जाता है, तो Buyer को सीधा Live रिस्पॉन्स जाएगा।<br>
-                    • यदि सेलर की API धीमी है और सेट सेकंड्स से अधिक समय लगता है, तो Buyer का कनेक्शन टाइमआउट नहीं होगा, बल्कि रिस्पॉन्स आने पर बैकएंड स्वतः Buyer के <b>Callback URL</b> पर रिस्पॉन्स भेज देगा।
+                    • <b>Logic:</b> When a Buyer sends a recharge request via API, if a Success or Fail response is received from the Seller within the configured seconds (e.g., 15s), an instant live response is returned directly to the Buyer.<br>
+                    • If the Seller API is delayed beyond this limit, the Buyer connection will not time out; instead, the backend automatically forwards the outcome to the Buyer's <b>Callback URL</b> as soon as it arrives.
                   </td>
                 </tr>
                 <tr>
@@ -598,58 +598,58 @@ module.exports = function createSystemChartPage() {
                   <td><strong>Complain Accept After</strong></td>
                   <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Instant / Delay (Sec/Min)</small></td>
                   <td>
-                    • <b>Instant:</b> रिचार्ज होते ही Buyer तुरंत कम्प्लेन/विवाद दर्ज कर सकता है।<br>
-                    • <b>Set Time:</b> जितने सेकंड या मिनट सेट होंगे, रिचार्ज होने के केवल उतने समय बाद ही कम्प्लेन स्वीकार होगी। पहले कम्प्लेन करने पर सिस्टम बताएगा कि कृपया इतने सेकंड/मिनट प्रतीक्षा करें।
+                    • <b>Instant:</b> Buyers can raise a complaint/dispute immediately following recharge processing.<br>
+                    • <b>Set Time:</b> A dispute is accepted only after the configured duration (seconds or minutes) has elapsed. Early submissions are blocked with an instruction to wait.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">4</td>
                   <td><strong>Do not Accept Complain After</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Days (उदा. 7 Days)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Days (e.g., 7 Days)</small></td>
                   <td>
-                    • <b>लॉजिक:</b> इसमें जितने दिन भरे होंगे (उदा. 7 दिन), सिर्फ उतने दिन पुराने ट्रांजैक्शन की ही कम्प्लेन प्राप्त होगी। उससे अधिक पुरानी तारीख के रिचार्ज पर कम्प्लेन सबमिशन ब्लॉक रहेगा।
+                    • <b>Logic:</b> Complaints are restricted to transactions completed within the configured window (e.g., 7 days). Submissions for recharges older than this cutoff are blocked.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">5</td>
                   <td><strong>Notify Pending Txn After</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (उदा. 15 Min)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (e.g., 15 Min)</small></td>
                   <td>
-                    • <b>बैकग्राउंड ऑटो-वर्कर:</b> रिचार्ज जिस भी Seller के पास गया है, यदि वह रिचार्ज सेट मिनटों (उदा. 15 मिनट) से अधिक समय तक <code>pending</code> रहता है, तो सिस्टम हर 60 सेकंड में चेक करके उस Seller के WhatsApp पर ऑटोमैटिक रिमाइंडर मैसेज भेजता है कि कृपया इस पेंडिंग रिचार्ज को तुरंत क्लियर करें।
+                    • <b>Background Auto-Worker:</b> If a recharge dispatched to a Seller remains in <code>pending</code> status past the configured threshold (e.g., 15 minutes), the background worker scans every 60 seconds and sends an automated WhatsApp reminder to that Seller to clear the pending transaction immediately.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">6</td>
                   <td><strong>Stop Rehit After</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (उदा. 2 Min)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (e.g., 2 Min)</small></td>
                   <td>
-                    • <b>लॉजिक:</b> यदि पहली API/सेलर से रिचार्ज रिस्पॉन्स आने में या फेल होने में सेट किए गए मिनट (उदा. 2 मिनट) से अधिक समय लग जाता है, तो सिस्टम आगे दूसरे सेलर पर Re-hit (झरना) करने के बजाय Buyer को तुरंत Fail रिस्पॉन्स भेजकर रोक देगा ताकि बायर का पैसा अटका न रहे।
+                    • <b>Logic:</b> If the initial Seller API takes longer than the configured threshold (e.g., 2 minutes) to respond or fail, the waterfall engine halts further re-hits to prevent locking buyer funds indefinitely, immediately returning a Fail response to the Buyer.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">7</td>
                   <td><strong>Stop Same Number/Amount for</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (उदा. 3 Min)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Minutes (e.g., 3 Min)</small></td>
                   <td>
-                    • <b>डुप्लीकेट रिचार्ज सुरक्षा:</b> जो रिचार्ज एक बार Success हो चुका है, उसी समान मोबाइल नंबर और समान अमाउंट का नया रिक्वेस्ट उतने सेट मिनट में किसी भी यूजर से दोबारा स्वीकार नहीं होगा। इससे गलती से दो बार रिचार्ज होने का नुकसान रुक जाता है।
+                    • <b>Duplicate Recharge Protection:</b> Once a recharge succeeds, any subsequent request with the same mobile number and exact amount submitted within the configured window is blocked, preventing accidental double billing.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">8</td>
                   <td><strong>API Disable After Number of Fail Txn</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Fail Txn (उदा. 5)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">Fail Txn (e.g., 5)</small></td>
                   <td>
-                    • <b>लॉजिक:</b> यदि किसी Seller API से लगातार अथवा तय संख्या में रिचार्ज फेल (Fail) होते हैं, तो सिस्टम तुरंत उस Seller API को ऑटोमैटिक Disable (is_active = false) कर देता है।<br>
-                    • इससे नए रिचार्ज लगातार फेल हो रही API पर नहीं जाते और तुरंत अगले स्वस्थ सेलर पर रूट हो जाते हैं। जब सेलर अपनी समस्या ठीक कर लेगा तब उसे दोबारा Enable किया जा सकता है।
+                    • <b>Logic:</b> If a Seller API accumulates consecutive failures matching the configured threshold, the system automatically disables that Seller API (is_active = false).<br>
+                    • This diverts incoming traffic to healthy Sellers, preventing cascade failures until the operator resolves their outage and re-enables the endpoint.
                   </td>
                 </tr>
                 <tr>
                   <td class="font-weight-bold text-center">9</td>
                   <td><strong>API Suspend After % on Refund Txn in a Day</strong></td>
-                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">% (उदा. 25%)</small></td>
+                  <td><span class="tag-pill tag-on">ON</span> / <span class="tag-pill tag-off">OFF</span><br><small class="text-muted">% (e.g., 25%)</small></td>
                   <td>
-                    • <b>लॉजिक:</b> यदि 1 दिन (24 घंटे) में किसी Seller API के कुल ट्रांजेक्शन में से रिफंड (Refund / Dispute) ट्रांजेक्शन का प्रतिशत सेट किए गए % (उदा. 25%) या उससे अधिक हो जाता है, तो वह API ऑटोमैटिक Suspend (is_active = false) हो जाएगी।<br>
-                    • इससे खराब क्वालिटी या फेक सक्सेस देकर बाद में रिफंड कराने वाली API से सिस्टम व बायर्स दोनों का नुकसान तुरंत रुक जाता है।
+                    • <b>Logic:</b> If the proportion of refunded/disputed transactions for any Seller API exceeds the configured percentage (e.g., 25%) in a single 24-hour cycle, the API is automatically suspended (is_active = false).<br>
+                    • This protects buyers and the platform against degraded or fraudulent upstream providers.
                   </td>
                 </tr>
               </tbody>
@@ -660,25 +660,25 @@ module.exports = function createSystemChartPage() {
             <div class="col-md-3">
               <div class="logic-box border-primary">
                 <h6><i class="fa fa-envelope text-primary"></i> Email Notification Settings</h6>
-                <p class="mb-0 small">Google Apps Script Webhook या SMTP सर्वर। OTP, अलर्ट्स व ट्रांजैक्शन मेल्स भेजने हेतु।</p>
+                <p class="mb-0 small">Google Apps Script Webhook or SMTP server for dispatching OTPs, security alerts, and transaction receipts.</p>
               </div>
             </div>
             <div class="col-md-3">
               <div class="logic-box border-success">
                 <h6><i class="fa fa-whatsapp text-success"></i> WhatsApp Notification Settings</h6>
-                <p class="mb-0 small">UltraMsg या Custom Gateway। लॉगिन OTP, पेआउट अलर्ट्स व सेलर पेंडिंग रिमाइंडर भेजने हेतु।</p>
+                <p class="mb-0 small">UltraMsg or Custom Gateway for dispatching login OTPs, payout notifications, and seller pending transaction reminders.</p>
               </div>
             </div>
             <div class="col-md-3">
               <div class="logic-box border-info">
                 <h6><i class="fa fa-search text-info"></i> Plan API (ERS HLR Fetch)</h6>
-                <p class="mb-0 small">बैकएंड में प्री-कॉन्फ़िगर ERS API। बायर मोबाइल नंबर से लाइव ऑपरेटर व सर्कल फेच व ऑटो-राउटिंग।</p>
+                <p class="mb-0 small">Pre-configured ERS backend API for live operator and circle lookup and dynamic route optimization based on buyer mobile numbers.</p>
               </div>
             </div>
             <div class="col-md-3">
               <div class="logic-box border-warning">
                 <h6><i class="fa fa-percent text-warning"></i> Margin Difference Setting</h6>
-                <p class="mb-0 small">सेलर मार्जिन और बायर मार्जिन के बीच एडमिन का न्यूनतम कमीशन मार्जिन अंतर (%) तय करना।</p>
+                <p class="mb-0 small">Configures admin commission margin difference (%) between seller offers and buyer rates.</p>
               </div>
             </div>
           </div>
@@ -689,13 +689,13 @@ module.exports = function createSystemChartPage() {
               <span class="feature-route">/admin/settings/service-settings#tabPlanApi</span>
             </div>
             <div class="card-feature-body">
-              <p>रिचार्ज सिस्टम को पूरी तरह ऑटोमैटिक बनाने के लिए <strong>Plan API / HLR Operator Lookup</strong> इंटीग्रेट किया गया है:</p>
+              <p>Integrated <strong>Plan API / HLR Operator Lookup</strong> for automated route resolution:</p>
               <ul>
-                <li><strong>मल्टी-ब्रांड आर्किटेक्चर (Multi-Brand Support):</strong> सिस्टम में एक से अधिक ब्रांड्स का Plan API जोड़ने की सुविधा है। वर्तमान में <strong>ERS (Easy Recharge Solution)</strong> ब्रांड लाइव एक्टिव है।</li>
-                <li><strong>बैकएंड में प्री-कॉन्फ़िगर URL:</strong> एडमिन को कोई बड़ा URL लिखने की जरूरत नहीं है। बैकएंड में <code>https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew</code> पहले से कॉन्फ़िगर है। एडमिन को एडमिन पैनल में सिर्फ अपना <strong>User ID (ApiUserID)</strong> और <strong>Token</strong> सबमिट करना होता है।</li>
-                <li><strong>डायनामिक मोबाइल नंबर (Mobileno Replacement):</strong> जब भी कोई Buyer रिचार्ज रिक्वेस्ट भेजता है, उसका 10-अंकों का मोबाइल नंबर ERS API के <code>Mobileno</code> पैरामीटर में लाइव पास होता है।</li>
-                <li><strong>लाइव ऑपरेटर व सर्कल डिटेक्शन:</strong> ERS से प्राप्त ऑपरेटर नाम (उदा. AIRTEL, Reliance Jio, VODAFONE) और सर्कल (उदा. UP East, Mumbai) को सिस्टम डेटाबेस के <code>operator_definitions</code> और सर्कल्स से स्वतः मैच किया जाता है।</li>
-                <li><strong>बेस्ट सेलर मार्जिन ऑटो-राउटिंग:</strong> डिटेक्ट किए गए ऑपरेटर और सर्कल के आधार पर सेलर मार्जिन सेटिंग्स चेक होती हैं और सबसे ज्यादा कमीशन मार्जिन देने वाले सेलर के पास रिचार्ज रिक्वेस्ट वाटरफॉल तरीके से रूट हो जाती है।</li>
+                <li><strong>Multi-Brand Architecture:</strong> Supports adding multiple Plan API providers. The <strong>ERS (Easy Recharge Solution)</strong> engine is currently live.</li>
+                <li><strong>Pre-configured Backend URL:</strong> Pre-configured with <code>https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew</code>. The administrator only inputs their <strong>User ID (ApiUserID)</strong> and <strong>Token</strong>.</li>
+                <li><strong>Dynamic Mobile Lookup:</strong> Whenever a Buyer requests a recharge, the 10-digit mobile number is passed dynamically to the ERS API <code>Mobileno</code> parameter.</li>
+                <li><strong>Live Operator &amp; Circle Detection:</strong> Operator name (e.g., AIRTEL, Reliance Jio, VODAFONE) and Circle (e.g., UP East, Mumbai) returned from ERS are matched automatically against database <code>operator_definitions</code> and registered circles.</li>
+                <li><strong>Best Seller Margin Routing:</strong> Using the resolved operator and circle, seller margins are evaluated to route requests via the waterfall engine to the highest-yielding seller.</li>
               </ul>
             </div>
           </div>
@@ -710,40 +710,40 @@ module.exports = function createSystemChartPage() {
     <div id="section-user" class="chart-section mt-5">
       <div class="section-header">
         <span class="badge-role badge-user">BUYER &amp; SELLER USER</span>
-        <h2>3. यूज़र पैनल (User Panel) के सभी फीचर्स व कार्यप्रणाली</h2>
+        <h2>3. User Panel Modules &amp; Functionality</h2>
       </div>
 
       <!-- Buyer Features -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-shopping-cart text-primary"></i> 3.1 बायर मॉड्यूल्स (Buyer - रिचार्ज खरीदने वाला)</h4>
+          <h4><i class="fa fa-shopping-cart text-primary"></i> 3.1 Buyer Modules (Recharge Purchasing)</h4>
           <span class="feature-route">/buyer/*</span>
         </div>
         <div class="card-feature-body">
           <div class="logic-grid">
             <div class="logic-box">
               <h6><i class="fa fa-eye text-primary"></i> Available Margin (/buyer/available-margin)</h6>
-              <p>मार्केट में जितने भी सेलर स्टॉक दे रहे हैं, उनमें से एडमिन का मार्जिन अंतर काटकर बायर को मिलने वाला वास्तविक बेस्ट कमीशन लाइव दिखता है।</p>
+              <p>Displays live top commission rates available across active seller stock, net of system admin margin deductions.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-sliders text-success"></i> Buyer Margin (/buyer/margin)</h6>
-              <p>बायर प्रत्येक ऑपरेटर पर अपना न्यूनतम अपेक्षित कमीशन (%) सेट करता है। इसके साथ ही डेली/मंथली लिमिट और जीएसटी विकल्प चुनता है।</p>
+              <p>Allows buyers to configure minimum acceptable commission (%) per operator, along with daily/monthly volume limits and GST options.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-list-alt text-info"></i> Purchase Txn (/buyer/purchase-txn)</h6>
-              <p>बायर द्वारा खरीदे गए सभी रिचार्ज का पूरा इतिहास। फ़िल्टर (Date, Operator, Status, Mobile, Ref ID) और लाइव समरी कार्ड्स।</p>
+              <p>Comprehensive transaction history for all recharges purchased by the buyer, complete with filters (Date, Operator, Status, Mobile, Ref ID) and live summary cards.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-undo text-danger"></i> Purchase Refund (/buyer/purchase-refund)</h6>
-              <p>फेल हुए या डिस्प्यूट में रिफंड मिले रिचार्ज का ब्योरा। रिफंड की रकम बायर के प्रीपेड वॉलेट में स्वतः जुड़ जाती है।</p>
+              <p>Detailed log of failed and disputed recharge refunds. Refund amounts are credited automatically back to the buyer's prepaid wallet.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-gavel text-warning"></i> Recharge Dispute (/buyer/recharge-dispute)</h6>
-              <p>गलत या पेंडिंग रिचार्ज पर कम्प्लेन दर्ज करना। सिस्टम सेटिंग्स के अनुसार समय सीमा जांची जाती है।</p>
+              <p>Submit dispute tickets for failed or unfulfilled recharges, subject to system dispute eligibility timeframes.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-pie-chart text-secondary"></i> Operator-wise Purchase (/buyer/operator-wise-purchase)</h6>
-              <p>ऑपरेटर के आधार पर कुल रिचार्ज काउंट, कुल खर्च की गई रकम और कमाए गए कमीशन का समरी टेबल।</p>
+              <p>Summary breakdown of recharge volume, aggregate expenditure, and commission earned categorized by telecom operator.</p>
             </div>
           </div>
         </div>
@@ -752,34 +752,34 @@ module.exports = function createSystemChartPage() {
       <!-- Seller Features -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-briefcase text-success"></i> 3.2 सेलर मॉड्यूल्स (Seller - रिचार्ज बेचने/सप्लाई करने वाला)</h4>
+          <h4><i class="fa fa-briefcase text-success"></i> 3.2 Seller Modules (Recharge Supply &amp; Fulfillment)</h4>
           <span class="feature-route">/seller/*</span>
         </div>
         <div class="card-feature-body">
           <div class="logic-grid">
             <div class="logic-box">
               <h6><i class="fa fa-tag text-success"></i> Sales Margin (/seller/sales-margin)</h6>
-              <p>सेलर तय करता है कि वह किस ऑपरेटर पर कितना कमीशन (%) ऑफर कर रहा है, उसकी बिक्री सीमा (Limit) क्या है और मिनिमम Roffer आवश्यकता क्या है।</p>
+              <p>Sellers define commission (%) offered per operator, daily/monthly fulfillment limits, and minimum Roffer criteria.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-line-chart text-primary"></i> Sales Txn (/seller/sales-txn)</h6>
-              <p>सेलर के स्टॉक/API पर जितने भी रिचार्ज हिट हुए, उनकी पूरी लिस्ट। रिचार्ज सक्सेस होने पर सेलर को मिला क्रेडिट तुरंत दिखता है।</p>
+              <p>Comprehensive transaction log of all recharge requests dispatched to the seller's balance/API, displaying instant credits on successful processing.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-code text-dark"></i> API Setting (/seller/api-setting)</h6>
-              <p>सेलर अपनी थर्ड-पार्टी रिचार्ज API (URL, Headers, GET/POST Parameters, JSON/Text Dynamic Parsing, Callback Setup) सेट करता है।</p>
+              <p>Configure third-party recharge gateway API endpoints (URL, Headers, GET/POST Parameters, JSON/Text Dynamic Parsing, and Webhook Callbacks).</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-gavel text-warning"></i> Sales Dispute (/seller/sales-dispute)</h6>
-              <p>बायर द्वारा की गई कम्प्लेन्स का सेलर स्तर पर निस्तारण। सेलर ऑपरेटर प्रूफ देखकर <b>Accept (Refund)</b> या <b>Reject</b> कर सकता है।</p>
+              <p>Review buyer disputes. Sellers inspect operator response logs to either <b>Accept (Refund)</b> or <b>Reject</b> tickets.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-clock-o text-danger"></i> Sales Pending (/seller/sales-pending)</h6>
-              <p>सेलर की API पर पेंडिंग चल रहे रिचार्ज का लाइव मॉनिटरिंग डैशबोर्ड।</p>
+              <p>Live dashboard monitoring ongoing and delayed recharges currently processing on the seller gateway.</p>
             </div>
             <div class="logic-box">
               <h6><i class="fa fa-bar-chart text-info"></i> Operator-wise Sale (/seller/operator-wise-sale)</h6>
-              <p>ऑपरेटर-वाइज़ बिक्री मात्रा, सेलर्स को मिला पेमेंट और मार्जिन का एनालिटिक्स।</p>
+              <p>Analytics on fulfilled recharge volumes, seller earnings, and net margins segmented by telecom operator.</p>
             </div>
           </div>
         </div>
@@ -788,22 +788,22 @@ module.exports = function createSystemChartPage() {
       <!-- Security Settings -->
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-lock text-danger"></i> 3.3 यूजर सुरक्षा सेटिंग्स (IP Whitelist &amp; Callback)</h4>
+          <h4><i class="fa fa-lock text-danger"></i> 3.3 Security Settings (IP Whitelist &amp; Callback)</h4>
           <span class="feature-route">/setting/ip-setting | /setting/add-callback</span>
         </div>
         <div class="card-feature-body">
           <div class="logic-grid">
             <div class="logic-box">
-              <h6><i class="fa fa-shield text-primary"></i> IP Setting (API सुरक्षा)</h6>
-              <p>यूजर अपने सर्वर का IP Address व्हाइटलिस्ट करता है। बिना व्हाइटलिस्टेड IP के API से कोई भी रिचार्ज रिक्वेस्ट स्वीकार नहीं की जाती।</p>
+              <h6><i class="fa fa-shield text-primary"></i> IP Setting (API Security)</h6>
+              <p>Whitelist trusted server IP addresses. Requests from unlisted IPs are rejected at the firewall gateway.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-link text-success"></i> Add Callback (वेबहुक URL)</h6>
-              <p>यूजर अपना Callback URL जोड़ता है ताकि रिचार्ज का स्टेटस (Success/Fail) उसके सर्वर पर वेबहुक द्वारा स्वतः प्राप्त हो सके।</p>
+              <h6><i class="fa fa-link text-success"></i> Add Callback (Webhook URL)</h6>
+              <p>Register callback endpoints to receive automatic real-time transaction updates (Success/Fail) on completion.</p>
             </div>
             <div class="logic-box">
-              <h6><i class="fa fa-key text-danger"></i> Dual-OTP सुरक्षा</h6>
-              <p>IP या Callback URL बदलते समय सुरक्षा हेतु यूजर के ईमेल और व्हाट्सएप पर डुअल OTP जाता है, जिसे भरने के बाद ही बदलाव लागू होता है।</p>
+              <h6><i class="fa fa-key text-danger"></i> Dual-OTP Verification</h6>
+              <p>Changes to IP whitelists or callback endpoints require dual OTP confirmation via registered Email and WhatsApp for tamper prevention.</p>
             </div>
           </div>
         </div>
@@ -817,25 +817,25 @@ module.exports = function createSystemChartPage() {
     <div id="section-engine" class="chart-section mt-5">
       <div class="section-header">
         <span class="badge-role badge-engine">ENGINE ARCHITECTURE</span>
-        <h2>4. स्मार्ट रिचार्ज इंजन, वॉटरफॉल व सेटलमेंट लॉजिक</h2>
+        <h2>4. Smart Recharge Engine, Waterfall &amp; Settlement Logic</h2>
       </div>
 
       <div class="card-feature">
         <div class="card-feature-header">
-          <h4><i class="fa fa-bolt text-warning"></i> रिचार्ज का पूरा जीवनचक्र (End-to-End Lifecycle)</h4>
+          <h4><i class="fa fa-bolt text-warning"></i> End-to-End Recharge Lifecycle</h4>
           <span class="feature-route">lib/buyer-api-service.js</span>
         </div>
         <div class="card-feature-body">
-          <p class="font-weight-bold text-dark">जब Buyer की API या पोर्टल से एक रिचार्ज रिक्वेस्ट आती है, तो सिस्टम निम्नलिखित 7 चरणों में काम करता है:</p>
+          <p class="font-weight-bold text-dark">When a recharge request arrives from a Buyer API or portal, the engine executes the following 7 stages:</p>
 
           <div class="step-flow">
             <div class="step-item">
               <div class="step-num">1</div>
               <div class="step-text">
-                <h6>ऑथेंटिकेशन एवं डुप्लीकेट चेक (Authentication &amp; Duplicate Check)</h6>
+                <h6>Authentication &amp; Duplicate Check</h6>
                 <p>
-                  • Buyer का <code>api_token</code> और व्हाइटलिस्टेड IP चेक होता है।<br>
-                  • <b>Duplicate Protection:</b> यदि 'Stop Same Number/Amount' सेटिंग ON है, तो देखा जाता है कि पिछले X मिनट में इसी नंबर व अमाउंट का सफल रिचार्ज तो नहीं हुआ। यदि हुआ है, तो रिक्वेस्ट तुरंत रिजेक्ट हो जाती है।
+                  • Buyer <code>api_token</code> and whitelisted IP are validated.<br>
+                  • <b>Duplicate Protection:</b> If 'Stop Same Number/Amount' is ON, the system checks for any successful recharge on the same number and amount within the configured window. If detected, the request is rejected immediately.
                 </p>
               </div>
             </div>
@@ -843,10 +843,10 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">2</div>
               <div class="step-text">
-                <h6>वॉलेट बैलेंस जाँच एवं होल्ड/डेबिट (Wallet Balance Debit)</h6>
+                <h6>Wallet Balance Debit &amp; Hold</h6>
                 <p>
-                  • Buyer के प्रीपेड वॉलेट बैलेंस की जांच होती है। यदि बैलेंस कम है तो <code>Insufficient Balance</code> एरर जाता है।<br>
-                  • पर्याप्त बैलेंस होने पर रिचार्ज की पूरी राशि Buyer के वॉलेट से तात्कालिक रूप से डेबिट (Hold) कर ली जाती है।
+                  • Checks buyer prepaid wallet balance. Returns <code>Insufficient Balance</code> if below required amount.<br>
+                  • Upon verification, the recharge amount is temporarily held (debited) from the buyer wallet.
                 </p>
               </div>
             </div>
@@ -854,10 +854,10 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">3</div>
               <div class="step-text">
-                <h6>सर्वश्रेष्ठ सेलर मैचिंग (Best Seller Margin Matching)</h6>
+                <h6>Best Seller Margin Matching</h6>
                 <p>
-                  • सिस्टम उन सभी सक्रिय Sellers को खोजता है जिन्होंने उस ऑपरेटर व सर्कल पर स्टॉक दिया है और जिनका ऑफर किया गया मार्जिन Buyer के न्यूनतम मार्जिन से <b>बराबर या अधिक</b> है।<br>
-                  • सेलर्स को उच्चतम मार्जिन से न्यूनतम मार्जिन (Descending Order) में क्रमबद्ध (Sort) किया जाता है, ताकि बायर को सबसे बेहतरीन मार्जिन वाला सेलर पहले मिले।
+                  • Identifies all active sellers offering stock for the operator and circle whose offered margin meets or exceeds the buyer's minimum expected margin.<br>
+                  • Sellers are sorted in descending order of margin so that the highest yielding seller is prioritized first.
                 </p>
               </div>
             </div>
@@ -865,11 +865,11 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">4</div>
               <div class="step-text">
-                <h6>वॉटरफॉल Re-hit प्रक्रिया (Cascading Re-hit Waterfall)</h6>
+                <h6>Cascading Re-hit Waterfall</h6>
                 <p>
-                  • सिस्टम सबसे पहले #1 सेलर की API पर रिचार्ज भेजता है।<br>
-                  • यदि सेलर #1 से रिचार्ज <b>Success</b> या <b>Pending</b> होता है, तो वॉटरफॉल तुरंत रुक जाता है (विनर मिल गया)।<br>
-                  • यदि सेलर #1 से रिचार्ज <b>Fail</b> होता है, तो सिस्टम जांचता है कि क्या 'Stop Rehit After' समय सीमा समाप्त तो नहीं हुई। यदि समय बचा है, तो तुरंत सेलर #2 की API पर Re-hit करता है। यह क्रम तब तक चलता है जब तक सफल सेलर न मिल जाए या लिस्ट समाप्त न हो जाए।
+                  • Dispatches the request to the primary (#1) seller API.<br>
+                  • If seller #1 responds with <b>Success</b> or <b>Pending</b>, the waterfall terminates immediately.<br>
+                  • If seller #1 returns <b>Fail</b>, the engine checks whether the 'Stop Rehit After' timeout has been reached. If time remains, the request is re-dispatched to seller #2. This cascading waterfall continues until a successful response is received or eligible sellers are exhausted.
                 </p>
               </div>
             </div>
@@ -877,10 +877,10 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">5</div>
               <div class="step-text">
-                <h6>यदि सभी सेलर फेल हो जाएं (All Sellers Failed)</h6>
+                <h6>All Sellers Failed Handling</h6>
                 <p>
-                  • यदि सभी सेलर्स फेल हो जाते हैं, तो Buyer के वॉलेट से काटा गया पूरा पैसा तुरंत <b>वापस रिफंड (Credit)</b> कर दिया जाता है।<br>
-                  • डेटाबेस में <code>status: 'failed'</code> का रिकॉर्ड दर्ज होता है और बायर को फेल का रिस्पॉन्स चला जाता है।
+                  • If all eligible sellers fail, the debited amount is immediately refunded in full back to the buyer's wallet.<br>
+                  • The transaction is recorded as <code>status: 'failed'</code> and an error response is returned to the buyer.
                 </p>
               </div>
             </div>
@@ -888,12 +888,12 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">6</div>
               <div class="step-text">
-                <h6>सफलता सेटलमेंट व गणित (Success Settlement Mathematics)</h6>
+                <h6>Success Settlement Mathematics</h6>
                 <p>
-                  जब विनर सेलर से रिचार्ज सफल होता है, तो एक ही सुरक्षित डेटाबेस ट्रांजैक्शन (BEGIN...COMMIT) में निम्नलिखित गणित होता है:<br>
-                  • <b>बायर कमीशन:</b> <code>Buyer Commission = Amount × Buyer Commission %</code> बायर के वॉलेट में क्रेडिट होता है।<br>
-                  • <b>सेलर क्रेडिट:</b> <code>Seller Payout = Amount - (Amount × Seller Margin %)</code> सेलर के वॉलेट में जमा होता है।<br>
-                  • <b>लिमिट्स अपडेट:</b> बायर और सेलर दोनों की 'लिमिट यूज़्ड' बढ़ाई जाती है।
+                  When the winning seller confirms a successful recharge, the following settlement occurs inside an atomic database transaction (BEGIN...COMMIT):<br>
+                  • <b>Buyer Commission:</b> <code>Buyer Commission = Amount × Buyer Commission %</code> is credited to the buyer wallet.<br>
+                  • <b>Seller Credit:</b> <code>Seller Payout = Amount - (Amount × Seller Margin %)</code> is credited to the seller balance.<br>
+                  • <b>Limits Update:</b> Both buyer and seller used limits are updated accordingly.
                 </p>
               </div>
             </div>
@@ -901,10 +901,10 @@ module.exports = function createSystemChartPage() {
             <div class="step-item">
               <div class="step-num">7</div>
               <div class="step-text">
-                <h6>लाइव रिस्पॉन्स बनाम कॉलबैक डिलीवरी (Instant Response vs Callback)</h6>
+                <h6>Instant Response vs Callback Delivery</h6>
                 <p>
-                  • यदि पूरे प्रोसेस में लगा समय एडमिन द्वारा सेट किए गए 'Instant Response Time' (उदा. 15 सेकंड) के भीतर है, तो Buyer को लाइव स्क्रीन/API पर तुरंत रिस्पॉन्स मिलता है।<br>
-                  • यदि किसी कारणवश सेलर से रिस्पॉन्स आने में 15 सेकंड से अधिक समय लग जाता है, तो बैकएंड स्वतः Buyer के <b>Callback URL</b> पर ट्रांजैक्शन ID, ऑपरेटर ID और स्टेटस कोड भेज देता है।
+                  • If processing finishes within the configured 'Instant Response Time' (e.g., 15s), an instant synchronous response is returned to the buyer.<br>
+                  • If upstream seller processing exceeds this threshold, the backend asynchronously posts transaction ID, operator ID, and status code to the buyer's registered <b>Callback URL</b>.
                 </p>
               </div>
             </div>

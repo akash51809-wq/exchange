@@ -33,6 +33,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'Create Operator', path: '/admin/settings/create-operator' },
     { label: 'Show Operator', path: '/admin/settings/show-operator' },
     { label: 'Service Settings', path: '/admin/settings/service-settings' },
+    { label: 'Wallet Settings', path: '/admin/settings/wallet-settings' },
     { label: 'Website Settings', path: '/admin/settings/website-settings' },
   ] },
 ];

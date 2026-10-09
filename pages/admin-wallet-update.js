@@ -535,6 +535,14 @@ module.exports = function createAdminWalletUpdatePage({
             </select>
           </div>
           <div class="form-group">
+            <label class="font-weight-bold small text-muted">Target Wallet (For Separate Wallet Mode)</label>
+            <select class="form-control" name="walletTarget">
+              <option value="buyer">Buyer Wallet - Default</option>
+              <option value="seller">Seller Wallet</option>
+            </select>
+            <small class="form-text text-muted">In Separate Dual Wallet mode, this determines which wallet balance will be updated.</small>
+          </div>
+          <div class="form-group">
             <label class="font-weight-bold small text-muted">Amount in INR (₹) *</label>
             <input type="number" step="0.01" min="1" class="form-control" name="amount" required placeholder="e.g. 500.00">
           </div>
@@ -638,6 +646,7 @@ module.exports = function createAdminWalletUpdatePage({
     const payload = {
       username: form.username.value.trim(),
       actionType: form.actionType.value,
+      walletTarget: form.walletTarget ? form.walletTarget.value : 'buyer',
       amount: parseFloat(form.amount.value),
       remark: form.remark.value.trim(),
     };

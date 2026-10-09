@@ -7,7 +7,9 @@ const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 
-module.exports = function createPageModule({ db, formatMinorUnits, fundFieldHash, decryptFundField }) {
+module.exports = function createPageModule({ db, formatMinorUnits, fundFieldHash, decryptFundField, httpError: providedHttpError }) {
+const httpError = providedHttpError || ((message, statusCode = 400) => Object.assign(new Error(message), { statusCode }));
+
 async function sendUserFundOrderPage(user, response, searchParams) {
   const today = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -22,12 +24,31 @@ async function sendUserFundOrderPage(user, response, searchParams) {
     accountNumber: String(searchParams.get('accountNumber') || '').trim(),
     transactionId: String(searchParams.get('transactionId') || '').trim(),
   };
-  const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
-  if ((filters.from && !validDate(filters.from)) || (filters.to && !validDate(filters.to))) throw httpError('à¤¤à¤¾à¤°à¥€à¤– à¤•à¤¾ à¤°à¥‚à¤ª à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
-  if (filters.from && filters.to && filters.from > filters.to) throw httpError('From Date, To Date à¤¸à¥‡ à¤¬à¤¾à¤¦ à¤•à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¤¤à¥€à¥¤', 400);
-  if (filters.wallet && filters.wallet !== 'Prepaid') throw httpError('Wallet type à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
-  if (filters.status && !['pending', 'approved', 'rejected'].includes(filters.status)) throw httpError('Status à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
-  if (filters.mode && !['Bank Transfer', 'UPI', 'Cash Deposit'].includes(filters.mode)) throw httpError('Payment mode à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  const isValidDate = (value) => {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const [yearStr, monthStr, dayStr] = value.split('-');
+    const y = parseInt(yearStr, 10);
+    const m = parseInt(monthStr, 10);
+    const d = parseInt(dayStr, 10);
+    if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1 || d > 31) return false;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+  };
+  if ((filters.from && !isValidDate(filters.from)) || (filters.to && !isValidDate(filters.to))) {
+    throw httpError('Invalid date format. Please select a valid calendar date in YYYY-MM-DD format.', 400);
+  }
+  if (filters.from && filters.to && filters.from > filters.to) {
+    throw httpError('From Date cannot be later than To Date.', 400);
+  }
+  if (filters.wallet && filters.wallet !== 'Prepaid') {
+    throw httpError('Invalid wallet type selected.', 400);
+  }
+  if (filters.status && !['pending', 'approved', 'rejected'].includes(filters.status)) {
+    throw httpError('Invalid status filter selected.', 400);
+  }
+  if (filters.mode && !['Bank Transfer', 'UPI', 'Cash Deposit'].includes(filters.mode)) {
+    throw httpError('Invalid payment mode selected.', 400);
+  }
 
   const conditions = ['r.user_id = $1'];
   const values = [user.id];
@@ -39,12 +60,16 @@ async function sendUserFundOrderPage(user, response, searchParams) {
   if (filters.mode) conditions.push(`r.payment_mode = ${addValue(filters.mode)}`);
   if (filters.accountNumber) {
     const normalized = filters.accountNumber.replace(/[\s-]/g, '').toUpperCase();
-    if (!/^[A-Z0-9]{5,34}$/.test(normalized)) throw httpError('Account number filter à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+    if (!/^[A-Z0-9]{5,34}$/.test(normalized)) {
+      throw httpError('Invalid account number filter format.', 400);
+    }
     conditions.push(`r.source_account_hash = ${addValue(fundFieldHash('account', normalized))}`);
   }
   if (filters.transactionId) {
     const normalized = filters.transactionId.toUpperCase();
-    if (!/^[A-Z0-9/._-]{3,80}$/.test(normalized)) throw httpError('Transaction ID filter à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+    if (!/^[A-Z0-9/._-]{3,80}$/.test(normalized)) {
+      throw httpError('Invalid transaction ID filter format.', 400);
+    }
     conditions.push(`r.transaction_id_hash = ${addValue(fundFieldHash('transaction', normalized))}`);
   }
   const limitParam = addValue(Number(filters.limit));

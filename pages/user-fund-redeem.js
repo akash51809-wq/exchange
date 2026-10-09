@@ -3,6 +3,7 @@
 const { escapeHtml } = require('../lib/page-utils');
 const { renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { getWalletMode, getSellerAvailableBalances } = require('../lib/wallet-helper');
 
 module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
 
@@ -41,14 +42,18 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
     const toDate = String(searchParams.get('toDate') || '').trim();
     const statusFilter = String(searchParams.get('status') || '').trim().toLowerCase();
 
-    // 1. Fetch current wallet balance
-    const walletRes = await db.query(
-      "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR'",
-      [user.id],
-    );
-    const balanceMinor = BigInt(walletRes.rows[0]?.balance_minor || 0);
-    const formattedBalance = `₹${formatMinorUnits(balanceMinor)}`;
+    // 1. Fetch wallet mode and available balances considering hold policy and active liens
+    const balanceData = await getSellerAvailableBalances(db, user.id);
+    const walletMode = balanceData.walletMode;
+    const isSeparate = walletMode === 'separate';
+    const balanceMinor = balanceData.availableForRedeemMinor;
+    const formattedBalance = `₹${balanceData.formatted.availableForRedeem}`;
     const balanceRupees = (Number(balanceMinor) / 100).toFixed(2);
+    const totalSellerFormatted = `₹${balanceData.formatted.sellerBalance}`;
+    const heldRedeemFormatted = `₹${balanceData.formatted.heldForRedeem}`;
+    const activeLienFormatted = `₹${balanceData.formatted.activeLien}`;
+    const heldRedeemMinor = balanceData.heldForRedeemMinor;
+    const activeLienMinor = balanceData.activeLienMinor;
 
     // 2. Fetch user bank accounts
     const banksRes = await db.query(
@@ -173,11 +178,19 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
       ${navigation}
       <div class="page-container">
 
-        <div class="balance-card">
+        <div class="balance-card" ${isSeparate ? 'style="background: linear-gradient(135deg, #312e81, #4f46e5);"' : ''}>
           <div>
-            <div class="balance-title"><i class="fa fa-wallet mr-1"></i> Available Wallet Balance</div>
+            <div class="balance-title"><i class="fa fa-wallet mr-1"></i> ${isSeparate ? 'Available Seller Wallet Balance' : 'Available Wallet Balance'}</div>
             <h2 class="balance-val" id="dispUserBalance">${formattedBalance}</h2>
-            <div class="small text-light">You can request payout of full or partial available balance</div>
+            ${heldRedeemMinor > 0n || activeLienMinor > 0n ? `
+              <div class="mt-2 small text-light" style="background: rgba(0,0,0,0.22); padding: 6px 12px; border-radius: 6px; display: inline-block;">
+                <span class="mr-3">Total Seller Balance: <strong>${totalSellerFormatted}</strong></span>
+                ${heldRedeemMinor > 0n ? `<span class="badge badge-warning text-dark mr-2"><i class="fa fa-clock-o"></i> Sales Hold (${balanceData.policy.sellerSaleRedeemHoldMinutes}m): ${heldRedeemFormatted}</span>` : ''}
+                ${activeLienMinor > 0n ? `<span class="badge badge-danger text-white"><i class="fa fa-lock"></i> Dispute Lien: ${activeLienFormatted}</span>` : ''}
+              </div>
+            ` : `
+              <div class="small text-light">${isSeparate ? 'Dual Wallet Mode Active: Payout requests are debited directly from your Seller Wallet (Sales earnings).' : 'You can request payout of full or partial available balance'}</div>
+            `}
           </div>
           <div class="d-flex gap-2">
             <button type="button" class="btn btn-warning text-dark font-weight-bold" data-toggle="modal" data-target="#addBankModal">

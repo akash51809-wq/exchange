@@ -6,11 +6,14 @@ const path = require('node:path');
 const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { getWalletMode } = require('../lib/wallet-helper');
 
 module.exports = function createPageModule({ db, formatMinorUnits }) {
 async function sendWalletTopupRequestPage(user, response) {
   const userName = escapeHtml(user.name);
   const userId = escapeHtml(user.username);
+  const walletMode = await getWalletMode(db);
+  const isSeparate = (walletMode === 'separate');
 
   // Fetch active bank accounts configured by admin
   const bankResult = await db.query(
@@ -111,6 +114,12 @@ async function sendWalletTopupRequestPage(user, response) {
             <i class="fa fa-plus-circle mr-1"></i> Fund Request
           </button>
         </div>
+
+        ${isSeparate ? `
+        <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-3" style="background: #eff6ff; border-left: 4px solid #2563eb !important;">
+          <i class="fa fa-info-circle text-primary mr-2" style="font-size: 18px;"></i>
+          <span class="fs-13"><strong>Dual Wallet Active:</strong> Approved fund requests are credited directly to your <strong>Buyer Wallet</strong> for mobile/DTH recharge purchases.</span>
+        </div>` : ''}
 
         <section class="card mb-4 shadow-sm">
           <div class="card-header bg-white border-bottom">

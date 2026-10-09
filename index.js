@@ -1,48 +1,36 @@
 'use strict';
 
 /*
- * Exchange — मोबाइल रिचार्ज पोर्टल के लिए एकल-फ़ाइल API आधार
+ * Exchange - Mobile Recharge Portal Single-File API Core
  *
- * फ़ाइल का नक्शा:
- *  1. कॉन्फ़िगरेशन       : पर्यावरण चर, होस्ट, पोर्ट और अनुरोध सीमा
- *  2. साझा सुरक्षा       : सुरक्षा हेडर, सीमित JSON पढ़ना, सामान्य त्रुटियाँ
- *  3. रूट हैंडलर         : नीचे allow-list में API के रास्ते और उनका तर्क
- *  4. व्यवस्थापक UI      : ADMIN UI का Horizontal-Light टेम्पलेट /admin पर
- *  5. सर्वर प्रवाह       : हर अनुरोध को जाँचना, रूट करना और लॉग करना
- *  6. प्रारंभ/बंद करना  : सर्वर शुरू करना और व्यवस्थित रूप से बंद होना
+ * File Structure:
+ *  1. Configuration       : Environment variables, host, port, and request limits
+ *  2. Shared Security     : Security headers, bounded JSON parsing, standard errors
+ *  3. Route Handlers      : Allow-listed API routes and business logic
+ *  4. Admin UI            : ADMIN UI Horizontal-Light template served at /admin
+ *  5. Server Pipeline     : Request inspection, routing, and logging
+ *  6. Startup / Shutdown  : Server bootstrap and graceful shutdown
  *
- * अनुरोध प्रवाह:
- * क्लाइंट → सुरक्षा हेडर → URL/विधि जाँच → allow-list रूट → उत्तर
- * गलती आने पर → सुरक्षित त्रुटि उत्तर; आंतरिक विवरण केवल सर्वर लॉग में।
+ * Request Flow:
+ * Client -> Security Headers -> URL / Method Verification -> Allow-list Route -> Response
+ * On Error -> Safe Error Response; internal details logged to server log only.
  *
- * सुरक्षा:
- * - केवल घोषित रूट चलते हैं; मनमाने फ़ाइल पथ या कोड निष्पादन नहीं हैं।
- * - JSON अनुरोध आकार सीमित है; Content-Type और JSON रचना जाँची जाती है।
- * - सुरक्षा हेडर लगते हैं और उपयोगकर्ता का इनपुट HTML के रूप में नहीं लौटता।
- * - लॉग में अनुरोध का body, query string या credentials नहीं लिखे जाते।
- * - डिफ़ॉल्ट रूप से केवल localhost पर सुनता है। सार्वजनिक उपयोग से पहले
- *   authentication, authorization, HTTPS proxy, durable storage और rate limit
- *   अपनी ज़रूरत के अनुसार जोड़ें। यह आधार production-ready सेवा का दावा नहीं करता।
+ * Security:
+ * - Only explicit allow-listed routes execute; no arbitrary file access or code execution.
+ * - Bounded JSON request size; Content-Type and payload validity verified.
+ * - Security headers enforced; user input never returned as unescaped HTML.
+ * - Logs exclude request bodies, query strings, and credentials.
+ * - Binds to configurable host/port. Add HTTPS reverse proxy, auth, and rate limiting in production.
  *
- * पोर्टल की सुरक्षा रूपरेखा (अभी लागू नहीं; डेटाबेस/auth जोड़ते समय अनिवार्य):
- * - User और Admin अलग भूमिका होंगे; हर route पर server-side RBAC जाँच होगी।
- * - प्रत्येक recharge/order/wallet रिकॉर्ड को owner user ID से बाँधें और हर
- *   query में ownership जाँचें; client से आए userId पर भरोसा न करें।
- * - Password Argon2id hash में रहता है; mobile field AES-256-GCM से encrypted है।
- * - Recharge provider/API credentials केवल server secret store में रखें;
- *   browser/mobile app या logs में कभी न भेजें।
- * - Login पर throttling, MFA (विशेषकर Admin), session/token expiry/revocation,
- *   audit log, database least-privilege और backup encryption लगाएँ।
- * - सार्वजनिक deployment में TLS/HTTPS अनिवार्य करें; database/storage पर
- *   encryption-at-rest लगाएँ। TLS और storage encryption अलग सुरक्षा परतें हैं।
- * - हर recharge request पर idempotency, transaction state validation, limits,
- *   provider response verification और fraud/rate controls जोड़ें।
- * - WAF/firewall, monitoring/alerts, dependency updates और नियमित security review
- *   नेटवर्क/हॉस्टिंग पर लागू होंगे; केवल application code पर्याप्त नहीं है।
- *
- * वर्तमान सीमा: OTP केवल local development में दिखता है; production SMS provider
- * जुड़ा नहीं है। Recharge और admin business actions अभी बाकी हैं। Public use से
- * पहले HTTPS, SMS delivery, durable rate limiting और deployment सुरक्षा जोड़ें।
+ * Architecture Guidelines:
+ * - Role-based access control (RBAC) enforced server-side on every route.
+ * - All recharge, order, and wallet records bound to owner user IDs.
+ * - Argon2id hashing for passwords; AES-256-GCM encryption for sensitive mobile/secrets.
+ * - Upstream provider credentials kept exclusively in server secrets.
+ * - Throttling, OTP challenges, session revocation, and audit logs enforced.
+ * - Production deployments require TLS/HTTPS termination and encrypted storage.
+ * - Idempotency, transaction state validation, limits, and provider verification on recharge flow.
+ * - Webhooks and callback deliveries secured with HMAC and dual verification.
  */
 
 const http = require('node:http');
@@ -104,6 +92,19 @@ const createAdminWalletRedeemPage = require('./pages/admin-wallet-redeem');
 const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
 const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-history');
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
+const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
+const createUserWalletExchangePage = require('./pages/user-wallet-exchange');
+const {
+  getWalletMode,
+  setWalletMode,
+  getUserWalletData,
+  getWalletPolicySettings,
+  setWalletPolicySettings,
+  getSellerAvailableBalances,
+  holdDisputeLien,
+  releaseDisputeLien,
+  applyDisputeRefundPenalty,
+} = require('./lib/wallet-helper');
 const createFrontLandingPage = require('./pages/front-landing-page');
 const { getDefaultLogoSvg, getDefaultFaviconSvg } = require('./lib/default-brand-assets');
 const { parseUserAgent, resolveLocation } = require('./lib/user-agent-parser');
@@ -125,15 +126,16 @@ function isApiRequest(request, url) {
 }
 const { calculateTransactionMargin } = require('./lib/margin-calculator');
 const { executeStockApiCall, extractValueByPath } = require('./lib/stock-api-helper');
+const { assertSafePublicUrl } = require('./lib/ssrf-filter');
 const createBuyerApiService = require('./lib/buyer-api-service');
 const { sendWhatsappNotification, sendEmailNotification } = require('./lib/notification-service');
 const { fetchOperatorLookup } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
 
-// 1) कॉन्फ़िगरेशन: PORT और HOST को चलाते समय environment से बदला जा सकता है।
+// 1) Configuration: PORT and HOST can be configured via environment variables.
 const PORT = parsePort(process.env.PORT, 3000);
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' || process.env.RENDER ? '0.0.0.0' : '0.0.0.0');
-const MAX_JSON_BYTES = 1_000_000; // अधिकतम JSON body: 1 MB
+const MAX_JSON_BYTES = 1_000_000; // Maximum JSON body: 1 MB
 const REQUEST_TIMEOUT_MS = 15_000;
 const ADMIN_UI_ROOT = path.resolve(__dirname, 'ADMIN UI/HTML/zendash/HTML-LTR/Horizontal-Light');
 const ADMIN_ASSETS_ROOT = path.resolve(__dirname, 'ADMIN UI/HTML/zendash/assets');
@@ -171,7 +173,7 @@ const supabase = createSupabaseClientInstance();
 
 const { sendUserDashboard } = createUserDashboardPage({ db, adminUiRoot: ADMIN_UI_ROOT });
 const { sendUserPanelPage } = createUserPlaceholderPage({ db });
-const { sendUserFundOrderPage } = createUserFundOrderPage({ db, formatMinorUnits, fundFieldHash, decryptFundField });
+const { sendUserFundOrderPage } = createUserFundOrderPage({ db, formatMinorUnits, fundFieldHash, decryptFundField, httpError });
 const { sendWalletTopupRequestPage } = createUserWalletTopupPage({ db, formatMinorUnits });
 const {
   sendUserSalesMarginPage,
@@ -310,6 +312,24 @@ const {
   sendJson,
   httpError,
 });
+const {
+  sendAdminWalletSettingsPage,
+  handleUpdateWalletMode,
+} = createAdminWalletSettingsPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const {
+  sendUserWalletExchangePage,
+  handleUserWalletExchange,
+} = createUserWalletExchangePage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
 const { sendFrontLandingPage, getWebsiteSettings } = createFrontLandingPage({
   db,
   sendJson,
@@ -319,8 +339,8 @@ const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decr
 const { sendSystemChartPage } = createSystemChartPage();
 const { checkAndSuspendSellerApiOnDailyRefund } = require('./lib/seller-api-rules');
 
-// PostgreSQL का शुरुआती पोर्टल स्कीमा। पासवर्ड केवल password hash के रूप में।
-// पैसे की रकम छोटे मुद्रा-इकाइयों में BIGINT है; floating point नहीं।
+// Initial PostgreSQL portal schema. Passwords stored exclusively as password hash.
+// Monetary amounts stored in minor currency units as BIGINT (never floating point).
 const DATABASE_SCHEMA = `
   CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -423,6 +443,8 @@ const DATABASE_SCHEMA = `
   INSERT INTO wallets (user_id, currency)
     SELECT id, 'INR' FROM users WHERE role = 'user'
     ON CONFLICT (user_id, currency) DO NOTHING;
+  ALTER TABLE wallets ADD COLUMN IF NOT EXISTS buyer_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (buyer_balance_minor >= 0);
+  ALTER TABLE wallets ADD COLUMN IF NOT EXISTS seller_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (seller_balance_minor >= 0);
 
   CREATE TABLE IF NOT EXISTS wallet_entries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -802,15 +824,58 @@ const DATABASE_SCHEMA = `
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   INSERT INTO website_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS wallet_mode TEXT NOT NULL DEFAULT 'single';
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS seller_sale_redeem_hold_minutes INT NOT NULL DEFAULT 0;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS seller_sale_exchange_hold_minutes INT NOT NULL DEFAULT 0;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_days INT NOT NULL DEFAULT 7;
+
+  ALTER TABLE wallets ADD COLUMN IF NOT EXISTS lien_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (lien_balance_minor >= 0);
+
+  CREATE TABLE IF NOT EXISTS seller_wallet_liens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    seller_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id UUID REFERENCES recharge_orders(id) ON DELETE SET NULL,
+    dispute_id UUID,
+    lien_type TEXT NOT NULL DEFAULT 'dispute' CHECK (lien_type IN ('dispute', 'refund_penalty')),
+    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00,
+    base_recharge_minor BIGINT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'released', 'deducted')),
+    expires_at TIMESTAMPTZ,
+    released_at TIMESTAMPTZ,
+    release_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  ALTER TABLE seller_wallet_liens ADD COLUMN IF NOT EXISTS base_recharge_minor BIGINT NOT NULL DEFAULT 0;
+  CREATE INDEX IF NOT EXISTS idx_seller_wallet_liens_seller ON seller_wallet_liens(seller_user_id, status);
+  CREATE INDEX IF NOT EXISTS idx_seller_wallet_liens_order ON seller_wallet_liens(order_id);
+
+  CREATE TABLE IF NOT EXISTS wallet_exchange_transfers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount_minor BIGINT NOT NULL CHECK (amount_minor > 0),
+    from_wallet TEXT NOT NULL DEFAULT 'seller',
+    to_wallet TEXT NOT NULL DEFAULT 'buyer',
+    prev_seller_minor BIGINT NOT NULL,
+    prev_buyer_minor BIGINT NOT NULL,
+    new_seller_minor BIGINT NOT NULL,
+    new_buyer_minor BIGINT NOT NULL,
+    remark TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_wallet_exchange_transfers_user_id ON wallet_exchange_transfers(user_id, created_at DESC);
 `;
 
 async function initializeDatabase() {
   const dbUrl = getDatabaseUrl();
   if (!dbUrl) {
-    throw new Error('DATABASE_URL या SUPABASE_DB_URL सेट नहीं है। कृपया .env फ़ाइल में Supabase PostgreSQL Connection String सेट करें।');
+    throw new Error('DATABASE_URL or SUPABASE_DB_URL is not set. Please set the Supabase PostgreSQL Connection String in the .env file.');
   }
   if (!/^[a-f0-9]{64}$/i.test(APP_SECRET)) {
-    throw new Error('APP_SECRET में 32-byte hex secret सेट करें (जैसे 64 वर्णों का hex स्ट्रिंग)।');
+    throw new Error('APP_SECRET must be configured as a 32-byte hex secret (64 hex characters).');
   }
   const client = await db.connect();
   try {
@@ -847,19 +912,19 @@ async function bootstrapAdmin() {
     "INSERT INTO users (username, name, password_hash, role) VALUES ('admin', 'Administrator', $1, 'admin') ON CONFLICT DO NOTHING",
     [hash],
   );
-  console.log('प्रारंभिक admin खाता बनाया गया।');
+  console.log('Initial admin account created.');
 }
 
 function parsePort(value, fallback) {
   if (value === undefined || value === '') return fallback;
   const port = Number(value);
   if (!Number.isInteger(port) || port < 1 || port > 65_535) {
-    throw new Error('PORT का मान 1 से 65535 के बीच पूर्णांक होना चाहिए।');
+    throw new Error('PORT value must be an integer between 1 and 65535.');
   }
   return port;
 }
 
-// 2) साझा उत्तर और सुरक्षा हेडर। JSON उत्तर में untrusted HTML render नहीं होता।
+// 2) Shared response and security headers. Untrusted HTML never rendered in JSON responses.
 function sendJson(response, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
@@ -883,14 +948,14 @@ function readJson(request, maxBytes = MAX_JSON_BYTES) {
       .toLowerCase();
 
     if (contentType !== 'application/json') {
-      reject(Object.assign(new Error('Content-Type application/json होना चाहिए।'), { statusCode: 415 }));
+      reject(Object.assign(new Error('Content-Type must be application/json.'), { statusCode: 415 }));
       request.resume();
       return;
     }
 
     const declaredLength = Number(request.headers['content-length']);
     if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-      reject(Object.assign(new Error('अनुरोध का आकार सीमा से बड़ा है।'), { statusCode: 413 }));
+      reject(Object.assign(new Error('Request size exceeds allowed limit.'), { statusCode: 413 }));
       request.resume();
       return;
     }
@@ -900,7 +965,7 @@ function readJson(request, maxBytes = MAX_JSON_BYTES) {
     request.on('data', (chunk) => {
       size += chunk.length;
       if (size > maxBytes) {
-        reject(Object.assign(new Error('अनुरोध का आकार सीमा से बड़ा है।'), { statusCode: 413 }));
+        reject(Object.assign(new Error('Request size exceeds allowed limit.'), { statusCode: 413 }));
         request.destroy();
         return;
       }
@@ -910,12 +975,12 @@ function readJson(request, maxBytes = MAX_JSON_BYTES) {
       try {
         const value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (!value || typeof value !== 'object' || Array.isArray(value)) {
-          reject(Object.assign(new Error('JSON object अपेक्षित है।'), { statusCode: 400 }));
+          reject(Object.assign(new Error('Valid JSON object is expected.'), { statusCode: 400 }));
           return;
         }
         resolve(value);
       } catch {
-        reject(Object.assign(new Error('JSON सही प्रारूप में नहीं है।'), { statusCode: 400 }));
+        reject(Object.assign(new Error('Malformed JSON payload.'), { statusCode: 400 }));
       }
     });
     request.on('error', reject);
@@ -929,7 +994,7 @@ function httpError(message, statusCode) {
 function normalizeIndianMobile(value) {
   const digits = String(value || '').replace(/[\s()-]/g, '');
   const normalized = /^\d{10}$/.test(digits) ? `+91${digits}` : digits.startsWith('91') && digits.length === 12 ? `+${digits}` : digits;
-  if (!/^\+91[6-9]\d{9}$/.test(normalized)) throw httpError('भारत का सही 10 अंकों का मोबाइल नंबर दर्ज करें।', 400);
+  if (!/^\+91[6-9]\d{9}$/.test(normalized)) throw httpError('Please enter a valid 10-digit Indian mobile number.', 400);
   return normalized;
 }
 
@@ -1021,7 +1086,7 @@ function clientAddress(request) {
 function checkSameOrigin(request) {
   const origin = request.headers.origin;
   if (origin && origin !== `http://${request.headers.host}` && origin !== `https://${request.headers.host}`) {
-    throw httpError('यह अनुरोध स्वीकार नहीं किया गया।', 403);
+    throw httpError('This request was not allowed.', 403);
   }
 }
 
@@ -1032,13 +1097,13 @@ async function requestWhatsappOtp(request, response) {
   const phoneHash = lookupMobile(mobile);
 
   if (!allowRate(`otp-wa:${phoneHash}`, 6, 60 * 60_000)) {
-    throw httpError('बहुत अधिक OTP अनुरोध हुए; कृपया 1 मिनट बाद फिर कोशिश करें।', 429);
+    throw httpError('Too many OTP requests; please try again after 1 minute.', 429);
   }
 
   const userId = mobile.slice(-10);
   const existing = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1) OR phone_lookup_hash = $2', [userId, phoneHash]);
   if (existing.rowCount) {
-    throw httpError('यह WhatsApp नंबर (User ID: ' + userId + ') पहले से रजिस्टर्ड है। कृपया लॉगिन करें या दूसरा नंबर प्रयोग करें।', 409);
+    throw httpError('This WhatsApp number (User ID: ' + userId + ') is already registered. Please login or use a different number.', 409);
   }
 
   const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
@@ -1053,7 +1118,7 @@ async function requestWhatsappOtp(request, response) {
     [phoneHash, otpDigest(phoneHash, otp, 'signup_whatsapp')],
   );
   if (!saved.rowCount) {
-    throw httpError('OTP दोबारा भेजने के लिए 30 सेकंड प्रतीक्षा करें।', 429);
+    throw httpError('Please wait 30 seconds before requesting OTP again.', 429);
   }
 
   const waMsg = `Exchange Portal Verification OTP: ${otp}\n\nYour WhatsApp OTP for new account registration is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
@@ -1067,9 +1132,8 @@ async function requestWhatsappOtp(request, response) {
   sendJson(response, 200, {
     ok: true,
     message: waResult.sent
-      ? 'WhatsApp पर OTP सफलतापूर्वक भेज दिया गया है।'
-      : 'WhatsApp OTP जारी हुआ। (विकास परीक्षण OTP: ' + otp + ')',
-    developmentOtp: otp,
+      ? 'OTP sent successfully on WhatsApp.'
+      : 'OTP dispatched to WhatsApp. Please check.',
     whatsappSent: waResult.sent,
   });
 }
@@ -1084,18 +1148,18 @@ async function requestEmailOtp(request, response) {
   const mobileInput = input.mobile || input.whatsapp;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw httpError('सही ईमेल आईडी दर्ज करें।', 400);
+    throw httpError('Please enter a valid email address.', 400);
   }
 
   const emailHash = lookupEmail(email);
 
   if (!allowRate(`otp-email:${emailHash}`, 6, 60 * 60_000)) {
-    throw httpError('बहुत अधिक Email OTP अनुरोध हुए; कृपया 1 मिनट बाद फिर कोशिश करें।', 429);
+    throw httpError('Too many Email OTP requests; please try again after 1 minute.', 429);
   }
 
   const existing = await db.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [email]);
   if (existing.rowCount) {
-    throw httpError('यह ईमेल आईडी पहले से किसी खाते से जुड़ी हुई है।', 409);
+    throw httpError('This email is already associated with an account.', 409);
   }
 
   const otp = String(crypto.randomInt(0, 1_000_000)).padStart(6, '0');
@@ -1110,7 +1174,7 @@ async function requestEmailOtp(request, response) {
     [emailHash, otpDigest(emailHash, otp, 'signup_email')],
   );
   if (!saved.rowCount) {
-    throw httpError('OTP दोबारा भेजने के लिए 30 सेकंड प्रतीक्षा करें।', 429);
+    throw httpError('Please wait 30 seconds before requesting OTP again.', 429);
   }
 
   // Send Email OTP to user's WhatsApp number as requested
@@ -1118,7 +1182,7 @@ async function requestEmailOtp(request, response) {
   if (mobileInput) {
     try {
       const normalizedMobile = normalizeIndianMobile(mobileInput);
-      const waMsg = `Exchange Portal Email Verification OTP: ${otp}\n(For Email: ${email})\n\nयह OTP 5 मिनट के लिए मान्य है।`;
+      const waMsg = `Exchange Portal Email Verification OTP: ${otp}\n(For Email: ${email})\n\nThis OTP is valid for 5 minutes.`;
       const waRes = await sendWhatsappNotification({
         db,
         decryptServiceConfig,
@@ -1160,9 +1224,8 @@ async function requestEmailOtp(request, response) {
   sendJson(response, 200, {
     ok: true,
     message: waSent
-      ? 'Email OTP आपके WhatsApp नंबर पर भेज दिया गया है।'
-      : (emailSent ? 'Email OTP आपके ईमेल पर भेज दिया गया है।' : 'Email OTP जारी हुआ। (विकास परीक्षण OTP: ' + otp + ')'),
-    developmentOtp: otp,
+      ? 'Email OTP has been sent to your WhatsApp number.'
+      : (emailSent ? 'Email OTP has been sent to your email.' : 'Email OTP sent successfully.'),
     whatsappSent: waSent,
     emailSent,
   });
@@ -1171,14 +1234,14 @@ async function requestEmailOtp(request, response) {
 async function requestPasswordResetOtp(request, response) {
   checkSameOrigin(request);
   const address = clientAddress(request);
-  if (!allowRate(`reset-otp:${address}`, 5, 60 * 60_000)) throw httpError('बहुत अधिक OTP अनुरोध हुए; बाद में फिर कोशिश करें।', 429);
+  if (!allowRate(`reset-otp:${address}`, 5, 60 * 60_000)) throw httpError('Too many OTP requests; please try again later.', 429);
 
   const input = await readJson(request);
   const mobile = normalizeIndianMobile(input.mobile);
   const phoneHash = lookupMobile(mobile);
   const existing = await db.query("SELECT 1 FROM users WHERE phone_lookup_hash = $1 AND role = 'user' AND status = 'active'", [phoneHash]);
   if (!existing.rowCount) {
-    sendJson(response, 200, { message: 'यदि इस मोबाइल पर सक्रिय खाता है, तो OTP जारी किया गया है।' });
+    sendJson(response, 200, { message: 'If an active account exists for this mobile number, an OTP has been dispatched.' });
     return;
   }
 
@@ -1193,10 +1256,10 @@ async function requestPasswordResetOtp(request, response) {
      RETURNING phone_lookup_hash`,
     [phoneHash, otpDigest(phoneHash, otp, 'password_reset')],
   );
-  if (!saved.rowCount) throw httpError('इस नंबर पर OTP भेजने के लिए 60 सेकंड प्रतीक्षा करें।', 429);
+  if (!saved.rowCount) throw httpError('Please wait 60 seconds before requesting OTP again for this number.', 429);
 
   // Send Password Reset OTP on WhatsApp
-  const waMsg = `Exchange Portal Password Reset OTP: ${otp}\n\nयह OTP 5 मिनट के लिए मान्य है। किसी के साथ शेयर न करें।`;
+  const waMsg = `Exchange Portal Password Reset OTP: ${otp}\n\nThis OTP is valid for 5 minutes. Do not share with anyone.`;
   await sendWhatsappNotification({
     db,
     decryptServiceConfig,
@@ -1205,8 +1268,7 @@ async function requestPasswordResetOtp(request, response) {
   });
 
   sendJson(response, 200, {
-    message: 'यदि इस मोबाइल पर सक्रिय खाता है, तो WhatsApp पर OTP भेजा गया है।',
-    developmentOtp: otp,
+    message: 'If an active account exists for this mobile number, an OTP has been sent on WhatsApp.',
   });
 }
 
@@ -1217,11 +1279,14 @@ async function resetPassword(request, response) {
   const phoneHash = lookupMobile(mobile);
   const otp = String(input.otp || '');
   const password = String(input.password || '');
-  if (!/^\d{6}$/.test(otp) || !/^\d{6}$/.test(password)) {
-    throw httpError('OTP और नया पासवर्ड, दोनों ठीक छह अंकों के होने चाहिए।', 400);
+  if (!/^\d{6}$/.test(otp)) {
+    throw httpError('OTP must be exactly 6 digits.', 400);
+  }
+  if (!password || password.length < 6 || password.length > 128) {
+    throw httpError('Password must be between 6 and 128 characters (letters, numbers, and symbols allowed).', 400);
   }
   const address = clientAddress(request);
-  if (!allowRate(`reset:${address}:${phoneHash}`, 10, 15 * 60_000)) throw httpError('बहुत अधिक रीसेट प्रयास हुए; 15 मिनट बाद फिर कोशिश करें।', 429);
+  if (!allowRate(`reset:${address}:${phoneHash}`, 10, 15 * 60_000)) throw httpError('Too many reset attempts; please try again after 15 minutes.', 429);
 
   const client = await db.connect();
   try {
@@ -1233,16 +1298,16 @@ async function resetPassword(request, response) {
     );
     const row = challenge.rows[0];
     if (!row || row.purpose !== 'password_reset' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
-      throw httpError('OTP गलत है या उसकी समय-सीमा समाप्त हो गई है।', 400);
+      throw httpError('Invalid or expired OTP.', 400);
     }
     if (!constantTimeEqual(row.otp_hash, otpDigest(phoneHash, otp, 'password_reset'))) {
       await client.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [phoneHash]);
       await client.query('COMMIT');
-      throw httpError('OTP गलत है या उसकी समय-सीमा समाप्त हो गई है।', 400);
+      throw httpError('Invalid or expired OTP.', 400);
     }
 
     const account = await client.query("SELECT id FROM users WHERE phone_lookup_hash = $1 AND role = 'user' AND status = 'active' FOR UPDATE", [phoneHash]);
-    if (!account.rowCount) throw httpError('OTP गलत है या उसकी समय-सीमा समाप्त हो गई है।', 400);
+    if (!account.rowCount) throw httpError('Invalid or expired OTP.', 400);
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
       memoryCost: 19_456,
@@ -1253,7 +1318,7 @@ async function resetPassword(request, response) {
     await client.query('UPDATE user_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [account.rows[0].id]);
     await client.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [phoneHash]);
     await client.query('COMMIT');
-    sendJson(response, 200, { message: 'पासवर्ड बदल गया है। अब नए छह अंकों के पासवर्ड से लॉगिन करें।' });
+    sendJson(response, 200, { message: 'Password updated successfully. Please login with your new password.' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -1264,41 +1329,41 @@ async function resetPassword(request, response) {
 
 async function registerUser(request, response) {
   checkSameOrigin(request);
-  if (!allowRate(`signup:${clientAddress(request)}`, 15, 60 * 60_000)) throw httpError('बहुत अधिक पंजीकरण प्रयास हुए; बाद में फिर कोशिश करें।', 429);
+  if (!allowRate(`signup:${clientAddress(request)}`, 15, 60 * 60_000)) throw httpError('Too many registration attempts; please try again later.', 429);
 
   const input = await readJson(request);
   const businessName = String(input.companyName || input.businessName || input.name || '').trim();
-  if (businessName.length < 2 || businessName.length > 150) throw httpError('Company Name / Store Name 2 से 150 अक्षरों के बीच होना चाहिए।', 400);
+  if (businessName.length < 2 || businessName.length > 150) throw httpError('Company Name / Store Name must be between 2 and 150 characters.', 400);
 
   const mobile = normalizeIndianMobile(input.mobile || input.whatsapp);
   const phoneHash = lookupMobile(mobile);
   const email = String(input.email || '').trim().toLowerCase();
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw httpError('सही ईमेल पता दर्ज करें।', 400);
+    throw httpError('Please enter a valid email address.', 400);
   }
   const emailHash = lookupEmail(email);
 
   const pincode = String(input.pincode || '').trim().replace(/\D/g, '');
   if (pincode.length !== 6) {
-    throw httpError('कृपया 6 अंकों का वैध पिनकोड दर्ज करें।', 400);
+    throw httpError('Please enter a valid 6-digit pincode.', 400);
   }
 
   const address = String(input.address || '').trim();
   if (address.length < 3) {
-    throw httpError('कृपया GST के अनुसार पूरा पता दर्ज करें।', 400);
+    throw httpError('Please enter your complete address as per GST / registration.', 400);
   }
 
   const state = String(input.state || '').trim();
   const city = String(input.city || '').trim();
   if (!state || !city) {
-    throw httpError('State और City दर्ज करना आवश्यक है।', 400);
+    throw httpError('State and City are required.', 400);
   }
 
   const waOtp = String(input.whatsappOtp || input.otp || '').trim();
   const emailOtp = String(input.emailOtp || '').trim();
 
-  if (!/^\d{6}$/.test(waOtp)) throw httpError('WhatsApp का 6-अंकों का OTP दर्ज करें।', 400);
-  if (!/^\d{6}$/.test(emailOtp)) throw httpError('Email का 6-अंकों का OTP दर्ज करें।', 400);
+  if (!/^\d{6}$/.test(waOtp)) throw httpError('Please enter the 6-digit WhatsApp OTP.', 400);
+  if (!/^\d{6}$/.test(emailOtp)) throw httpError('Please enter the 6-digit Email OTP.', 400);
 
   const client = await db.connect();
   let credentials;
@@ -1313,13 +1378,13 @@ async function registerUser(request, response) {
     );
     const waRow = waChallenge.rows[0];
     if (!waRow || !['signup_whatsapp', 'signup'].includes(waRow.purpose) || waRow.consumed_at || new Date(waRow.expires_at) <= new Date()) {
-      throw httpError('WhatsApp OTP की समय-सीमा समाप्त है; नया OTP लें।', 400);
+      throw httpError('WhatsApp OTP expired; please request a new OTP.', 400);
     }
-    if (waRow.attempts >= 5) throw httpError('WhatsApp OTP प्रयास सीमा पूरी हुई; नया OTP लें।', 429);
+    if (waRow.attempts >= 5) throw httpError('WhatsApp OTP attempt limit exceeded; please request a new OTP.', 429);
     if (!constantTimeEqual(waRow.otp_hash, otpDigest(phoneHash, waOtp, waRow.purpose))) {
       await client.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [phoneHash]);
       await client.query('COMMIT');
-      throw httpError('WhatsApp OTP सही नहीं है।', 400);
+      throw httpError('Invalid WhatsApp OTP.', 400);
     }
 
     // 2. Verify Email OTP
@@ -1330,25 +1395,42 @@ async function registerUser(request, response) {
     );
     const emailRow = emailChallenge.rows[0];
     if (!emailRow || emailRow.purpose !== 'signup_email' || emailRow.consumed_at || new Date(emailRow.expires_at) <= new Date()) {
-      throw httpError('Email OTP की समय-सीमा समाप्त है; नया OTP भेजें।', 400);
+      throw httpError('Email OTP expired; please request a new OTP.', 400);
     }
-    if (emailRow.attempts >= 5) throw httpError('Email OTP प्रयास सीमा पूरी हुई; नया OTP लें।', 429);
+    if (emailRow.attempts >= 5) throw httpError('Email OTP attempt limit exceeded; please request a new OTP.', 429);
     if (!constantTimeEqual(emailRow.otp_hash, otpDigest(emailHash, emailOtp, 'signup_email'))) {
       await client.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [emailHash]);
       await client.query('COMMIT');
-      throw httpError('Email OTP सही नहीं है।', 400);
+      throw httpError('Invalid Email OTP.', 400);
     }
 
     // 3. Duplicate checks
     const userId = mobile.slice(-10);
     const existingPhone = await client.query('SELECT 1 FROM users WHERE lower(username) = lower($1) OR phone_lookup_hash = $2', [userId, phoneHash]);
-    if (existingPhone.rowCount) throw httpError('यह WhatsApp नंबर (User ID: ' + userId + ') पहले से रजिस्टर्ड है। कृपया लॉगिन करें।', 409);
+    if (existingPhone.rowCount) throw httpError('This WhatsApp number (User ID: ' + userId + ') is already registered. Please login.', 409);
 
     const existingEmail = await client.query('SELECT 1 FROM users WHERE lower(email) = lower($1)', [email]);
-    if (existingEmail.rowCount) throw httpError('यह ईमेल आईडी पहले से किसी खाते से जुड़ी हुई है।', 409);
+    if (existingEmail.rowCount) throw httpError('This email is already associated with an account.', 409);
 
-    // Random 6-digit password generated by system
-    const password = String(crypto.randomInt(100_000, 1_000_000));
+    // Strong password generated with letters, numbers, and special symbols
+    const generateStrongPassword = (length = 10) => {
+      const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const lower = 'abcdefghijkmnpqrstuvwxyz';
+      const digits = '23456789';
+      const symbols = '@#$&!';
+      const all = upper + lower + digits + symbols;
+      const pwdChars = [
+        upper[crypto.randomInt(0, upper.length)],
+        lower[crypto.randomInt(0, lower.length)],
+        digits[crypto.randomInt(0, digits.length)],
+        symbols[crypto.randomInt(0, symbols.length)],
+      ];
+      while (pwdChars.length < length) {
+        pwdChars.push(all[crypto.randomInt(0, all.length)]);
+      }
+      return pwdChars.sort(() => crypto.randomInt(-1, 2)).join('');
+    };
+    const password = generateStrongPassword(10);
     const passwordHash = await argon2.hash(password, {
       type: argon2.argon2id,
       memoryCost: 19_456,
@@ -1381,13 +1463,13 @@ async function registerUser(request, response) {
   try {
     const welcomeWaMsg =
       `🎉 *Welcome to Exchange Portal!*\n\n` +
-      `आपका खाता सफलतापूर्वक बन गया है।\n\n` +
+      `Your account has been created successfully.\n\n` +
       `🏢 *Company Name:* ${credentials.businessName}\n` +
       `👤 *User ID (Mobile):* ${credentials.userId}\n` +
       `🔑 *Password:* ${credentials.password}\n` +
       `📍 *Address:* ${credentials.address}, ${credentials.city}, ${credentials.state} - ${credentials.pincode}\n\n` +
       `🌐 *Login URL:* ${loginUrl}\n\n` +
-      `User ID आपका रजिस्टर्ड मोबाइल नंबर है। कृपया अपना पासवर्ड सुरक्षित रखें।`;
+      `User ID is your registered mobile number. Please keep your password confidential.`;
 
     await sendWhatsappNotification({
       db,
@@ -1438,9 +1520,8 @@ async function registerUser(request, response) {
 
   sendJson(response, 201, {
     ok: true,
-    message: 'खाता सफलतापूर्वक बन गया! आपकी यूजर आईडी और पासवर्ड आपके WhatsApp और Email पर भेज दिए गए हैं।',
+    message: 'Account created successfully! Your User ID and password have been sent to your WhatsApp and Email.',
     userId: credentials.userId,
-    password: credentials.password,
     companyName: credentials.businessName,
     redirect: '/admin/login?userId=' + encodeURIComponent(credentials.userId),
   });
@@ -1477,9 +1558,9 @@ async function loginUser(request, response) {
   const address = clientAddress(request);
   const rateKey = `login:${address}:${userId.toLowerCase().slice(0, 80)}`;
   if (!allowRate(`login-ip:${address}`, 30, 15 * 60_000) || !allowRate(rateKey, 10, 15 * 60_000)) {
-    throw httpError('बहुत अधिक लॉगिन प्रयास हुए; 15 मिनट बाद फिर कोशिश करें।', 429);
+    throw httpError('Too many login attempts; please try again after 15 minutes.', 429);
   }
-  if (userId.length > 80 || password.length > 256) throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
+  if (userId.length > 80 || password.length > 256) throw httpError('Invalid user ID or password.', 401);
 
   const result = await db.query(
     'SELECT id, username, name, role, city, state, password_hash FROM users WHERE lower(username) = lower($1) AND status = \'active\' AND deleted_at IS NULL',
@@ -1518,7 +1599,7 @@ async function loginUser(request, response) {
         ]
       ).catch(() => {});
     } catch (_) {}
-    throw httpError('यूज़र आईडी या पासवर्ड सही नहीं है।', 401);
+    throw httpError('Invalid user ID or password.', 401);
   }
 
   // Check Login OTP general setting
@@ -1571,7 +1652,6 @@ async function loginUser(request, response) {
         requireOtp: true,
         message: 'Login OTP sent to your registered Email & WhatsApp. Please enter OTP to complete login.',
         userId: user.username,
-        developmentOtp: !IS_PRODUCTION ? generatedOtp : undefined,
       });
       return;
     }
@@ -1633,7 +1713,7 @@ async function loginUser(request, response) {
   }
 
   sendJson(response, 200, {
-    message: 'लॉगिन सफल।',
+    message: 'Login successful.',
     redirect: user.role === 'admin' ? '/admin/' : '/dashboard',
     user: { userId: user.username, name: user.name, role: user.role },
   }, { 'set-cookie': sessionCookie(token, SESSION_DURATION_SECONDS) });
@@ -1647,7 +1727,7 @@ async function logoutUser(request, response) {
     await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
     await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
   }
-  sendJson(response, 200, { message: 'लॉगआउट हो गया।' }, { 'set-cookie': sessionCookie('', 0) });
+  sendJson(response, 200, { message: 'Logged out successfully.' }, { 'set-cookie': sessionCookie('', 0) });
 }
 
 const { USER_PANEL_PAGES } = require('./config/user-panel-menu');
@@ -1719,9 +1799,9 @@ async function getGeneralSettings() {
 async function quoteTransactionMargin(request, response) {
   checkSameOrigin(request);
   const user = await getSession(request);
-  if (!user) throw httpError('लॉगिन आवश्यक है।', 401);
-  if (user.role !== 'user') throw httpError('यह सुविधा केवल यूज़र के लिए है।', 403);
-  if (!allowRate(`margin-quote:${user.id}`, 60, 60 * 60_000)) throw httpError('बहुत सारे अनुरोध हुए; थोड़ी देर बाद फिर कोशिश करें।', 429);
+  if (!user) throw httpError('Login required.', 401);
+  if (user.role !== 'user') throw httpError('This feature is only available to users.', 403);
+  if (!allowRate(`margin-quote:${user.id}`, 60, 60 * 60_000)) throw httpError('Too many requests; please try again shortly.', 429);
   const input = await readJson(request);
   const quote = await calculateTransactionMargin(db, user.id, input);
   sendJson(response, 200, quote);
@@ -1730,15 +1810,15 @@ async function quoteTransactionMargin(request, response) {
 async function createFundRequest(request, response) {
   checkSameOrigin(request);
   const user = await getSession(request);
-  if (!user) throw httpError('à¤²à¥‰à¤—à¤¿à¤¨ à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤', 401);
-  if (user.role !== 'user') throw httpError('à¤¯à¤¹ à¤•à¤¾à¤® à¤•à¥‡à¤µà¤² user account à¤•à¤° à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤', 403);
-  if (!allowRate(`fund-request:${user.id}`, 10, 60 * 60_000)) throw httpError('à¤¬à¤¹à¥à¤¤ à¤¸à¤¾à¤°à¥‡ request à¤¹à¥‹ à¤—à¤; à¤à¤• à¤˜à¤‚à¤Ÿà¥‡ à¤¬à¤¾à¤¦ à¤«à¤¿à¤° à¤•à¥‹à¤¶à¤¿à¤¶ à¤•à¤°à¥‡à¤‚à¥¤', 429);
+  if (!user) throw httpError('Login required.', 401);
+  if (user.role !== 'user') throw httpError('This action is only available to user accounts.', 403);
+  if (!allowRate(`fund-request:${user.id}`, 10, 60 * 60_000)) throw httpError('Too many requests; please try again after 1 hour.', 429);
   const input = await readJson(request);
   const amount = String(input.amount || '').trim();
-  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)) throw httpError('à¤°à¤¾à¤¶à¤¿ 0.01 à¤¸à¥‡ 10,000,000 à¤°à¥‚à¤ªà¤¯à¥‡ à¤•à¥‡ à¤¬à¥€à¤š à¤¸à¤¹à¥€ à¤°à¥‚à¤ª à¤®à¥‡à¤‚ à¤²à¤¿à¤–à¥‡à¤‚à¥¤', 400);
+  if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(amount)) throw httpError('Amount must be formatted correctly between 0.01 and 10,000,000.', 400);
   const [whole, fraction = ''] = amount.split('.');
   const amountMinor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-  if (amountMinor < 1n || amountMinor > 1_000_000_000n) throw httpError('à¤°à¤¾à¤¶à¤¿ 0.01 à¤¸à¥‡ 10,000,000 à¤°à¥‚à¤ªà¤¯à¥‡ à¤•à¥‡ à¤¬à¥€à¤š à¤¹à¥‹à¤¨à¥€ à¤šà¤¾à¤¹à¤¿à¤à¥¤', 400);
+  if (amountMinor < 1n || amountMinor > 1_000_000_000n) throw httpError('Amount must be between 0.01 and 10,000,000.', 400);
   const bankId = String(input.bankId || '').trim();
   const bankCode = String(input.bankCode || '').trim();
   let bankRow = null;
@@ -1759,34 +1839,34 @@ async function createFundRequest(request, response) {
   }
 
   if (!bankRow) {
-    throw httpError('सक्रिय बैंक विवरण उपलब्ध नहीं है। कृपया व्यवस्थापक से संपर्क करें।', 400);
+    throw httpError('Active bank details unavailable. Please contact administrator.', 400);
   }
   const paymentModes = ['Bank Transfer', 'UPI', 'Cash Deposit'];
-  if (!paymentModes.includes(input.paymentMode)) throw httpError('à¤­à¥à¤—à¤¤à¤¾à¤¨ à¤¤à¤°à¥€à¤•à¤¾ à¤šà¥à¤¨à¤¨à¤¾ à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
-  if (input.walletType !== 'Prepaid') throw httpError('à¤…à¤­à¥€ à¤•à¥‡à¤µà¤² Prepaid wallet à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¹à¥ˆà¥¤', 400);
+  if (!paymentModes.includes(input.paymentMode)) throw httpError('Invalid payment mode selected.', 400);
+  if (input.walletType !== 'Prepaid') throw httpError('Currently only Prepaid wallet is supported.', 400);
   const accountInput = String(input.accountNumber || '').trim();
   const accountNumber = accountInput ? accountInput.replace(/[\s-]/g, '').toUpperCase() : '';
-  if (accountNumber && !/^[A-Z0-9]{5,34}$/.test(accountNumber)) throw httpError('Depositor account number à¤•à¤¾ à¤°à¥‚à¤ª à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  if (accountNumber && !/^[A-Z0-9]{5,34}$/.test(accountNumber)) throw httpError('Depositor account number format is invalid.', 400);
   const transactionInput = String(input.transactionId || '').trim();
   const transactionId = transactionInput ? transactionInput.toUpperCase() : '';
-  if (transactionId && !/^[A-Z0-9/._-]{3,80}$/.test(transactionId)) throw httpError('Transaction ID à¤•à¤¾ à¤°à¥‚à¤ª à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  if (transactionId && !/^[A-Z0-9/._-]{3,80}$/.test(transactionId)) throw httpError('Transaction ID format is invalid.', 400);
 
   let proofMime = null;
   let proofData = null;
   if (input.proof !== undefined && input.proof !== null) {
     const validMimes = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
     if (!input.proof || typeof input.proof !== 'object' || !validMimes.has(input.proof.mime) || typeof input.proof.base64 !== 'string' || input.proof.base64.length > 700_000 || !/^[A-Za-z0-9+/]*={0,2}$/.test(input.proof.base64)) {
-      throw httpError('à¤‡à¤®à¥‡à¤œ à¤«à¤¼à¤¾à¤‡à¤² à¤•à¤¾ à¤°à¥‚à¤ª à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+      throw httpError('Invalid image file format.', 400);
     }
     proofData = Buffer.from(input.proof.base64, 'base64');
-    if (!proofData.length || proofData.length > 512 * 1024 || proofData.toString('base64') !== input.proof.base64) throw httpError('à¤‡à¤®à¥‡à¤œ 512 KB à¤¸à¥‡ à¤›à¥‹à¤Ÿà¥€ à¤”à¤° à¤¸à¤¹à¥€ à¤¹à¥‹à¤¨à¥€ à¤šà¤¾à¤¹à¤¿à¤à¥¤', 400);
+    if (!proofData.length || proofData.length > 512 * 1024 || proofData.toString('base64') !== input.proof.base64) throw httpError('Image must be valid and under 512 KB.', 400);
     const signatures = {
       'image/png': (data) => data.length >= 8 && data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
       'image/jpeg': (data) => data.length >= 3 && data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff,
       'image/webp': (data) => data.length >= 12 && data.toString('ascii', 0, 4) === 'RIFF' && data.toString('ascii', 8, 12) === 'WEBP',
       'image/gif': (data) => data.length >= 6 && ['GIF87a', 'GIF89a'].includes(data.toString('ascii', 0, 6)),
     };
-    if (!signatures[input.proof.mime](proofData)) throw httpError('à¤‡à¤®à¥‡à¤œ à¤•à¤¾ à¤ªà¥à¤°à¤•à¤¾à¤° à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+    if (!signatures[input.proof.mime](proofData)) throw httpError('Invalid image type.', 400);
     proofMime = input.proof.mime;
   }
 
@@ -1809,20 +1889,20 @@ async function createFundRequest(request, response) {
 async function decideFundRequest(request, response, requestId) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('à¤²à¥‰à¤—à¤¿à¤¨ à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤', 401);
-  if (admin.role !== 'admin') throw httpError('à¤•à¥‡à¤µà¤² admin à¤¯à¤¹ à¤•à¤¾à¤® à¤•à¤° à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤', 403);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) throw httpError('à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ ID à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('Only admin can perform this action.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) throw httpError('Invalid record ID.', 400);
   const input = await readJson(request);
-  if (!['approve', 'reject'].includes(input.action)) throw httpError('à¤•à¤¾à¤°à¥à¤°à¤µà¤¾à¤ˆ à¤šà¥à¤¨à¤¨à¤¾ à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  if (!['approve', 'reject'].includes(input.action)) throw httpError('Invalid action selected.', 400);
   const note = String(input.note || '').trim();
-  if (note.length > 500) throw httpError('Admin note 500 à¤…à¤•à¥à¤·à¤° à¤¤à¤• à¤°à¤–à¥‡à¤‚à¥¤', 400);
+  if (note.length > 500) throw httpError('Admin note must be under 500 characters.', 400);
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const locked = await client.query('SELECT * FROM wallet_fund_requests WHERE id = $1 FOR UPDATE', [requestId]);
-    if (!locked.rowCount) throw httpError('Fund request à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¥€à¥¤', 404);
+    if (!locked.rowCount) throw httpError('Fund request not found.', 404);
     const fundRequest = locked.rows[0];
-    if (fundRequest.status !== 'pending') throw httpError('à¤‡à¤¸ request à¤ªà¤° à¤ªà¤¹à¤²à¥‡ à¤¹à¥€ à¤«à¥ˆà¤¸à¤²à¤¾ à¤¹à¥‹ à¤šà¥à¤•à¤¾ à¤¹à¥ˆà¥¤', 409);
+    if (fundRequest.status !== 'pending') throw httpError('This request has already been reviewed.', 409);
 
     if (input.action === 'approve') {
       await client.query(
@@ -1831,8 +1911,19 @@ async function decideFundRequest(request, response, requestId) {
         [fundRequest.user_id],
       );
       const wallet = await client.query("SELECT id FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE", [fundRequest.user_id]);
-      if (!wallet.rowCount) throw httpError('User wallet à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾à¥¤', 409);
-      await client.query("UPDATE wallets SET balance_minor = balance_minor + $1::bigint, updated_at = now() WHERE id = $2", [fundRequest.amount_minor, wallet.rows[0].id]);
+      if (!wallet.rowCount) throw httpError('User wallet not found.', 409);
+      const walletMode = await getWalletMode(client);
+      if (walletMode === 'separate') {
+        await client.query(
+          "UPDATE wallets SET buyer_balance_minor = buyer_balance_minor + $1::bigint, balance_minor = balance_minor + $1::bigint, updated_at = now() WHERE id = $2",
+          [fundRequest.amount_minor, wallet.rows[0].id]
+        );
+      } else {
+        await client.query(
+          "UPDATE wallets SET balance_minor = balance_minor + $1::bigint, buyer_balance_minor = balance_minor + $1::bigint, updated_at = now() WHERE id = $2",
+          [fundRequest.amount_minor, wallet.rows[0].id]
+        );
+      }
       await client.query(
         `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key)
          VALUES ($1, $2, $3, 'credit', 'fund_request', $4, $5)`,
@@ -1956,41 +2047,41 @@ async function handleDeleteAdminBank(request, response, bankId) {
 async function createOperator(request, response) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('à¤²à¥‰à¤—à¤¿à¤¨ à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤', 401);
-  if (admin.role !== 'admin') throw httpError('à¤•à¥‡à¤µà¤² admin operator à¤¬à¤¨à¤¾ à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤', 403);
-  if (!allowRate(`operator-create:${admin.id}`, 30, 15 * 60_000)) throw httpError('à¤¬à¤¹à¥à¤¤ à¤¸à¤¾à¤°à¥‡ operator save à¤¹à¥‹à¤—à¤; à¤¬à¤¾à¤¦ à¤®à¥‡à¤‚ à¤•à¥‹à¤¶à¤¿à¤¶ à¤•à¤°à¥‡à¤‚à¥¤', 429);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('Only admin can create operators.', 403);
+  if (!allowRate(`operator-create:${admin.id}`, 30, 15 * 60_000)) throw httpError('Too many operator updates; please try again later.', 429);
   const input = await readJson(request);
   const operatorName = String(input.operatorName || '').trim();
   const serviceType = String(input.serviceType || '').trim();
   const operatorCode = String(input.operatorCode || '').trim().toUpperCase();
   const serviceTypes = ['Mobile Recharge', 'DTH', 'Postpaid', 'Electricity', 'Gas', 'Water', 'Broadband', 'Insurance', 'FASTag', 'Other'];
-  if (operatorName.length < 2 || operatorName.length > 100) throw httpError('Operator Name 2 à¤¸à¥‡ 100 à¤…à¤•à¥à¤·à¤° à¤•à¤¾ à¤°à¤–à¥‡à¤‚à¥¤', 400);
-  if (!serviceTypes.includes(serviceType)) throw httpError('Service Type à¤šà¥à¤¨à¤¨à¤¾ à¤†à¤µà¤¶à¥à¤¯à¤• à¤¹à¥ˆà¥¤', 400);
-  if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(operatorCode)) throw httpError('Operator Code 2–40 letters, numbers, dot, underscore à¤¯à¤¾ hyphen à¤•à¤¾ à¤°à¤–à¥‡à¤‚à¥¤', 400);
+  if (operatorName.length < 2 || operatorName.length > 100) throw httpError('Operator Name must be between 2 and 100 characters.', 400);
+  if (!serviceTypes.includes(serviceType)) throw httpError('Service Type is required.', 400);
+  if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(operatorCode)) throw httpError('Operator Code must be 2-40 letters, numbers, dot, underscore or hyphen.', 400);
   const moneyToMinor = (value, label, allowZero = false) => {
     const textValue = String(value ?? '').trim();
-    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(textValue)) throw httpError(`${label} à¤•à¤¾ amount à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤`, 400);
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(textValue)) throw httpError(`${label} amount is invalid.`, 400);
     const [whole, fraction = ''] = textValue.split('.');
     const minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-    if ((!allowZero && minor < 1n) || minor > 10_000_000_000n) throw httpError(`${label} 0 à¤¸à¥‡ 100,000,000 à¤°à¥‚à¤ªà¤¯à¥‡ à¤•à¥‡ à¤¬à¥€à¤š à¤¹à¥‹à¥¤`, 400);
+    if ((!allowZero && minor < 1n) || minor > 10_000_000_000n) throw httpError(`${label} must be between 0 and 100,000,000.`, 400);
     return minor;
   };
   const minimumMinor = moneyToMinor(input.minimumAmount, 'Minimum Amount', true);
   const maximumMinor = moneyToMinor(input.maximumAmount, 'Maximum Amount');
-  if (maximumMinor < minimumMinor) throw httpError('Maximum Amount, Minimum Amount à¤¸à¥‡ à¤•à¤® à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤à¥¤', 400);
+  if (maximumMinor < minimumMinor) throw httpError('Maximum Amount cannot be less than Minimum Amount.', 400);
   const stopInput = String(input.stopAmounts || '').trim();
   const stopAmounts = stopInput ? stopInput.split(',').map((item) => moneyToMinor(item.trim(), 'Stop Amount')) : [];
-  if (stopAmounts.length > 100) throw httpError('Stop Amounts à¤•à¥€ à¤¸à¤‚à¤–à¥à¤¯à¤¾ 100 à¤¸à¥‡ à¤•à¤® à¤°à¤–à¥‡à¤‚à¥¤', 400);
+  if (stopAmounts.length > 100) throw httpError('Stop Amounts count must be less than 100.', 400);
   let operatorNumberLength = null;
   if (input.operatorNumberLength !== undefined && String(input.operatorNumberLength).trim() !== '') {
     operatorNumberLength = Number(input.operatorNumberLength);
-    if (!Number.isInteger(operatorNumberLength) || operatorNumberLength < 1 || operatorNumberLength > 30) throw httpError('Operator Number Length 1 à¤¸à¥‡ 30 à¤•à¥‡ à¤¬à¥€à¤š à¤•à¤¾ à¤°à¤–à¥‡à¤‚à¥¤', 400);
+    if (!Number.isInteger(operatorNumberLength) || operatorNumberLength < 1 || operatorNumberLength > 30) throw httpError('Operator Number Length must be between 1 and 30.', 400);
   }
-  if (!Array.isArray(input.parameters) || input.parameters.length > 30) throw httpError('Bill Payment Parameters à¤•à¥€ à¤¸à¤‚à¤–à¥à¤¯à¤¾ 30 à¤¤à¤• à¤°à¤–à¥‡à¤‚à¥¤', 400);
+  if (!Array.isArray(input.parameters) || input.parameters.length > 30) throw httpError('Bill Payment Parameters count must be up to 30.', 400);
   const parameterTypes = ['text', 'number', 'mobile', 'date', 'dropdown'];
   const keys = new Set();
   const parameters = input.parameters.map((item) => {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) throw httpError('Parameter row à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+    if (!item || typeof item !== 'object' || Array.isArray(item)) throw httpError('Parameter row is invalid.', 400);
     const name = String(item.name || '').trim();
     const hint = String(item.hint || '').trim();
     const type = String(item.type || '').trim();
@@ -2031,36 +2122,36 @@ async function createOperator(request, response) {
 async function updateOperator(request, response, operatorId) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('लॉगिन आवश्यक है।', 401);
-  if (admin.role !== 'admin') throw httpError('केवल Admin ऑपरेटर बदल सकता है।', 403);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('ऑपरेटर ID सही नहीं है।', 400);
-  if (!allowRate(`operator-update:${admin.id}`, 30, 15 * 60_000)) throw httpError('बहुत सारे operator बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('Only Admin can update operators.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('Operator ID is invalid.', 400);
+  if (!allowRate(`operator-update:${admin.id}`, 30, 15 * 60_000)) throw httpError('Too many operator updates; please try again later.', 429);
   const input = await readJson(request);
   const operatorName = String(input.operatorName || '').trim();
   const serviceType = String(input.serviceType || '').trim();
   const operatorCode = String(input.operatorCode || '').trim().toUpperCase();
   const serviceTypes = ['Mobile Recharge', 'DTH', 'Postpaid', 'Electricity', 'Gas', 'Water', 'Broadband', 'Insurance', 'FASTag', 'Other'];
-  if (operatorName.length < 2 || operatorName.length > 100) throw httpError('Operator Name 2 से 100 अक्षर का रखें।', 400);
-  if (!serviceTypes.includes(serviceType)) throw httpError('Service Type चुनना आवश्यक है।', 400);
-  if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(operatorCode)) throw httpError('Operator Code 2–40 अक्षर, अंक, dot, underscore या hyphen का रखें।', 400);
+  if (operatorName.length < 2 || operatorName.length > 100) throw httpError('Operator Name must be between 2 and 100 characters.', 400);
+  if (!serviceTypes.includes(serviceType)) throw httpError('Service Type is required.', 400);
+  if (!/^[A-Z0-9][A-Z0-9._-]{1,39}$/.test(operatorCode)) throw httpError('Operator Code must be 2-40 letters, numbers, dot, underscore or hyphen.', 400);
   const moneyToMinor = (value, label, allowZero = false) => {
     const text = String(value ?? '').trim();
-    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) throw httpError(`${label} की राशि सही नहीं है।`, 400);
+    if (!/^\d{1,8}(?:\.\d{1,2})?$/.test(text)) throw httpError(`${label} amount is invalid.`, 400);
     const [whole, fraction = ''] = text.split('.');
     const minor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
-    if ((!allowZero && minor < 1n) || minor > 10_000_000_000n) throw httpError(`${label} 0 से 100,000,000 रुपये की सीमा में रखें।`, 400);
+    if ((!allowZero && minor < 1n) || minor > 10_000_000_000n) throw httpError(`${label} must be between 0 and 100,000,000.`, 400);
     return minor;
   };
   const minimumMinor = moneyToMinor(input.minimumAmount, 'Minimum Amount', true);
   const maximumMinor = moneyToMinor(input.maximumAmount, 'Maximum Amount');
-  if (maximumMinor < minimumMinor) throw httpError('Maximum Amount, Minimum Amount से कम नहीं हो सकता।', 400);
+  if (maximumMinor < minimumMinor) throw httpError('Maximum Amount cannot be less than Minimum Amount.', 400);
   const stopInput = String(input.stopAmounts || '').trim();
   const stopAmounts = stopInput ? stopInput.split(',').map((item) => moneyToMinor(item.trim(), 'Stop Amount')) : [];
-  if (stopAmounts.length > 100) throw httpError('Stop Amounts की संख्या 100 से कम रखें।', 400);
+  if (stopAmounts.length > 100) throw httpError('Stop Amounts count must be less than 100.', 400);
   let numberLength = null;
   if (String(input.operatorNumberLength ?? '').trim()) {
     numberLength = Number(input.operatorNumberLength);
-    if (!Number.isInteger(numberLength) || numberLength < 1 || numberLength > 30) throw httpError('Operator Number Length 1 से 30 के बीच रखें।', 400);
+    if (!Number.isInteger(numberLength) || numberLength < 1 || numberLength > 30) throw httpError('Operator Number Length must be between 1 and 30.', 400);
   }
   try {
     const client = await db.connect();
@@ -2073,7 +2164,7 @@ async function updateOperator(request, response, operatorId) {
          WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
         [operatorId, operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), numberLength],
       );
-      if (!updated.rowCount) throw httpError('ऑपरेटर नहीं मिला।', 404);
+      if (!updated.rowCount) throw httpError('Operator not found.', 404);
       await client.query(
         'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
         [admin.id, 'operator_updated', 'operator_definition', operatorId, { operatorCode, serviceType }],
@@ -2081,24 +2172,24 @@ async function updateOperator(request, response, operatorId) {
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK').catch(() => {});
-      if (error.code === '23505') throw httpError('यह Operator Code पहले से मौजूद है।', 409);
+      if (error.code === '23505') throw httpError('This Operator Code already exists.', 409);
       throw error;
     } finally { client.release(); }
   } catch (error) { throw error; }
-  sendJson(response, 200, { message: 'ऑपरेटर अपडेट हो गया।' });
+  sendJson(response, 200, { message: 'Operator updated successfully.' });
 }
 
 async function setOperatorStatus(request, response, operatorId) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('लॉगिन आवश्यक है।', 401);
-  if (admin.role !== 'admin') throw httpError('केवल Admin ऑपरेटर की स्थिति बदल सकता है।', 403);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('ऑपरेटर ID सही नहीं है।', 400);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('Only Admin can update operator status.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('Operator ID is invalid.', 400);
   const input = await readJson(request);
-  if (!['active', 'inactive'].includes(input.status)) throw httpError('स्थिति Active या Inactive होनी चाहिए।', 400);
-  if (!allowRate(`operator-status:${admin.id}`, 60, 15 * 60_000)) throw httpError('बहुत सारे operator बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!['active', 'inactive'].includes(input.status)) throw httpError('Status must be Active or Inactive.', 400);
+  if (!allowRate(`operator-status:${admin.id}`, 60, 15 * 60_000)) throw httpError('Too many operator updates; please try again later.', 429);
   const result = await db.query('UPDATE operator_definitions SET status=$2, updated_at=now() WHERE id=$1 AND deleted_at IS NULL RETURNING id, status', [operatorId, input.status]);
-  if (!result.rowCount) throw httpError('ऑपरेटर नहीं मिला।', 404);
+  if (!result.rowCount) throw httpError('Operator not found.', 404);
   await db.query(
     'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
     [admin.id, `operator_${input.status}`, 'operator_definition', operatorId, {}],
@@ -2109,35 +2200,35 @@ async function setOperatorStatus(request, response, operatorId) {
 async function deleteOperator(request, response, operatorId) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('लॉगिन आवश्यक है।', 401);
-  if (admin.role !== 'admin') throw httpError('केवल Admin ऑपरेटर हटा सकता है।', 403);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('ऑपरेटर ID सही नहीं है।', 400);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('Only Admin can delete operators.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operatorId)) throw httpError('Operator ID is invalid.', 400);
   await readJson(request);
-  if (!allowRate(`operator-delete:${admin.id}`, 30, 15 * 60_000)) throw httpError('बहुत सारे operator बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!allowRate(`operator-delete:${admin.id}`, 30, 15 * 60_000)) throw httpError('Too many operator updates; please try again later.', 429);
   const result = await db.query(
     `UPDATE operator_definitions SET status='inactive', deleted_at=now(), updated_at=now()
      WHERE id=$1 AND deleted_at IS NULL RETURNING id`, [operatorId],
   );
-  if (!result.rowCount) throw httpError('ऑपरेटर नहीं मिला।', 404);
+  if (!result.rowCount) throw httpError('Operator not found.', 404);
   await db.query(
     'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
     [admin.id, 'operator_deleted', 'operator_definition', operatorId, {}],
   );
-  sendJson(response, 200, { message: 'ऑपरेटर सूची से हटा दिया गया।' });
+  sendJson(response, 200, { message: 'Operator deleted successfully.' });
 }
 
 async function requireAdminAndUser(request, userId) {
   checkSameOrigin(request);
   const admin = await getSession(request);
-  if (!admin) throw httpError('लॉगिन आवश्यक है।', 401);
-  if (admin.role !== 'admin') throw httpError('यह सुविधा केवल Admin के लिए है।', 403);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) throw httpError('यूज़र ID सही नहीं है।', 400);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('This feature is only available to Admin.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) throw httpError('User ID is invalid.', 400);
   return admin;
 }
 
 async function updateManagedUser(request, response, userId) {
   const admin = await requireAdminAndUser(request, userId);
-  if (!allowRate(`admin-user-update:${admin.id}`, 40, 15 * 60_000)) throw httpError('बहुत सारे user बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!allowRate(`admin-user-update:${admin.id}`, 40, 15 * 60_000)) throw httpError('Too many user updates; please try again later.', 429);
   const input = await readJson(request);
   const name = String(input.name || '').trim();
   const mobile = normalizeIndianMobile(input.mobile);
@@ -2145,19 +2236,19 @@ async function updateManagedUser(request, response, userId) {
   const email = emailInput || null;
   const address = String(input.address || '').trim();
   const parentInput = String(input.parentUser || '').trim();
-  if (name.length < 2 || name.length > 80) throw httpError('नाम 2 से 80 अक्षर का रखें।', 400);
-  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw httpError('ईमेल पता सही दर्ज करें।', 400);
-  if (address.length > 300) throw httpError('पता अधिकतम 300 अक्षरों का हो सकता है।', 400);
-  if (parentInput.length > 80) throw httpError('Parent यूज़र आईडी अधिकतम 80 अक्षरों की हो सकती है।', 400);
+  if (name.length < 2 || name.length > 80) throw httpError('Name must be between 2 and 80 characters.', 400);
+  if (email && (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw httpError('Please enter a valid email address.', 400);
+  if (address.length > 300) throw httpError('Address cannot exceed 300 characters.', 400);
+  if (parentInput.length > 80) throw httpError('Parent User ID cannot exceed 80 characters.', 400);
   let parentId = null;
   if (parentInput) {
     const parent = await db.query(
       `SELECT id FROM users WHERE role='user' AND deleted_at IS NULL AND status='active'
        AND (lower(username)=lower($1) OR id::text=$1) LIMIT 1`, [parentInput],
     );
-    if (!parent.rowCount) throw httpError('दिया गया Parent User ID नहीं मिला या सक्रिय नहीं है।', 400);
+    if (!parent.rowCount) throw httpError('Given Parent User ID not found or inactive.', 400);
     parentId = parent.rows[0].id;
-    if (parentId === userId) throw httpError('यूज़र को स्वयं का Parent नहीं बनाया जा सकता।', 400);
+    if (parentId === userId) throw httpError('User cannot be their own Parent.', 400);
     const cycle = await db.query(
       `WITH RECURSIVE descendants(id) AS (
          SELECT id FROM users WHERE parent_user_id=$1
@@ -2166,7 +2257,7 @@ async function updateManagedUser(request, response, userId) {
        ) SELECT EXISTS(SELECT 1 FROM descendants WHERE id=$2) AS creates_cycle`,
       [userId, parentId],
     );
-    if (cycle.rows[0].creates_cycle) throw httpError('इस Parent से user hierarchy में circular link बनेगा।', 400);
+    if (cycle.rows[0].creates_cycle) throw httpError('This Parent creates a circular link in user hierarchy.', 400);
   }
   let result;
   try {
@@ -2177,29 +2268,31 @@ async function updateManagedUser(request, response, userId) {
       [userId, name, email, encryptMobile(mobile), lookupMobile(mobile), address || null, parentId],
     );
   } catch (error) {
-    if (error.code === '23505') throw httpError('यह मोबाइल या ईमेल दूसरे खाते में उपयोग हो रहा है।', 409);
+    if (error.code === '23505') throw httpError('This mobile or email is already in use by another account.', 409);
     throw error;
   }
-  if (!result.rowCount) throw httpError('यूज़र नहीं मिला।', 404);
+  if (!result.rowCount) throw httpError('User not found.', 404);
   await db.query(
     'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
     [admin.id, 'user_updated', 'user', userId, { emailChanged: true, mobileChanged: true, addressChanged: true, parentChanged: true }],
   ).catch(() => {});
-  sendJson(response, 200, { message: 'यूज़र विवरण अपडेट हो गया।' });
+  sendJson(response, 200, { message: 'User details updated successfully.' });
 }
 
 async function changeManagedUserPassword(request, response, userId) {
   const admin = await requireAdminAndUser(request, userId);
-  if (!allowRate(`admin-user-password:${admin.id}`, 20, 15 * 60_000)) throw httpError('बहुत सारे password बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!allowRate(`admin-user-password:${admin.id}`, 20, 15 * 60_000)) throw httpError('Too many password updates; please try again later.', 429);
   const input = await readJson(request);
   const password = String(input.password || '');
-  if (!/^\d{6}$/.test(password)) throw httpError('पासवर्ड केवल छह अंकों का होना चाहिए।', 400);
+  if (!password || password.length < 6 || password.length > 128) {
+    throw httpError('Password must be between 6 and 128 characters (numbers, letters and special characters allowed).', 400);
+  }
   const passwordHash = await argon2.hash(password, { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 });
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const updated = await client.query("UPDATE users SET password_hash=$2, updated_at=now() WHERE id=$1 AND role='user' AND deleted_at IS NULL RETURNING id", [userId, passwordHash]);
-    if (!updated.rowCount) throw httpError('यूज़र नहीं मिला।', 404);
+    if (!updated.rowCount) throw httpError('User not found.', 404);
     await client.query('UPDATE user_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
     await client.query('INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)', [admin.id, 'user_password_changed', 'user', userId, {}]);
     await client.query('COMMIT');
@@ -2207,19 +2300,19 @@ async function changeManagedUserPassword(request, response, userId) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally { client.release(); }
-  sendJson(response, 200, { message: 'पासवर्ड बदल दिया गया और पुराने login sessions बंद कर दिए गए।' });
+  sendJson(response, 200, { message: 'Password updated and previous login sessions terminated.' });
 }
 
 async function setManagedUserStatus(request, response, userId) {
   const admin = await requireAdminAndUser(request, userId);
   const input = await readJson(request);
-  if (!['active', 'blocked', 'pending'].includes(input.status)) throw httpError('स्थिति Active, Inactive या Pending होनी चाहिए।', 400);
-  if (!allowRate(`admin-user-status:${admin.id}`, 60, 15 * 60_000)) throw httpError('बहुत सारे user status बदलाव हुए; बाद में प्रयास करें।', 429);
+  if (!['active', 'blocked', 'pending'].includes(input.status)) throw httpError('Status must be Active, Inactive or Pending.', 400);
+  if (!allowRate(`admin-user-status:${admin.id}`, 60, 15 * 60_000)) throw httpError('Too many user status updates; please try again later.', 429);
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const updated = await client.query("UPDATE users SET status=$2, updated_at=now() WHERE id=$1 AND role='user' AND deleted_at IS NULL RETURNING id", [userId, input.status]);
-    if (!updated.rowCount) throw httpError('यूज़र नहीं मिला।', 404);
+    if (!updated.rowCount) throw httpError('User not found.', 404);
     if (input.status !== 'active') await client.query('UPDATE user_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
     await client.query('INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)', [admin.id, `user_${input.status}`, 'user', userId, {}]);
     await client.query('COMMIT');
@@ -2233,12 +2326,12 @@ async function setManagedUserStatus(request, response, userId) {
 async function deleteManagedUser(request, response, userId) {
   const admin = await requireAdminAndUser(request, userId);
   await readJson(request);
-  if (!allowRate(`admin-user-delete:${admin.id}`, 15, 15 * 60_000)) throw httpError('बहुत सारे user delete अनुरोध हुए; बाद में प्रयास करें।', 429);
+  if (!allowRate(`admin-user-delete:${admin.id}`, 15, 15 * 60_000)) throw httpError('Too many user delete requests; please try again later.', 429);
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const updated = await client.query("UPDATE users SET status='blocked', deleted_at=now(), updated_at=now() WHERE id=$1 AND role='user' AND deleted_at IS NULL RETURNING id", [userId]);
-    if (!updated.rowCount) throw httpError('यूज़र नहीं मिला।', 404);
+    if (!updated.rowCount) throw httpError('User not found.', 404);
     await client.query('UPDATE user_sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
     await client.query('INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)', [admin.id, 'user_deleted', 'user', userId, { softDelete: true }]);
     await client.query('COMMIT');
@@ -2246,13 +2339,13 @@ async function deleteManagedUser(request, response, userId) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally { client.release(); }
-  sendJson(response, 200, { message: 'यूज़र account बंद करके सूची से छिपा दिया गया।' });
+  sendJson(response, 200, { message: 'User account deactivated and archived.' });
 }
 
 async function getManagedUserMargins(request, response, userId) {
   await requireAdminAndUser(request, userId);
   const userResult = await db.query("SELECT id FROM users WHERE id=$1 AND role='user' AND deleted_at IS NULL", [userId]);
-  if (!userResult.rowCount) throw httpError('यूज़र नहीं मिला।', 404);
+  if (!userResult.rowCount) throw httpError('User not found.', 404);
   const load = async (table) => {
     const result = await db.query(
       `SELECT o.operator_name, m.circle_name, m.commission_percent, m.is_active
@@ -2266,15 +2359,15 @@ async function getManagedUserMargins(request, response, userId) {
 
 async function sendFundRequestProof(request, response, requestId) {
   const admin = await getSession(request);
-  if (!admin || admin.role !== 'admin') throw httpError('à¤•à¥‡à¤µà¤² admin à¤¯à¤¹ à¤«à¤¼à¤¾à¤‡à¤² à¤¦à¥‡à¤– à¤¸à¤•à¤¤à¤¾ à¤¹à¥ˆà¥¤', admin ? 403 : 401);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) throw httpError('à¤°à¤¿à¤•à¥‰à¤°à¥à¤¡ ID à¤¸à¤¹à¥€ à¤¨à¤¹à¥€à¤‚ à¤¹à¥ˆà¥¤', 400);
+  if (!admin || admin.role !== 'admin') throw httpError('Only admin can view this file.', admin ? 403 : 401);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) throw httpError('Invalid record ID.', 400);
   const result = await db.query('SELECT proof_mime, proof_data FROM wallet_fund_requests WHERE id = $1', [requestId]);
-  if (!result.rowCount || !result.rows[0].proof_data) throw httpError('à¤‡à¤®à¥‡à¤œ à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¥€à¥¤', 404);
+  if (!result.rowCount || !result.rows[0].proof_data) throw httpError('Image not found.', 404);
   let proofData;
   try {
     proofData = decryptFundProof(result.rows[0].proof_data);
   } catch {
-    throw httpError('à¤ªà¥à¤°à¥‚à¤«à¤¼ decrypt à¤¨à¤¹à¥€à¤‚ à¤¹à¥‹ à¤¸à¤•à¤¾à¥¤', 500);
+    throw httpError('Failed to decrypt proof.', 500);
   }
   response.writeHead(200, {
     'content-type': result.rows[0].proof_mime, 'content-length': proofData.length,
@@ -2301,7 +2394,7 @@ const AUTH_CLIENT_JS = `
       body: JSON.stringify(payload),
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || body.message || 'अनुरोध पूरा नहीं हुआ।');
+    if (!response.ok) throw new Error(body.error || body.message || 'Request failed.');
     return body;
   };
 
@@ -2338,7 +2431,7 @@ const AUTH_CLIENT_JS = `
           }
           const submitBtn = loginForm.querySelector('button[type="submit"]');
           if (submitBtn) submitBtn.textContent = 'Verify OTP & Login';
-          message(result.developmentOtp ? result.message + ' (Dev OTP: ' + result.developmentOtp + ')' : result.message);
+          message(result.message);
           return;
         }
         location.assign(result.redirect);
@@ -2357,7 +2450,7 @@ const AUTH_CLIENT_JS = `
         const mobileEl = byId('signup-whatsapp') || byId('signup-mobile');
         const mobileVal = mobileEl ? mobileEl.value.trim() : '';
         if (!mobileVal || mobileVal.length < 10) {
-          message('कृपया 10 अंकों का वैध WhatsApp नंबर दर्ज करें।', true);
+          message('Please enter a valid 10-digit WhatsApp number.', true);
           if (mobileEl) mobileEl.focus();
           return;
         }
@@ -2372,9 +2465,7 @@ const AUTH_CLIENT_JS = `
           }
           const waOtpInput = byId('signup-wa-otp') || byId('signup-otp');
           if (waOtpInput) waOtpInput.focus();
-          message(result.developmentOtp
-            ? result.message + ' (Dev OTP: ' + result.developmentOtp + ')'
-            : result.message);
+          message(result.message);
           btnSendWaOtp.innerHTML = '<i class="fa fa-refresh mr-1"></i> Resend OTP';
         } catch (error) {
           message(error.message, true);
@@ -2394,7 +2485,7 @@ const AUTH_CLIENT_JS = `
         const mobileEl = byId('signup-whatsapp') || byId('signup-mobile');
         const mobileVal = mobileEl ? mobileEl.value.trim() : '';
         if (!emailVal || !emailVal.includes('@')) {
-          message('कृपया सही ईमेल पता दर्ज करें।', true);
+          message('Please enter a valid email address.', true);
           if (emailEl) emailEl.focus();
           return;
         }
@@ -2409,9 +2500,7 @@ const AUTH_CLIENT_JS = `
           }
           const emailOtpInput = byId('signup-email-otp');
           if (emailOtpInput) emailOtpInput.focus();
-          message(result.developmentOtp
-            ? result.message + ' (Dev OTP: ' + result.developmentOtp + ')'
-            : result.message);
+          message(result.message);
           btnSendEmailOtp.innerHTML = '<i class="fa fa-refresh mr-1"></i> Resend OTP';
         } catch (error) {
           message(error.message, true);
@@ -2436,7 +2525,7 @@ const AUTH_CLIENT_JS = `
       const cleanPin = String(pin || '').trim().replace(/\\D/g, '');
       if (cleanPin.length !== 6) {
         if (cleanPin.length > 0 && pincodeFeedback) {
-          pincodeFeedback.innerHTML = '<span class="text-warning"><i class="fa fa-info-circle mr-1"></i> Pincode 6 अंकों का होना चाहिए।</span>';
+          pincodeFeedback.innerHTML = '<span class="text-warning"><i class="fa fa-info-circle mr-1"></i> Pincode must be 6 digits.</span>';
         }
         return;
       }
@@ -2445,7 +2534,7 @@ const AUTH_CLIENT_JS = `
 
       if (pincodeSpinner) pincodeSpinner.className = 'fa fa-spinner fa-spin';
       if (pincodeFeedback) {
-        pincodeFeedback.innerHTML = '<span class="text-info"><i class="fa fa-spinner fa-spin mr-1"></i> Pincode विवरण खोजा जा रहा है...</span>';
+        pincodeFeedback.innerHTML = '<span class="text-info"><i class="fa fa-spinner fa-spin mr-1"></i> Searching pincode details...</span>';
       }
 
       let data = null;
@@ -2488,7 +2577,7 @@ const AUTH_CLIENT_JS = `
         }
       } else {
         if (pincodeFeedback) {
-          pincodeFeedback.innerHTML = '<span class="text-danger"><i class="fa fa-exclamation-triangle mr-1"></i> Pincode रिकॉर्ड नहीं मिला। कृपया State और City सीधे भरें।</span>';
+          pincodeFeedback.innerHTML = '<span class="text-danger"><i class="fa fa-exclamation-triangle mr-1"></i> Pincode not found. Please enter State and City manually.</span>';
         }
       }
     };
@@ -2526,42 +2615,42 @@ const AUTH_CLIENT_JS = `
       const country = byId('signup-country') ? byId('signup-country').value.trim() : 'India';
 
       if (!companyName) {
-        message('कृपया Company Name दर्ज करें।', true);
+        message('Please enter Company Name.', true);
         if (byId('signup-business-name')) byId('signup-business-name').focus();
         return;
       }
       if (!mobile || mobile.length < 10) {
-        message('कृपया 10 अंकों का वैध WhatsApp नंबर दर्ज करें।', true);
+        message('Please enter a valid 10-digit WhatsApp number.', true);
         if (byId('signup-whatsapp')) byId('signup-whatsapp').focus();
         return;
       }
       if (!whatsappOtp || whatsappOtp.length !== 6) {
-        message('कृपया WhatsApp पर प्राप्त 6 अंकों का OTP दर्ज करें।', true);
+        message('Please enter the 6-digit OTP received on WhatsApp.', true);
         if (byId('signup-wa-otp')) byId('signup-wa-otp').focus();
         return;
       }
       if (!email || !email.includes('@')) {
-        message('कृपया सही ईमेल पता दर्ज करें।', true);
+        message('Please enter a valid email address.', true);
         if (byId('signup-email')) byId('signup-email').focus();
         return;
       }
       if (!emailOtp || emailOtp.length !== 6) {
-        message('कृपया Email पर प्राप्त 6 अंकों का OTP दर्ज करें।', true);
+        message('Please enter the 6-digit OTP received on Email.', true);
         if (byId('signup-email-otp')) byId('signup-email-otp').focus();
         return;
       }
       if (!pincode || pincode.length !== 6) {
-        message('कृपया 6 अंकों का वैध Pincode दर्ज करें।', true);
+        message('Please enter a valid 6-digit Pincode.', true);
         if (byId('signup-pincode')) byId('signup-pincode').focus();
         return;
       }
       if (!address || address.length < 3) {
-        message('कृपया GST के अनुसार पूरा पता दर्ज करें।', true);
+        message('Please enter full address as per GST.', true);
         if (byId('signup-address')) byId('signup-address').focus();
         return;
       }
       if (!state || !city) {
-        message('State और City दर्ज करना आवश्यक है।', true);
+        message('State and City are required.', true);
         return;
       }
 
@@ -2596,10 +2685,10 @@ const AUTH_CLIENT_JS = `
         }
         if (byId('created-company-name')) byId('created-company-name').textContent = result.companyName || companyName;
         if (byId('created-user-id')) byId('created-user-id').textContent = result.userId;
-        if (byId('created-password')) byId('created-password').textContent = result.password;
+        if (byId('created-password')) byId('created-password').innerHTML = '<span class="text-success"><i class="fa fa-lock mr-1"></i> Sent on WhatsApp and Email</span>';
         if (byId('credentials-warning')) byId('credentials-warning').textContent = result.message;
         if (byId('created-login-link')) byId('created-login-link').href = '/admin/login?userId=' + encodeURIComponent(result.userId);
-        message('खाता सफलतापूर्वक बनाया गया!', false);
+        message('Account created successfully!', false);
       } catch (error) {
         message(error.message, true);
         if (submitBtn) {
@@ -2616,9 +2705,7 @@ const AUTH_CLIENT_JS = `
       const result = await post('/api/auth/password-reset-otp', { mobile: byId('reset-mobile').value });
       byId('reset-otp-step').hidden = false;
       byId('reset-otp').focus();
-      message(result.developmentOtp
-        ? 'स्थानीय परीक्षण OTP: ' + result.developmentOtp + ' (यह उत्पादन में कभी नहीं दिखेगा)'
-        : result.message);
+      message(result.message || 'OTP has been sent on WhatsApp.');
     } catch (error) {
       message(error.message, true);
     }
@@ -2629,7 +2716,7 @@ const AUTH_CLIENT_JS = `
     event.preventDefault();
     const password = byId('reset-password').value;
     if (password !== byId('reset-password-confirm').value) {
-      message('दोनों पासवर्ड एक जैसे होने चाहिए।', true);
+      message('Both passwords must match.', true);
       return;
     }
     try {
@@ -2665,7 +2752,7 @@ const AUTH_CLIENT_JS = `
 })();
 `;
 
-// 3) रूट allow-list: व्यावसायिक काम के लिए नए handlers यहीं जोड़ें।
+// 3) Route allow-list: Add new business handlers here.
 const routes = new Map([
   ['GET /health', async () => ({
     statusCode: 200,
@@ -2683,7 +2770,7 @@ function startKeepAlivePinger() {
   if (!targetUrl || targetUrl.includes('localhost') || targetUrl.includes('127.0.0.1')) return;
 
   const pingEndpoint = targetUrl.replace(/\/$/, '') + '/health';
-  const INTERVAL_MS = 4 * 60 * 1000; // हर 4 मिनट में पिंग (Render 15 मिनट में सोता है)
+  const INTERVAL_MS = 4 * 60 * 1000; // Ping every 4 minutes (Render sleeps after 15 minutes)
 
   setInterval(() => {
     fetch(pingEndpoint)
@@ -2758,11 +2845,11 @@ async function handleRequest(request, response) {
   let url;
 
   try {
-    // गलत URL और असमर्थित HTTP method रोकें। URL query लॉग/उत्तर में नहीं जाता।
+    // Prevent invalid URLs and unsupported HTTP methods. Query strings not logged or returned.
     url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
     if (url.pathname.length > 2_048) {
       statusCode = 414;
-      sendJson(response, statusCode, { error: 'URL बहुत लंबा है।' });
+      sendJson(response, statusCode, { error: 'URL is too long.' });
       return;
     }
 
@@ -2841,12 +2928,22 @@ async function handleRequest(request, response) {
           }
 
           // If recharge failed, refund buyer
+          const cbWalletMode = await getWalletMode(db);
+          const isCbSeparate = (cbWalletMode === 'separate');
+
           if (newDbStatus === 'failed' && order.status !== 'failed' && order.status !== 'refunded') {
             const refundAmount = BigInt(order.cost_minor || order.amount_minor);
-            await db.query(
-              "UPDATE wallets SET balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-              [refundAmount, order.user_id],
-            );
+            if (isCbSeparate) {
+              await db.query(
+                "UPDATE wallets SET buyer_balance_minor = buyer_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                [refundAmount, order.user_id],
+              );
+            } else {
+              await db.query(
+                "UPDATE wallets SET balance_minor = balance_minor + $1, buyer_balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                [refundAmount, order.user_id],
+              );
+            }
             await db.query(
               `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key)
                SELECT id, $1, $2, 'refund', 'recharge_refund', $3, $4
@@ -2860,10 +2957,17 @@ async function handleRequest(request, response) {
               const sMarginMinor = BigInt(order.seller_margin_minor || 0);
               const sCreditMinor = amountMinor > sMarginMinor ? amountMinor - sMarginMinor : 0n;
               if (sCreditMinor > 0n) {
-                await db.query(
-                  "UPDATE wallets SET balance_minor = GREATEST(0, balance_minor - $1), updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-                  [sCreditMinor, order.seller_user_id],
-                );
+                if (isCbSeparate) {
+                  await db.query(
+                    "UPDATE wallets SET seller_balance_minor = GREATEST(0, seller_balance_minor - $1), balance_minor = GREATEST(0, balance_minor - $1), updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [sCreditMinor, order.seller_user_id],
+                  );
+                } else {
+                  await db.query(
+                    "UPDATE wallets SET balance_minor = GREATEST(0, balance_minor - $1), seller_balance_minor = GREATEST(0, seller_balance_minor - $1), updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [sCreditMinor, order.seller_user_id],
+                  );
+                }
                 await db.query(
                   `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description)
                    SELECT id, $1, $2, 'debit', 'recharge_failed_seller_reversal', $3, $4, $5
@@ -2880,10 +2984,17 @@ async function handleRequest(request, response) {
             const sMarginMinor = BigInt(order.seller_margin_minor || 0);
             const sCreditMinor = amountMinor > sMarginMinor ? amountMinor - sMarginMinor : 0n;
             if (sCreditMinor > 0n) {
-              await db.query(
-                "UPDATE wallets SET balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-                [sCreditMinor, order.seller_user_id],
-              );
+              if (isCbSeparate) {
+                await db.query(
+                  "UPDATE wallets SET seller_balance_minor = seller_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                  [sCreditMinor, order.seller_user_id],
+                );
+              } else {
+                await db.query(
+                  "UPDATE wallets SET balance_minor = balance_minor + $1, seller_balance_minor = seller_balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                  [sCreditMinor, order.seller_user_id],
+                );
+              }
               await db.query(
                 `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description)
                  SELECT id, $1, $2, 'credit', 'seller_sales_credit', $3, $4, $5
@@ -3014,8 +3125,8 @@ async function handleRequest(request, response) {
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (url.pathname === '/api/seller/api-settings') {
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
         const saved = await db.query(
           `SELECT s.id, s.name, s.short_name, s.services, s.mode, s.balance_value, s.balance_key, s.last_balance_at,
                   s.is_active, s.is_admin_approved, s.approval_status, s.rejection_reason, s.callback_ip, s.valid_till, s.config_ciphertext, s.created_at,
@@ -3298,6 +3409,8 @@ async function handleRequest(request, response) {
           await sendUserSettingCallbackPage(session, response);
         } else if (url.pathname === '/available-stock' || url.pathname === '/buyer/available-margin' || url.pathname === '/buyer/available-stock') {
           await sendUserAvailableStockPage(session, response, url.searchParams);
+        } else if (url.pathname === '/account/wallet-exchange' || url.pathname === '/user/account/wallet-exchange') {
+          await sendUserWalletExchangePage(session, response);
         } else {
           await sendUserPanelPage(session, userPage, response);
         }
@@ -3524,6 +3637,14 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/settings/wallet-settings' || url.pathname === '/admin/wallet-settings') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminWalletSettingsPage(admin, response);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -3603,7 +3724,7 @@ async function handleRequest(request, response) {
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         const ids = url.searchParams.getAll('id');
         if (!ids.length || ids.length > 500 || ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id))) {
-          throw httpError('यूज़र सूची सही नहीं है।', 400);
+          throw httpError('Invalid user list.', 400);
         }
         const balances = await db.query(
           `SELECT u.id, COALESCE(w.balance_minor, 0) AS balance_minor
@@ -3643,7 +3764,7 @@ async function handleRequest(request, response) {
 
       if (url.pathname === '/api/auth/me') {
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
+        if (!session) throw httpError('Login required.', 401);
         statusCode = 200;
         sendJson(response, statusCode, { user: { userId: session.username, name: session.name, role: session.role } });
         return;
@@ -3692,11 +3813,11 @@ async function handleRequest(request, response) {
       if (url.pathname === '/api/seller/fetch-response') {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
         const input = await readJson(request);
         const targetUrl = String(input.url || '').trim();
-        if (!targetUrl) throw httpError('Stock API URL आवश्यक है।', 400);
+        if (!targetUrl) throw httpError('Stock API URL is required.', 400);
 
         try {
           const apiResult = await executeStockApiCall({
@@ -3713,15 +3834,15 @@ async function handleRequest(request, response) {
           statusCode = 200;
           return;
         } catch (apiErr) {
-          throw httpError(apiErr.message || 'API कॉल असफल रही।', 400);
+          throw httpError(apiErr.message || 'API call failed.', 400);
         }
       }
 
       if (url.pathname === '/api/seller/api-settings') {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
         const input = await readJson(request);
         const name = String(input.name || '').trim();
         const targetUrl = String(input.url || (input.request && input.request.url) || '').trim();
@@ -3731,11 +3852,15 @@ async function handleRequest(request, response) {
         const parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || []);
         const balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || '').trim();
 
-        if (!name || name.length > 100) throw httpError('API Name 1 से 100 अक्षरों का होना चाहिए।', 400);
-        if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL आवश्यक है।', 400);
+        if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
+        if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL is required.', 400);
 
         let parsedUrl;
-        try { parsedUrl = new URL(targetUrl); } catch { throw httpError('API URL सही नहीं है (http:// या https:// आवश्यक है)।', 400); }
+        try {
+          parsedUrl = await assertSafePublicUrl(targetUrl);
+        } catch (urlErr) {
+          throw httpError(urlErr.message || 'Invalid API URL (valid public http:// or https:// required).', 400);
+        }
 
         // Attempt automatic live balance fetch to verify and get initial balance
         let balanceValue = '';
@@ -3800,8 +3925,8 @@ async function handleRequest(request, response) {
       if (sellerApiActionMatch) {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
         const [, apiId, action] = sellerApiActionMatch;
 
         if (action === 'delete') {
@@ -3824,14 +3949,14 @@ async function handleRequest(request, response) {
           const parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || []);
           const balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || '').trim();
 
-          if (!name || name.length > 100) throw httpError('API Name 1 से 100 अक्षरों का होना चाहिए।', 400);
-          if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL आवश्यक है।', 400);
+          if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
+          if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL is required.', 400);
 
           const row = await db.query(
             'SELECT config_ciphertext, balance_value, last_balance_at FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
 
           let config = {};
           try {
@@ -3928,13 +4053,13 @@ async function handleRequest(request, response) {
           const input = await readJson(request);
           const recharge = input.recharge || input;
           const targetUrl = String(recharge.url || '').trim();
-          if (!targetUrl) throw httpError('Recharge API URL आवश्यक है।', 400);
+          if (!targetUrl) throw httpError('Recharge API URL is required.', 400);
 
           const row = await db.query(
             'SELECT config_ciphertext FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
 
           let config = {};
           try {
@@ -3971,13 +4096,13 @@ async function handleRequest(request, response) {
           const input = await readJson(request);
           const statusCheck = input.statusCheck || input;
           const targetUrl = String(statusCheck.url || '').trim();
-          if (!targetUrl) throw httpError('Status Check API URL आवश्यक है।', 400);
+          if (!targetUrl) throw httpError('Status Check API URL is required.', 400);
 
           const row = await db.query(
             'SELECT config_ciphertext FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
 
           let config = {};
           try {
@@ -4015,13 +4140,13 @@ async function handleRequest(request, response) {
           const input = await readJson(request);
           const dispute = input.dispute || input;
           const targetUrl = String(dispute.url || '').trim();
-          if (!targetUrl) throw httpError('Dispute API URL आवश्यक है।', 400);
+          if (!targetUrl) throw httpError('Dispute API URL is required.', 400);
 
           const row = await db.query(
             'SELECT config_ciphertext FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
 
           let config = {};
           try {
@@ -4057,7 +4182,7 @@ async function handleRequest(request, response) {
             'SELECT config_ciphertext FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
 
           let config = {};
           try {
@@ -4092,7 +4217,7 @@ async function handleRequest(request, response) {
             'SELECT config_ciphertext, balance_key FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
-          if (!row.rowCount) throw httpError('API सेटिंग नहीं मिली।', 404);
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
           let config = {};
           try {
             config = decryptSellerApiConfig(row.rows[0].config_ciphertext);
@@ -4227,7 +4352,7 @@ async function handleRequest(request, response) {
           return;
         }
 
-        throw httpError('अमान्य action।', 400);
+        throw httpError('Invalid action.', 400);
       }
       if (url.pathname === '/api/admin/settings/website') {
         checkSameOrigin(request);
@@ -4235,6 +4360,15 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await handleSaveWebsiteSettings(request, response);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/wallet-mode') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleUpdateWalletMode(request, response, admin);
         statusCode = response.statusCode || 200;
         return;
       }
@@ -4321,8 +4455,8 @@ async function handleRequest(request, response) {
       if (url.pathname === '/api/buyer/disputes') {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
 
         const input = await readJson(request);
         const orderId = String(input.orderId || input.order_id || '').trim();
@@ -4385,6 +4519,14 @@ async function handleRequest(request, response) {
           );
         } catch {}
 
+        if (order.seller_user_id) {
+          await holdDisputeLien(db, {
+            orderId: order.id,
+            sellerId: order.seller_user_id,
+            rechargeAmountMinor: order.amount_minor,
+          }).catch(() => {});
+        }
+
         sendJson(response, 200, { ok: true, message: 'Dispute submitted successfully.', disputeCode: dispCode });
         statusCode = 200;
         return;
@@ -4392,8 +4534,8 @@ async function handleRequest(request, response) {
       if (url.pathname === '/api/seller/disputes/accept') {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
 
         const input = await readJson(request);
         const orderId = String(input.orderId || input.order_id || '').trim();
@@ -4515,6 +4657,15 @@ async function handleRequest(request, response) {
             [note, session.id, order.id],
           ).catch(() => {});
 
+          if (sellerId) {
+            await applyDisputeRefundPenalty(client, {
+              orderId: order.id,
+              sellerId: sellerId,
+              rechargeAmountMinor: amountMinor,
+              reason: note,
+            }).catch(() => {});
+          }
+
           await client.query('COMMIT');
           if (order.seller_api_id) {
             checkAndSuspendSellerApiOnDailyRefund(db, order.seller_api_id).catch(() => {});
@@ -4532,8 +4683,8 @@ async function handleRequest(request, response) {
       if (url.pathname === '/api/seller/disputes/reject') {
         checkSameOrigin(request);
         const session = await getSession(request);
-        if (!session) throw httpError('लॉगिन आवश्यक है।', 401);
-        if (session.role !== 'user') throw httpError('यूज़र access आवश्यक है।', 403);
+        if (!session) throw httpError('Login required.', 401);
+        if (session.role !== 'user') throw httpError('User access required.', 403);
 
         const input = await readJson(request);
         const orderId = String(input.orderId || input.order_id || '').trim();
@@ -4563,6 +4714,11 @@ async function handleRequest(request, response) {
            WHERE order_id = $3`,
           [reason, session.id, orderId],
         ).catch(() => {});
+
+        await releaseDisputeLien(db, {
+          orderId,
+          reason: reason || 'Dispute rejected by seller / recharge verified successful',
+        }).catch(() => {});
 
         sendJson(response, 200, { ok: true, message: 'Dispute rejected.' });
         statusCode = 200;
@@ -4634,6 +4790,15 @@ async function handleRequest(request, response) {
             [note, admin.id, order.id],
           ).catch(() => {});
 
+          if (order.seller_user_id) {
+            await applyDisputeRefundPenalty(client, {
+              orderId: order.id,
+              sellerId: order.seller_user_id,
+              rechargeAmountMinor: refundAmountMinor,
+              reason: note,
+            }).catch(() => {});
+          }
+
           await client.query('COMMIT');
           if (order.seller_api_id) {
             checkAndSuspendSellerApiOnDailyRefund(db, order.seller_api_id).catch(() => {});
@@ -4682,6 +4847,11 @@ async function handleRequest(request, response) {
            WHERE order_id = $3`,
           [note, admin.id, orderId],
         ).catch(() => {});
+
+        await releaseDisputeLien(db, {
+          orderId: orderId,
+          reason: note || 'Dispute rejected by administrator / recharge verified successful',
+        }).catch(() => {});
 
         sendJson(response, 200, { ok: true, message: 'Dispute rejected.' });
         statusCode = 200;
@@ -4821,23 +4991,45 @@ async function handleRequest(request, response) {
         const client = await db.connect();
         try {
           await client.query('BEGIN');
+          const walletMode = await getWalletMode(client);
+          const isSeparate = (walletMode === 'separate');
+
           const walletRes = await client.query(
-            `SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
+            `SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
             [user.id],
           );
           if (!walletRes.rowCount) throw httpError('Wallet not found.', 404);
           const wallet = walletRes.rows[0];
-          const currentBalance = BigInt(wallet.balance_minor || 0);
 
-          if (currentBalance < amountMinor) {
-            throw httpError('अपर्याप्त बैलेंस (Insufficient wallet balance for this payout).', 400);
+          const balanceInfo = await getSellerAvailableBalances(client, user.id);
+          const currentBalance = isSeparate
+            ? BigInt(wallet.seller_balance_minor || 0)
+            : BigInt(wallet.balance_minor || 0);
+
+          if (amountMinor > balanceInfo.availableForRedeemMinor) {
+            let errorMsg = `Insufficient redeemable balance. Available balance for redeem: ₹${balanceInfo.formatted.availableForRedeem}.`;
+            if (balanceInfo.heldForRedeemMinor > 0n) {
+              errorMsg += ` (Recent sales hold: ₹${balanceInfo.formatted.heldForRedeem} - Policy: ${balanceInfo.policy.sellerSaleRedeemHoldMinutes} minutes hold)`;
+            }
+            if (balanceInfo.activeLienMinor > 0n) {
+              errorMsg += ` (Active dispute lien hold: ₹${balanceInfo.formatted.activeLien})`;
+            }
+            throw httpError(errorMsg, 400);
           }
 
-          const newBalance = currentBalance - amountMinor;
-          await client.query(
-            `UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2`,
-            [newBalance, wallet.id],
-          );
+          if (isSeparate) {
+            const newSellerBal = currentBalance - amountMinor;
+            await client.query(
+              `UPDATE wallets SET seller_balance_minor = $1, balance_minor = GREATEST(0, balance_minor - $2), updated_at = now() WHERE id = $3`,
+              [newSellerBal, amountMinor, wallet.id],
+            );
+          } else {
+            const newBalance = currentBalance - amountMinor;
+            await client.query(
+              `UPDATE wallets SET balance_minor = $1, seller_balance_minor = GREATEST(0, seller_balance_minor - $2), updated_at = now() WHERE id = $3`,
+              [newBalance, amountMinor, wallet.id],
+            );
+          }
 
           const payoutRes = await client.query(
             `INSERT INTO payout_requests (
@@ -4879,6 +5071,15 @@ async function handleRequest(request, response) {
         } finally {
           client.release();
         }
+      }
+
+      if (url.pathname === '/api/user/wallet/exchange') {
+        checkSameOrigin(request);
+        const user = await getSession(request);
+        if (!user) throw httpError('login required', 401);
+        await handleUserWalletExchange(request, response, user);
+        statusCode = 200;
+        return;
       }
 
       if (url.pathname === '/api/admin/payment/banks/review') {
@@ -4959,19 +5160,30 @@ async function handleRequest(request, response) {
               [utr, remark || 'Processed successfully', admin.id, payoutId],
             );
           } else {
+            const payoutWalletMode = await getWalletMode(client);
+            const isPayoutSeparate = (payoutWalletMode === 'separate');
+
             const refundAmountMinor = BigInt(payout.amount_minor);
             const walletRes = await client.query(
-              `SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
+              `SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
               [payout.user_id],
             );
             if (!walletRes.rowCount) throw httpError('User wallet not found.', 404);
             const wallet = walletRes.rows[0];
-            const newBal = BigInt(wallet.balance_minor || 0) + refundAmountMinor;
 
-            await client.query(
-              `UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2`,
-              [newBal, wallet.id],
-            );
+            if (isPayoutSeparate) {
+              const newSellerBal = BigInt(wallet.seller_balance_minor || 0) + refundAmountMinor;
+              await client.query(
+                `UPDATE wallets SET seller_balance_minor = $1, balance_minor = balance_minor + $2, updated_at = now() WHERE id = $3`,
+                [newSellerBal, refundAmountMinor, wallet.id],
+              );
+            } else {
+              const newBal = BigInt(wallet.balance_minor || 0) + refundAmountMinor;
+              await client.query(
+                `UPDATE wallets SET balance_minor = $1, seller_balance_minor = seller_balance_minor + $2, updated_at = now() WHERE id = $3`,
+                [newBal, refundAmountMinor, wallet.id],
+              );
+            }
 
             const refundKey = `payout_refund_${payoutId}`;
             await client.query(
@@ -5046,18 +5258,50 @@ async function handleRequest(request, response) {
             [targetUser.id]
           );
           const walletRes = await client.query(
-            "SELECT id, balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
+            "SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE",
             [targetUser.id]
           );
           const wallet = walletRes.rows[0];
-          const currentBal = BigInt(wallet.balance_minor || 0);
+          const walletMode = await getWalletMode(client);
+          const targetWallet = String(input.walletTarget || input.wallet_target || 'buyer').toLowerCase();
+          const isSeparate = (walletMode === 'separate');
 
-          if (actionType === 'debit' && currentBal < amountMinor) {
-            throw httpError(`Insufficient balance. Current balance is ₹${formatMinorUnits(currentBal)}.`, 400);
+          let prevBal = 0n;
+          let newBal = 0n;
+
+          if (isSeparate) {
+            if (targetWallet === 'seller') {
+              prevBal = BigInt(wallet.seller_balance_minor || 0);
+              if (actionType === 'debit' && prevBal < amountMinor) {
+                throw httpError(`Insufficient Seller Wallet balance. Current is ₹${formatMinorUnits(prevBal)}.`, 400);
+              }
+              newBal = actionType === 'credit' ? prevBal + amountMinor : prevBal - amountMinor;
+              await client.query(
+                "UPDATE wallets SET seller_balance_minor = $1, balance_minor = buyer_balance_minor + $1, updated_at = now() WHERE id = $2",
+                [newBal, wallet.id]
+              );
+            } else {
+              prevBal = BigInt(wallet.buyer_balance_minor || 0);
+              if (actionType === 'debit' && prevBal < amountMinor) {
+                throw httpError(`Insufficient Buyer Wallet balance. Current is ₹${formatMinorUnits(prevBal)}.`, 400);
+              }
+              newBal = actionType === 'credit' ? prevBal + amountMinor : prevBal - amountMinor;
+              await client.query(
+                "UPDATE wallets SET buyer_balance_minor = $1, balance_minor = seller_balance_minor + $1, updated_at = now() WHERE id = $2",
+                [newBal, wallet.id]
+              );
+            }
+          } else {
+            prevBal = BigInt(wallet.balance_minor || 0);
+            if (actionType === 'debit' && prevBal < amountMinor) {
+              throw httpError(`Insufficient balance. Current balance is ₹${formatMinorUnits(prevBal)}.`, 400);
+            }
+            newBal = actionType === 'credit' ? prevBal + amountMinor : prevBal - amountMinor;
+            await client.query(
+              "UPDATE wallets SET balance_minor = $1, buyer_balance_minor = $1, updated_at = now() WHERE id = $2",
+              [newBal, wallet.id]
+            );
           }
-
-          const newBal = actionType === 'credit' ? currentBal + amountMinor : currentBal - amountMinor;
-          await client.query("UPDATE wallets SET balance_minor = $1, updated_at = now() WHERE id = $2", [newBal, wallet.id]);
 
           const refKey = `manual_${actionType}_${Date.now()}`;
           await client.query(
@@ -5158,7 +5402,6 @@ async function handleRequest(request, response) {
         sendJson(response, 200, {
           ok: true,
           message: 'OTP sent successfully to both your WhatsApp and Email.',
-          developmentOtp: !IS_PRODUCTION ? otp : undefined,
         });
         statusCode = 200;
         return;
@@ -5315,7 +5558,6 @@ async function handleRequest(request, response) {
         sendJson(response, 200, {
           ok: true,
           message: 'OTP sent successfully to both your WhatsApp and Email.',
-          developmentOtp: !IS_PRODUCTION ? otp : undefined,
         });
         statusCode = 200;
         return;
@@ -5330,8 +5572,10 @@ async function handleRequest(request, response) {
         const callbackUrl = String(input.callbackUrl || '').trim();
         const otp = String(input.otp || '').trim();
 
-        if (!callbackUrl || (!callbackUrl.startsWith('http://') && !callbackUrl.startsWith('https://'))) {
-          throw httpError('Valid HTTP or HTTPS callback URL is required.', 400);
+        try {
+          await assertSafePublicUrl(callbackUrl);
+        } catch (urlErr) {
+          throw httpError(urlErr.message || 'Valid public HTTP or HTTPS callback URL is required. Internal or private network URLs are forbidden.', 400);
         }
         if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
 
@@ -5510,17 +5754,17 @@ async function handleRequest(request, response) {
     if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
       response.setHeader('allow', 'GET, HEAD, POST, PUT, PATCH, DELETE');
       statusCode = 405;
-      sendJson(response, statusCode, { error: 'यह HTTP method समर्थित नहीं है।' });
+      sendJson(response, statusCode, { error: 'HTTP method not supported.' });
       return;
     }
 
-    // HEAD के लिए GET रूट का status/header दें, लेकिन body न भेजें।
+    // For HEAD requests, send GET headers without body.
     const routeKey = `${request.method === 'HEAD' ? 'GET' : request.method} ${url.pathname}`;
     const route = routes.get(routeKey);
     if (!route) {
       statusCode = 404;
       if (isApiRequest(request, url)) {
-        sendJson(response, statusCode, { error: 'यह रास्ता उपलब्ध नहीं है।' });
+        sendJson(response, statusCode, { error: 'Route not found.' });
       } else {
         const session = await getSession(request).catch(() => null);
         sendNotFoundPage(response, { requestedUrl: url.pathname, session });
@@ -5547,14 +5791,14 @@ async function handleRequest(request, response) {
     }
   } catch (error) {
     statusCode = Number.isInteger(error.statusCode) ? error.statusCode : 500;
-    // विवरण केवल स्थानीय server log में; ग्राहक को stack trace नहीं भेजते।
+    // Details logged to server log only; stack trace never sent to client.
     if (statusCode === 500) {
-      console.error('अनुरोध संसाधित करने में त्रुटि:', error);
+      console.error('Error processing request:', error);
       const diagnostic = `${new Date().toISOString()} ${request.method} ${url?.pathname || safePath(request.url)}\n${String(error?.stack || error).slice(0, 6000)}\n\n`;
       await fsp.appendFile(path.join(__dirname, 'exchange-local-error.log'), diagnostic, 'utf8').catch(() => {});
     }
     if (!response.headersSent && !response.destroyed) {
-      const message = statusCode === 500 ? 'सर्वर में आंतरिक त्रुटि हुई।' : error.message;
+      const message = statusCode === 500 ? 'Internal server error occurred.' : error.message;
       if (statusCode === 404 && !isApiRequest(request, url)) {
         const session = await getSession(request).catch(() => null);
         sendNotFoundPage(response, { requestedUrl: url?.pathname, session });
@@ -5563,7 +5807,7 @@ async function handleRequest(request, response) {
       }
     }
   } finally {
-    // संवेदनशील query/body के बिना छोटा संचालन लॉग।
+    // Concise operational log without sensitive query/body parameters.
     console.log(`${request.method} ${safePath(request.url)} ${statusCode} ${Date.now() - startedAt}ms`);
   }
 }
@@ -5576,7 +5820,7 @@ function safePath(requestUrl) {
   }
 }
 
-// 5–6) सर्वर बनाना, टाइमआउट सीमित करना और बंद होते समय अनुरोध पूरे करने देना।
+// 5-6) Server setup, request timeouts, and graceful shutdown.
 const server = http.createServer((request, response) => {
   void handleRequest(request, response);
 });
@@ -5588,7 +5832,7 @@ server.on('clientError', (_error, socket) => {
   if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
 });
 server.on('error', (error) => {
-  console.error('HTTP सर्वर शुरू नहीं हो सका:', error.code || 'अज्ञात त्रुटि');
+  console.error('HTTP server failed to start:', error.code || 'Unknown error');
   process.exitCode = 1;
   void db.end();
 });
@@ -5597,11 +5841,11 @@ async function startServer() {
   try {
     await initializeDatabase();
     server.listen(PORT, HOST, () => {
-      console.log(`Exchange API http://${HOST}:${PORT} पर चल रहा है।`);
-      console.log('✓ Supabase / PostgreSQL डेटाबेस कनेक्शन सक्रिय और तैयार है।');
+      console.log(`Exchange API running at http://${HOST}:${PORT}`);
+      console.log('✓ Supabase / PostgreSQL database connection active and ready.');
     });
   } catch (error) {
-    console.error('✗ डेटाबेस कनेक्शन विफल; API शुरू नहीं की गई:', error.message);
+    console.error('✗ Database connection failed; API not started:', error.message);
     process.exitCode = 1;
     await db.end();
   }
@@ -5610,15 +5854,15 @@ void startServer();
 
 for (const signal of ['SIGINT', 'SIGTERM']) {
   process.on(signal, () => {
-    console.log(`${signal} मिला; सर्वर व्यवस्थित रूप से बंद हो रहा है।`);
+    console.log(`${signal} received; server shutting down gracefully.`);
     server.close((error) => {
       if (error) {
-        console.error('सर्वर बंद करने में त्रुटि:', error);
+        console.error('Error shutting down server:', error);
         process.exitCode = 1;
       }
       void db.end();
     });
-    // लंबे समय तक खुले रहने वाले कनेक्शन पर बंद करना अटका न रहे।
+    // Prevent shutdown hangs from long-lived connections.
     setTimeout(() => server.closeAllConnections(), 5_000).unref();
   });
 }

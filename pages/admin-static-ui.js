@@ -40,7 +40,7 @@ async function serveAdminUi(urlPath, method, response) {
 
   function handleNotFound() {
     if (urlPath.startsWith('/assets/')) {
-      sendJson(response, 404, { error: 'यह फाइल उपलब्ध नहीं है।' });
+      sendJson(response, 404, { error: 'File not found.' });
     } else {
       sendNotFoundPage(response, { requestedUrl: urlPath });
     }
@@ -51,7 +51,7 @@ async function serveAdminUi(urlPath, method, response) {
   try {
     decodedPath = decodeURIComponent(requestedPath);
   } catch {
-    sendJson(response, 400, { error: 'पथ सही प्रारूप में नहीं है।' });
+    sendJson(response, 400, { error: 'Invalid path format.' });
     return true;
   }
 
