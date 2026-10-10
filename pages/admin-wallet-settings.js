@@ -62,12 +62,13 @@ module.exports = function createAdminWalletSettingsPage({
   /**
    * Render Admin Wallet Settings Page
    */
-  async function sendAdminWalletSettingsPage(admin, response) {
+  async function sendAdminWalletSettingsPage(admin, response, query = {}) {
     const policy = await getWalletPolicySettings(db);
     const stats = await fetchWalletStats();
 
     const isSingle = policy.walletMode === 'single';
     const isSeparate = policy.walletMode === 'separate';
+    const isSavedSuccess = String(query?.saved || '').toLowerCase() === 'true' || query?.saved === '1';
 
     const totalBal = formatMinorUnits(stats.total_balance_minor);
     const buyerBal = formatMinorUnits(stats.total_buyer_minor);
@@ -287,8 +288,19 @@ module.exports = function createAdminWalletSettingsPage({
             </div>
           </div>
 
+          <!-- Live Saved Notification & Alert Banner -->
+          ${isSavedSuccess ? `
+          <div class="alert alert-success border-0 shadow-sm mb-4 d-flex align-items-center">
+            <i class="fa fa-circle-check fs-20 me-3 text-success"></i>
+            <div>
+              <strong>Settings Saved!</strong> Wallet mode and policy settings have been updated successfully.
+            </div>
+          </div>` : ''}
+
+          <div id="statusAlert" class="alert d-none mb-4" role="alert"></div>
+
           <!-- Settings Form Start -->
-          <form id="walletSettingsForm" onsubmit="event.preventDefault(); saveAllSettings();">
+          <form id="walletSettingsForm" method="POST" action="/admin/settings/wallet-settings" onsubmit="event.preventDefault(); saveAllSettings();">
 
             <!-- SECTION 1: Single vs Separate Wallet Mode -->
             <div class="card shadow-sm border-0 mb-4">
@@ -691,10 +703,37 @@ module.exports = function createAdminWalletSettingsPage({
   function showToast(message, isError) {
     var toastEl = document.getElementById('liveToast');
     var msgEl = document.getElementById('toastMessage');
-    msgEl.innerHTML = message;
-    toastEl.className = 'toast align-items-center text-white border-0 ' + (isError ? 'bg-danger' : 'bg-success');
-    var toast = new bootstrap.Toast(toastEl, { delay: 4000 });
-    toast.show();
+    var alertEl = document.getElementById('statusAlert');
+
+    if (msgEl) msgEl.innerHTML = message;
+    if (alertEl) {
+      alertEl.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success') + ' d-block shadow-sm';
+      alertEl.innerHTML = '<i class="fa ' + (isError ? 'fa-triangle-exclamation' : 'fa-circle-check') + ' me-2"></i>' + message;
+      try { alertEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
+    }
+
+    if (toastEl) {
+      toastEl.className = 'toast align-items-center text-white border-0 ' + (isError ? 'bg-danger' : 'bg-success');
+      toastEl.style.opacity = '1';
+      toastEl.style.display = 'block';
+
+      if (window.bootstrap && typeof window.bootstrap.Toast === 'function') {
+        try {
+          var toast = new bootstrap.Toast(toastEl, { delay: 4000 });
+          toast.show();
+          return;
+        } catch (_) {}
+      }
+      if (window.jQuery && typeof jQuery.fn.toast === 'function') {
+        try {
+          jQuery(toastEl).toast({ delay: 4000 }).toast('show');
+          return;
+        } catch (_) {}
+      }
+      setTimeout(function() {
+        if (toastEl) toastEl.style.display = 'none';
+      }, 4000);
+    }
   }
 
   async function saveAllSettings() {
@@ -705,18 +744,31 @@ module.exports = function createAdminWalletSettingsPage({
     }
     var mode = selected.value;
 
-    var redeemHoldMin = parseInt(document.getElementById('redeemHoldMin').value, 10) || 0;
-    var exchangeHoldMin = parseInt(document.getElementById('exchangeHoldMin').value, 10) || 0;
-    var disputeLienMult = parseFloat(document.getElementById('disputeLienMult').value) || 1.0;
-    var refundLienMult = parseFloat(document.getElementById('refundLienMult').value) || 1.0;
-    var refundLienDays = parseInt(document.getElementById('refundLienDays').value, 10) || 7;
+    var redeemHoldMin = parseInt(document.getElementById('redeemHoldMin').value, 10);
+    if (isNaN(redeemHoldMin)) redeemHoldMin = 0;
+
+    var exchangeHoldMin = parseInt(document.getElementById('exchangeHoldMin').value, 10);
+    if (isNaN(exchangeHoldMin)) exchangeHoldMin = 0;
+
+    var disputeLienMult = parseFloat(document.getElementById('disputeLienMult').value);
+    if (isNaN(disputeLienMult)) disputeLienMult = 1.0;
+
+    var refundLienMult = parseFloat(document.getElementById('refundLienMult').value);
+    if (isNaN(refundLienMult)) refundLienMult = 1.0;
+
+    var refundLienDays = parseInt(document.getElementById('refundLienDays').value, 10);
+    if (isNaN(refundLienDays)) refundLienDays = 7;
 
     if (redeemHoldMin < 0 || exchangeHoldMin < 0) {
       showToast('Holding time cannot be negative.', true);
       return;
     }
     if (disputeLienMult < 0.1 || refundLienMult < 0) {
-      showToast('Lien multiplier must be a valid positive number.', true);
+      showToast('Lien multiplier must be a valid positive number (or 0 for refund).', true);
+      return;
+    }
+    if (refundLienDays < 0) {
+      showToast('Refund lien days cannot be negative.', true);
       return;
     }
 
@@ -728,7 +780,10 @@ module.exports = function createAdminWalletSettingsPage({
     try {
       var res = await fetch('/api/admin/settings/wallet-mode', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({
           mode: mode,
           sellerSaleRedeemHoldMinutes: redeemHoldMin,
@@ -770,7 +825,7 @@ module.exports = function createAdminWalletSettingsPage({
   }
 
   /**
-   * API Handler: POST /api/admin/settings/wallet-mode
+   * API & Form Handler: POST /api/admin/settings/wallet-mode & /admin/settings/wallet-settings
    */
   async function handleUpdateWalletMode(request, response, admin) {
     if (!admin || admin.role !== 'admin') {
@@ -780,27 +835,51 @@ module.exports = function createAdminWalletSettingsPage({
     let body = '';
     for await (const chunk of request) {
       body += chunk;
-      if (body.length > 10000) throw httpError('Payload too large', 413);
+      if (body.length > 50000) throw httpError('Payload too large', 413);
     }
 
     let payload = {};
-    try {
-      payload = JSON.parse(body);
-    } catch (_) {
-      throw httpError('Invalid JSON', 400);
+    const contentType = String(request.headers['content-type'] || '').toLowerCase();
+    if (contentType.includes('application/json')) {
+      try {
+        payload = JSON.parse(body || '{}');
+      } catch (_) {
+        throw httpError('Invalid JSON', 400);
+      }
+    } else if (contentType.includes('application/x-www-form-urlencoded')) {
+      const params = new URLSearchParams(body);
+      for (const [key, val] of params.entries()) {
+        payload[key] = val;
+      }
+    } else {
+      try {
+        payload = JSON.parse(body || '{}');
+      } catch (_) {
+        const params = new URLSearchParams(body);
+        for (const [key, val] of params.entries()) {
+          payload[key] = val;
+        }
+      }
     }
 
-    const mode = String(payload.mode || payload.walletMode || '').trim().toLowerCase();
+    const mode = String(payload.mode || payload.walletMode || payload.wallet_mode || '').trim().toLowerCase();
     if (mode && !['single', 'separate'].includes(mode)) {
       throw httpError('Invalid mode. Must be "single" or "separate".', 400);
     }
 
     const updated = await setWalletPolicySettings(db, payload, admin.id);
 
+    const accept = String(request.headers['accept'] || '').toLowerCase();
+    if (!accept.includes('application/json') && contentType.includes('application/x-www-form-urlencoded')) {
+      response.writeHead(303, { Location: '/admin/settings/wallet-settings?saved=true' });
+      response.end();
+      return;
+    }
+
     sendJson(response, 200, {
       ok: true,
       settings: updated,
-      message: `Wallet mode & policies successfully updated.`,
+      message: 'Wallet mode & policies successfully updated.',
     });
   }
 

@@ -3699,7 +3699,13 @@ async function handleRequest(request, response) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        await sendAdminWalletSettingsPage(admin, response);
+        if (request.method === 'POST') {
+          checkSameOrigin(request);
+          await handleUpdateWalletMode(request, response, admin);
+          statusCode = response.statusCode || 200;
+          return;
+        }
+        await sendAdminWalletSettingsPage(admin, response, Object.fromEntries(url.searchParams.entries()));
         statusCode = 200;
         return;
       }
@@ -4421,7 +4427,7 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
-      if (url.pathname === '/api/admin/settings/wallet-mode') {
+      if (url.pathname === '/api/admin/settings/wallet-mode' || url.pathname === '/api/admin/settings/wallet-settings') {
         checkSameOrigin(request);
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
