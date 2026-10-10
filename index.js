@@ -131,6 +131,7 @@ const createBuyerApiService = require('./lib/buyer-api-service');
 const { sendWhatsappNotification, sendEmailNotification } = require('./lib/notification-service');
 const { fetchOperatorLookup } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
+const { getClientIp } = require('./lib/client-ip');
 
 // 1) Configuration: PORT and HOST can be configured via environment variables.
 const PORT = parsePort(process.env.PORT, 3000);
@@ -159,12 +160,6 @@ function getServerIp() {
     }
   }
   return '127.0.0.1';
-}
-
-function getClientIp(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (forwarded) return forwarded.split(',')[0].trim();
-  return req.socket?.remoteAddress || '127.0.0.1';
 }
 
 // Supabase PostgreSQL Pool & Supabase Client
@@ -676,6 +671,10 @@ const DATABASE_SCHEMA = `
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS dispute_resolved_at TIMESTAMPTZ;
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS dispute_resolved_by UUID REFERENCES users(id) ON DELETE SET NULL;
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS dispute_resolution_note TEXT DEFAULT '';
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_status TEXT DEFAULT 'none';
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_attempts INT DEFAULT 0;
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_last_sent_at TIMESTAMPTZ;
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_response TEXT;
 
   CREATE TABLE IF NOT EXISTS recharge_disputes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -761,6 +760,7 @@ const DATABASE_SCHEMA = `
     UNIQUE (user_id, ip_address)
   );
   CREATE INDEX IF NOT EXISTS user_whitelisted_ips_user_idx ON user_whitelisted_ips (user_id);
+  UPDATE user_whitelisted_ips SET status = 'approved' WHERE status = 'active';
 
   CREATE TABLE IF NOT EXISTS seller_gst_invoices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -5441,8 +5441,8 @@ async function handleRequest(request, response) {
 
         await db.query(
           `INSERT INTO user_whitelisted_ips (user_id, ip_address, status)
-           VALUES ($1, $2, 'active')
-           ON CONFLICT (user_id, ip_address) DO UPDATE SET status = 'active'`,
+           VALUES ($1, $2, 'approved')
+           ON CONFLICT (user_id, ip_address) DO UPDATE SET status = 'approved'`,
           [session.id, ip],
         );
 

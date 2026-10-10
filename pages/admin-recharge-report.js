@@ -10,6 +10,7 @@ const {
   releaseDisputeLien,
   applyDisputeRefundPenalty,
 } = require('../lib/wallet-helper');
+const { assertSafePublicUrl } = require('../lib/ssrf-filter');
 
 const CIRCLES = [
   'All', 'Andhra Pradesh', 'Assam', 'Bihar & Jharkhand', 'Chennai', 'Delhi', 'Gujarat',
@@ -1653,27 +1654,88 @@ module.exports = function createAdminRechargeReportPage({
       throw httpError('Buyer has not configured a Callback URL in their Settings.', 400);
     }
 
+    let urlObj;
     try {
-      const urlObj = new URL(order.callback_url);
-      urlObj.searchParams.set('status', order.status === 'successful' ? 'SUCCESS' : (order.status === 'pending' ? 'PENDING' : 'FAILURE'));
-      urlObj.searchParams.set('recharge_id', order.id);
-      urlObj.searchParams.set('ref_id', order.idempotency_key);
-      urlObj.searchParams.set('operator', order.operator_code || '');
-      urlObj.searchParams.set('number', order.mobile_number || '');
-      urlObj.searchParams.set('amount', (Number(order.amount_minor) / 100).toFixed(2));
-      urlObj.searchParams.set('operator_ref', order.provider_reference || '');
-      urlObj.searchParams.set('statuscode', order.status === 'successful' ? '0' : (order.status === 'pending' ? '1' : '2'));
+      urlObj = await assertSafePublicUrl(order.callback_url);
+    } catch (urlErr) {
+      await db.query(
+        `UPDATE recharge_orders
+         SET callback_status = 'failed',
+             callback_attempts = callback_attempts + 1,
+             callback_last_sent_at = now(),
+             callback_response = $1
+         WHERE id = $2`,
+        [`SSRF Blocked: ${urlErr.message}`, orderId],
+      ).catch(() => {});
+      throw httpError(`Callback URL is unsafe or private: ${urlErr.message}`, 400);
+    }
 
-      const cbRes = await fetch(urlObj.toString(), {
-        method: 'GET',
+    const payload = {
+      status: order.status === 'successful' ? 'SUCCESS' : (order.status === 'pending' ? 'PENDING' : 'FAILURE'),
+      recharge_id: order.id,
+      ref_id: order.idempotency_key,
+      operator: order.operator_code || '',
+      number: order.mobile_number || '',
+      amount: (Number(order.amount_minor) / 100).toFixed(2),
+      operator_ref: order.provider_reference || '',
+      statuscode: order.status === 'successful' ? '0' : (order.status === 'pending' ? '1' : '2'),
+    };
+
+    try {
+      let cbRes = await fetch(urlObj.toString(), {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'user-agent': 'Exchange-Recharge-Engine/1.0',
+          'x-exchange-event': 'recharge.status_update',
+        },
+        body: JSON.stringify(payload),
         signal: AbortSignal.timeout(10000),
       });
+
+      let resText = await cbRes.text().catch(() => '');
+
+      if (cbRes.status === 405) {
+        // Fallback to GET for legacy endpoints
+        const getUrlObj = new URL(urlObj.toString());
+        for (const [k, v] of Object.entries(payload)) {
+          if (v !== undefined && v !== null) {
+            getUrlObj.searchParams.set(k, String(v));
+          }
+        }
+        cbRes = await fetch(getUrlObj.toString(), {
+          method: 'GET',
+          headers: { 'user-agent': 'Exchange-Recharge-Engine/1.0' },
+          signal: AbortSignal.timeout(10000),
+        });
+        resText = await cbRes.text().catch(() => '');
+      }
+
+      const isDelivered = cbRes.status >= 200 && cbRes.status < 300;
+      await db.query(
+        `UPDATE recharge_orders
+         SET callback_status = $1,
+             callback_attempts = callback_attempts + 1,
+             callback_last_sent_at = now(),
+             callback_response = $2
+         WHERE id = $3`,
+        [isDelivered ? 'delivered' : 'failed', `HTTP ${cbRes.status}: ${resText.slice(0, 200)}`, order.id],
+      );
 
       sendJson(response, 200, {
         ok: true,
         message: `Callback sent to ${order.callback_url} (HTTP ${cbRes.status} ${cbRes.statusText})`,
       });
     } catch (cbErr) {
+      await db.query(
+        `UPDATE recharge_orders
+         SET callback_status = 'failed',
+             callback_attempts = callback_attempts + 1,
+             callback_last_sent_at = now(),
+             callback_response = $1
+         WHERE id = $2`,
+        [`Error: ${cbErr.message}`, order.id],
+      ).catch(() => {});
       throw httpError(`Callback delivery failed: ${cbErr.message}`, 502);
     }
   }
