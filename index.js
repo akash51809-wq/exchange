@@ -830,6 +830,7 @@ const DATABASE_SCHEMA = `
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_days INT NOT NULL DEFAULT 7;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker TEXT DEFAULT 'Welcome to Exchange Recharge Platform! Lightning-fast automated LAPU stock swapping, instant recharge execution, and 24x7 real-time settlement.';
 
   ALTER TABLE wallets ADD COLUMN IF NOT EXISTS lien_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (lien_balance_minor >= 0);
 
@@ -2908,7 +2909,7 @@ async function handleRequest(request, response) {
 
       if (ourTxnId || supplierTxnId) {
         const orderRes = await db.query(
-          `SELECT id, user_id, amount_minor, cost_minor, status, provider_reference, idempotency_key,
+          `SELECT id, user_id, amount_minor, cost_minor, margin_minor, status, provider_reference, idempotency_key,
                   seller_user_id, seller_api_id, seller_margin_minor, mobile_number
            FROM recharge_orders
            WHERE (id::text = $1 OR idempotency_key = $1 OR provider_reference = $1 OR provider_reference = $2)
@@ -2932,7 +2933,22 @@ async function handleRequest(request, response) {
           const isCbSeparate = (cbWalletMode === 'separate');
 
           if (newDbStatus === 'failed' && order.status !== 'failed' && order.status !== 'refunded') {
-            const refundAmount = BigInt(order.cost_minor || order.amount_minor);
+            // Check if buyer margin was already credited (e.g. if order was created successful or credited earlier)
+            const marginEntryRes = await db.query(
+              "SELECT 1 FROM wallet_entries WHERE (idempotency_key = $1 OR idempotency_key = $2) LIMIT 1",
+              [`rech_comm_${order.idempotency_key}`, `cb_comm_${order.id}`],
+            );
+            const marginWasCredited = marginEntryRes.rowCount > 0;
+            const refundAmount = marginWasCredited
+              ? BigInt(order.cost_minor || order.amount_minor)
+              : BigInt(order.amount_minor);
+
+            // Auto-provision buyer wallet to ensure refund credit is not dropped
+            await db.query(
+              "INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR') ON CONFLICT (user_id, currency) DO NOTHING",
+              [order.user_id],
+            );
+
             if (isCbSeparate) {
               await db.query(
                 "UPDATE wallets SET buyer_balance_minor = buyer_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
@@ -2978,29 +2994,71 @@ async function handleRequest(request, response) {
             }
           }
 
-          // If recharge transitioned to successful from pending/processing, credit seller wallet
-          if (newDbStatus === 'successful' && order.status !== 'successful' && order.seller_user_id) {
-            const amountMinor = BigInt(order.amount_minor || 0);
-            const sMarginMinor = BigInt(order.seller_margin_minor || 0);
-            const sCreditMinor = amountMinor > sMarginMinor ? amountMinor - sMarginMinor : 0n;
-            if (sCreditMinor > 0n) {
-              if (isCbSeparate) {
+          // If recharge transitioned to successful from pending/processing:
+          // 1. Credit buyer margin (which was withheld while pending)
+          // 2. Credit seller wallet with sale proceeds
+          if (newDbStatus === 'successful' && order.status !== 'successful') {
+            const buyerCommissionMinor = BigInt(order.margin_minor || 0);
+            if (buyerCommissionMinor > 0n) {
+              const commIdempKey = `cb_comm_${order.id}`;
+              const existingComm = await db.query(
+                "SELECT 1 FROM wallet_entries WHERE (idempotency_key = $1 OR idempotency_key = $2) LIMIT 1",
+                [`rech_comm_${order.idempotency_key}`, commIdempKey],
+              );
+              if (existingComm.rowCount === 0) {
                 await db.query(
-                  "UPDATE wallets SET seller_balance_minor = seller_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-                  [sCreditMinor, order.seller_user_id],
+                  "INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR') ON CONFLICT (user_id, currency) DO NOTHING",
+                  [order.user_id],
                 );
-              } else {
+                if (isCbSeparate) {
+                  await db.query(
+                    "UPDATE wallets SET buyer_balance_minor = buyer_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [buyerCommissionMinor, order.user_id],
+                  );
+                } else {
+                  await db.query(
+                    "UPDATE wallets SET balance_minor = balance_minor + $1, buyer_balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [buyerCommissionMinor, order.user_id],
+                  );
+                }
                 await db.query(
-                  "UPDATE wallets SET balance_minor = balance_minor + $1, seller_balance_minor = seller_balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
-                  [sCreditMinor, order.seller_user_id],
+                  `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, idempotency_key, description)
+                   SELECT id, $1, $2, 'credit', 'buyer_margin', $3, 'buyer margin'
+                   FROM wallets WHERE user_id = $1 AND currency = 'INR'
+                   ON CONFLICT (wallet_id, idempotency_key) DO NOTHING`,
+                  [order.user_id, buyerCommissionMinor, commIdempKey],
                 );
               }
+            }
+
+            // Credit seller wallet
+            if (order.seller_user_id) {
               await db.query(
-                `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description)
-                 SELECT id, $1, $2, 'credit', 'seller_sales_credit', $3, $4, $5
-                 FROM wallets WHERE user_id = $1 AND currency = 'INR'`,
-                [order.seller_user_id, sCreditMinor, order.id, `cb_seller_cred_${order.id}`, `Recharge Sale Credit (${order.mobile_number || ''})`],
+                "INSERT INTO wallets (user_id, currency) VALUES ($1, 'INR') ON CONFLICT (user_id, currency) DO NOTHING",
+                [order.seller_user_id],
               );
+              const amountMinor = BigInt(order.amount_minor || 0);
+              const sMarginMinor = BigInt(order.seller_margin_minor || 0);
+              const sCreditMinor = amountMinor > sMarginMinor ? amountMinor - sMarginMinor : 0n;
+              if (sCreditMinor > 0n) {
+                if (isCbSeparate) {
+                  await db.query(
+                    "UPDATE wallets SET seller_balance_minor = seller_balance_minor + $1, balance_minor = balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [sCreditMinor, order.seller_user_id],
+                  );
+                } else {
+                  await db.query(
+                    "UPDATE wallets SET balance_minor = balance_minor + $1, seller_balance_minor = seller_balance_minor + $1, updated_at = now() WHERE user_id = $2 AND currency = 'INR'",
+                    [sCreditMinor, order.seller_user_id],
+                  );
+                }
+                await db.query(
+                  `INSERT INTO wallet_entries (wallet_id, user_id, amount_minor, entry_type, reference_type, reference_id, idempotency_key, description)
+                   SELECT id, $1, $2, 'credit', 'seller_sales_credit', $3, $4, $5
+                   FROM wallets WHERE user_id = $1 AND currency = 'INR'`,
+                  [order.seller_user_id, sCreditMinor, order.id, `cb_seller_cred_${order.id}`, `Recharge Sale Credit (${order.mobile_number || ''})`],
+                );
+              }
             }
           }
 

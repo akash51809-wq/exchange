@@ -1489,12 +1489,20 @@ module.exports = function createAdminRechargeReportPage({
       if (!orderRes.rowCount) throw httpError('Transaction not found.', 404);
       const order = orderRes.rows[0];
 
-      if (order.status !== 'successful') {
-        throw httpError('Only successful transactions can be marked as failed.', 400);
+      if (order.status !== 'successful' && order.status !== 'pending' && order.status !== 'processing') {
+        throw httpError('Only successful or pending transactions can be marked as failed.', 400);
       }
 
       const buyerId = order.user_id;
-      const refundAmountMinor = BigInt(order.cost_minor || order.amount_minor || '0');
+      // Check if buyer margin was already credited
+      const marginEntryRes = await client.query(
+        "SELECT 1 FROM wallet_entries WHERE (idempotency_key = $1 OR idempotency_key = $2) LIMIT 1",
+        [`rech_comm_${order.idempotency_key}`, `cb_comm_${order.id}`],
+      );
+      const marginWasCredited = marginEntryRes.rowCount > 0 || order.status === 'successful';
+      const refundAmountMinor = marginWasCredited
+        ? BigInt(order.cost_minor || order.amount_minor || '0')
+        : BigInt(order.amount_minor || '0');
 
       const walletMode = await getWalletMode(client);
       const isSeparate = (walletMode === 'separate');
@@ -1533,8 +1541,8 @@ module.exports = function createAdminRechargeReportPage({
         ],
       );
 
-      // 2. Debit credited amount from Seller's wallet if seller was credited
-      if (order.seller_user_id) {
+      // 2. Debit credited amount from Seller's wallet ONLY if seller was previously credited (order was successful)
+      if (order.status === 'successful' && order.seller_user_id) {
         const amtMinor = BigInt(order.amount_minor || '0');
         const sellerMarginMinor = BigInt(order.seller_margin_minor || '0');
         const sellerCreditMinor = amtMinor > sellerMarginMinor ? amtMinor - sellerMarginMinor : 0n;

@@ -308,6 +308,352 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
     assert.strictEqual(refundEntry, undefined, 'Must NOT refund when supplier recharge has succeeded');
   });
 
+  it('handleBuyerRecharge with PENDING status does NOT credit buyer margin or seller sales credit upfront', async () => {
+    const executedQueries = [];
+    const mockClient = {
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('INSERT INTO recharge_orders')) {
+          return { rows: [{ id: 'pending-order-uuid', created_at: new Date() }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => {},
+    };
+
+    const mockDb = {
+      connect: async () => mockClient,
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('SELECT u.id, u.username')) {
+          return { rows: [{ id: 'user-1', username: 'buyer1', status: 'active' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM user_whitelisted_ips')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM admin_service_settings')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-1',
+              operator_name: 'Airtel',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000n,
+              maximum_amount_minor: 1000000n,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          return { rows: [{ id: 'bmargin-1', commission_percent: '2.50', with_gst: false }], rowCount: 1 };
+        }
+        if (sql.includes('FROM seller_margin_settings')) {
+          return {
+            rows: [{
+              seller_margin_id: 'smargin-1',
+              user_id: 'seller-user-1',
+              commission_percent: '3.00',
+              seller_api_id: 'sapi-1',
+              seller_api_name: 'Mock API',
+              config_ciphertext: Buffer.from('mock'),
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM recharge_orders')) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 1 };
+      },
+    };
+
+    let sentStatusCode = 0;
+    let sentPayload = null;
+    const testService = createBuyerApiService({
+      db: mockDb,
+      formatMinorUnits: () => '0.00',
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => b.toString(),
+      decryptSellerApiConfig: () => ({ recharge: { url: 'http://mock.com' } }),
+      decryptServiceConfig: () => ({}),
+      fetchOperatorLookup: async () => null,
+      sendJson: (_res, code, payload) => {
+        sentStatusCode = code;
+        sentPayload = payload;
+      },
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      forwardRechargeToSeller: async () => ({
+        ok: true,
+        status: 'PENDING',
+        supplierTxnId: 'PENDING_TXN_123',
+        operatorTxnId: '',
+        latencyMs: 120,
+        targetUrl: 'http://mock.com',
+        parsedData: { status: 'PENDING' },
+        message: 'Pending',
+      }),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const testUrl = new URL('http://localhost/webservices/api/recharge?api_token=tok123&number=9876543210&amount=100&operator=AIRTEL&ref_id=REF_PENDING_TEST');
+
+    await testService.handleBuyerRecharge(mockReq, mockRes, testUrl);
+
+    assert.strictEqual(sentStatusCode, 200);
+    assert.strictEqual(sentPayload.status, 'PENDING');
+    assert.strictEqual(sentPayload.margin, '0.00', 'Margin must be 0.00 on pending order');
+    assert.strictEqual(sentPayload.net_amount, '100.00', 'Full amount must be held on pending order');
+    assert.strictEqual(sentPayload.closing_balance, '400.00', 'Closing balance must reflect full debit without unearned margin');
+
+    // Verify buyer margin entry was NOT inserted
+    const buyerMarginEntry = executedQueries.find(
+      (q) => q.sql.includes('INSERT INTO wallet_entries') && q.params && q.params.includes('buyer_margin')
+    );
+    assert.strictEqual(buyerMarginEntry, undefined, 'Must NOT credit buyer margin on pending recharge');
+
+    // Verify seller sales credit was NOT inserted
+    const sellerCreditEntry = executedQueries.find(
+      (q) => q.sql.includes('INSERT INTO wallet_entries') && q.params && q.params.includes('seller_sales_credit')
+    );
+    assert.strictEqual(sellerCreditEntry, undefined, 'Must NOT credit seller on pending recharge');
+  });
+
+  it('handleBuyerRecharge with SUCCESS status auto-provisions seller wallet and credits both buyer margin and seller sales credit', async () => {
+    const executedQueries = [];
+    let sellerWalletProvisioned = false;
+
+    const mockClient = {
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('INSERT INTO wallets') && sql.includes('ON CONFLICT (user_id, currency) DO NOTHING')) {
+          sellerWalletProvisioned = true;
+          return { rows: [], rowCount: 1 };
+        }
+        if (sql.includes('FROM wallets') && sql.includes('FOR UPDATE')) {
+          if (params && params.includes('seller-user-1')) {
+            return { rows: [{ id: 'seller-wallet-1', balance_minor: 0n, seller_balance_minor: 0n }], rowCount: 1 };
+          }
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('UPDATE wallets SET buyer_balance_minor = buyer_balance_minor +') || sql.includes('UPDATE wallets SET balance_minor = balance_minor +')) {
+          return { rows: [{ balance_minor: 40250n, buyer_balance_minor: 40250n }], rowCount: 1 };
+        }
+        if (sql.includes('INSERT INTO recharge_orders')) {
+          return { rows: [{ id: 'success-order-uuid', created_at: new Date() }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => {},
+    };
+
+    const mockDb = {
+      connect: async () => mockClient,
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('SELECT u.id, u.username')) {
+          return { rows: [{ id: 'user-1', username: 'buyer1', status: 'active' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM user_whitelisted_ips')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM admin_service_settings')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-1',
+              operator_name: 'Airtel',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000n,
+              maximum_amount_minor: 1000000n,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          return { rows: [{ id: 'bmargin-1', commission_percent: '2.50', with_gst: false }], rowCount: 1 };
+        }
+        if (sql.includes('FROM seller_margin_settings')) {
+          return {
+            rows: [{
+              seller_margin_id: 'smargin-1',
+              user_id: 'seller-user-1',
+              commission_percent: '3.00',
+              seller_api_id: 'sapi-1',
+              seller_api_name: 'Mock API',
+              config_ciphertext: Buffer.from('mock'),
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM recharge_orders')) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 1 };
+      },
+    };
+
+    let sentStatusCode = 0;
+    let sentPayload = null;
+    const testService = createBuyerApiService({
+      db: mockDb,
+      formatMinorUnits: () => '0.00',
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => b.toString(),
+      decryptSellerApiConfig: () => ({ recharge: { url: 'http://mock.com' } }),
+      decryptServiceConfig: () => ({}),
+      fetchOperatorLookup: async () => null,
+      sendJson: (_res, code, payload) => {
+        sentStatusCode = code;
+        sentPayload = payload;
+      },
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      forwardRechargeToSeller: async () => ({
+        ok: true,
+        status: 'SUCCESS',
+        supplierTxnId: 'SUCCESS_TXN_777',
+        operatorTxnId: 'OP_777',
+        latencyMs: 120,
+        targetUrl: 'http://mock.com',
+        parsedData: { status: 'SUCCESS' },
+        message: 'Success',
+      }),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const testUrl = new URL('http://localhost/webservices/api/recharge?api_token=tok123&number=9876543210&amount=100&operator=AIRTEL&ref_id=REF_SUCCESS_TEST');
+
+    await testService.handleBuyerRecharge(mockReq, mockRes, testUrl);
+
+    assert.strictEqual(sentStatusCode, 200);
+    assert.strictEqual(sentPayload.status, 'SUCCESS');
+    assert.strictEqual(sentPayload.margin, '2.50');
+    assert.strictEqual(sentPayload.net_amount, '97.50');
+    assert.strictEqual(sentPayload.closing_balance, '402.50');
+    assert.strictEqual(sellerWalletProvisioned, true, 'Seller wallet must be auto-provisioned');
+
+    // Verify buyer margin entry was inserted
+    const buyerMarginEntry = executedQueries.find(
+      (q) => q.sql.includes('INSERT INTO wallet_entries') && q.sql.includes("'buyer_margin'")
+    );
+    assert.ok(buyerMarginEntry, 'Buyer margin entry must be credited on success');
+
+    // Verify seller sales credit entry was inserted
+    const sellerCreditEntry = executedQueries.find(
+      (q) => q.sql.includes('INSERT INTO wallet_entries') && q.sql.includes("'seller_sales_credit'")
+    );
+    assert.ok(sellerCreditEntry, 'Seller sales credit must be credited on success');
+  });
+
+  it('handleBuyerRecharge rolls back and throws error if seller wallet is missing on SUCCESS', async () => {
+    const executedQueries = [];
+    const mockClient = {
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('FROM wallets') && sql.includes('FOR UPDATE')) {
+          // Simulate seller wallet missing even after provisioning
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes('UPDATE wallets SET buyer_balance_minor = buyer_balance_minor +') || sql.includes('UPDATE wallets SET balance_minor = balance_minor +')) {
+          return { rows: [{ balance_minor: 40250n, buyer_balance_minor: 40250n }], rowCount: 1 };
+        }
+        if (sql.includes('INSERT INTO recharge_orders')) {
+          return { rows: [{ id: 'emergency-order-uuid', created_at: new Date() }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => {},
+    };
+
+    const mockDb = {
+      connect: async () => mockClient,
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('SELECT u.id, u.username')) {
+          return { rows: [{ id: 'user-1', username: 'buyer1', status: 'active' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM user_whitelisted_ips')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM admin_service_settings')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-1',
+              operator_name: 'Airtel',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000n,
+              maximum_amount_minor: 1000000n,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          return { rows: [{ id: 'bmargin-1', commission_percent: '2.50', with_gst: false }], rowCount: 1 };
+        }
+        if (sql.includes('FROM seller_margin_settings')) {
+          return {
+            rows: [{
+              seller_margin_id: 'smargin-1',
+              user_id: 'seller-user-missing-wallet',
+              commission_percent: '3.00',
+              seller_api_id: 'sapi-1',
+              seller_api_name: 'Mock API',
+              config_ciphertext: Buffer.from('mock'),
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM recharge_orders')) return { rows: [], rowCount: 0 };
+        if (sql.includes('INSERT INTO recharge_orders') && sql.includes('ON CONFLICT (user_id, idempotency_key)')) {
+          return { rows: [{ id: 'emergency-order-uuid', created_at: new Date() }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+
+    const testService = createBuyerApiService({
+      db: mockDb,
+      formatMinorUnits: () => '0.00',
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => b.toString(),
+      decryptSellerApiConfig: () => ({ recharge: { url: 'http://mock.com' } }),
+      decryptServiceConfig: () => ({}),
+      fetchOperatorLookup: async () => null,
+      sendJson: () => {},
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      forwardRechargeToSeller: async () => ({
+        ok: true,
+        status: 'SUCCESS',
+        supplierTxnId: 'SUCCESS_TXN_888',
+        operatorTxnId: 'OP_888',
+        latencyMs: 120,
+        targetUrl: 'http://mock.com',
+        parsedData: { status: 'SUCCESS' },
+        message: 'Success',
+      }),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const testUrl = new URL('http://localhost/webservices/api/recharge?api_token=tok123&number=9876543210&amount=100&operator=AIRTEL&ref_id=REF_SELLER_WALLET_ERR');
+
+    await testService.handleBuyerRecharge(mockReq, mockRes, testUrl);
+
+    // Verify rollback was called in finishClient when seller wallet was missing
+    const rollbackQuery = executedQueries.find((q) => q.sql === 'ROLLBACK');
+    assert.ok(rollbackQuery, 'Transaction must rollback if seller wallet cannot be located or provisioned');
+  });
+
   it('authenticateBuyer accepts whitelisted IPs having status approved or active', async () => {
     let queriedSql = '';
     const mockDb = {
