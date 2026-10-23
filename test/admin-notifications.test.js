@@ -139,11 +139,13 @@ test('Admin Notifications - Page Component Rendering', async () => {
 
   await sendAdminNotificationsPage({ id: 'admin-1', role: 'admin' }, mockResponse);
 
-  // Assert essential elements in HTML output
-  assert.ok(responseBody.includes('Notification Settings &amp; Templates') || responseBody.includes('Notification Settings'));
+  // Assert essential elements in HTML output matching reference table UI
+  assert.ok(responseBody.includes('Notification Settings'));
   assert.ok(responseBody.includes('17 Events'));
-  assert.ok(responseBody.includes('WA ON'));
-  assert.ok(responseBody.includes('MAIL ON'));
+  assert.ok(responseBody.includes('SEND WHATSAPP'));
+  assert.ok(responseBody.includes('SEND EMAIL'));
+  assert.ok(responseBody.includes('CONTENT'));
+  assert.ok(responseBody.includes('notificationsTable'));
   assert.ok(responseBody.includes('signup_otp'));
   assert.ok(responseBody.includes('bank_approved_redeem'));
   assert.ok(responseBody.includes('Allowed Event Keywords'));

@@ -35,8 +35,6 @@ module.exports = function createAdminNotificationsPage({ db }) {
       adminAlerts: templates.filter(t => t.recipient_type === 'admin').length,
     };
 
-    const categories = [...new Set(templates.map(t => t.category))];
-
     const templatesJson = escapeHtml(JSON.stringify(templates));
 
     const html = `<!DOCTYPE html>
@@ -54,66 +52,159 @@ module.exports = function createAdminNotificationsPage({ db }) {
   <style>
     body { background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .font-monospace { font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    .stat-card { border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
-    .notif-card { border-radius: 12px; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 4px 16px rgba(0,0,0,0.05); }
-    
-    /* Left List Items */
-    .notif-item {
-      padding: 12px 14px;
-      border-bottom: 1px solid #f1f5f9;
-      cursor: pointer;
-      transition: all 0.15s ease-in-out;
-      border-left: 3px solid transparent;
+    .card-notif-table {
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+      background: #ffffff;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+      overflow: hidden;
     }
-    .notif-item:hover {
+    
+    /* Table Styling matching reference image */
+    .notif-table {
+      margin-bottom: 0;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .notif-table thead th {
+      background-color: #f8fafc;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 14px 16px;
+      border-bottom: 1px solid #e2e8f0;
+      border-top: none;
+      vertical-align: middle;
+    }
+    .notif-table tbody tr {
+      transition: background-color 0.15s ease-in-out;
+    }
+    .notif-table tbody tr:hover {
       background-color: #f8fafc;
     }
-    .notif-item.active {
-      background-color: #eff6ff;
-      border-left-color: #2563eb;
+    .notif-table tbody tr.row-active {
+      background-color: #f1f5f9;
     }
-    .notif-item-title {
+    .notif-table tbody td {
+      padding: 12px 16px;
+      vertical-align: middle;
+      border-bottom: 1px solid #f1f5f9;
       font-size: 13.5px;
-      font-weight: 600;
       color: #1e293b;
-      margin-bottom: 3px;
-    }
-    .notif-item.active .notif-item-title {
-      color: #1d4ed8;
-      font-weight: 700;
     }
     
-    /* Compact Channel Toggles */
-    .btn-toggle-wa, .btn-toggle-email {
+    /* Sr No column */
+    .col-sr {
+      width: 70px;
+      text-align: center;
+      font-weight: 600;
+      color: #64748b;
+    }
+    
+    /* Type column */
+    .col-type {
+      min-width: 260px;
+    }
+    .type-title {
+      font-weight: 600;
+      color: #1e293b;
+      margin-bottom: 2px;
+      font-size: 13.5px;
+    }
+    .type-key {
       font-size: 11px;
-      font-weight: 700;
-      padding: 2px 8px;
-      border-radius: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.3px;
+      color: #64748b;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    
+    /* Modern Slider Switch matching reference image */
+    .switch-wrapper {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
       cursor: pointer;
-      border: 1px solid transparent;
-      transition: all 0.15s;
+      user-select: none;
+      justify-content: center;
     }
-    .btn-toggle-wa.active {
-      background-color: #dcfce7;
-      color: #15803d;
-      border-color: #86efac;
+    .custom-switch-slider {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
     }
-    .btn-toggle-wa.inactive {
-      background-color: #f1f5f9;
-      color: #94a3b8;
-      border-color: #cbd5e1;
+    .custom-switch-slider input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      margin: 0;
     }
-    .btn-toggle-email.active {
-      background-color: #dbeafe;
-      color: #1d4ed8;
-      border-color: #93c5fd;
+    .slider-track {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1;
+      transition: all 0.2s ease-in-out;
+      border-radius: 24px;
     }
-    .btn-toggle-email.inactive {
-      background-color: #f1f5f9;
-      color: #94a3b8;
-      border-color: #cbd5e1;
+    .slider-track:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #ffffff;
+      transition: all 0.2s ease-in-out;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    }
+    .custom-switch-slider input:checked + .slider-track {
+      background-color: #10b981; /* Green active like reference image */
+    }
+    .custom-switch-slider input:checked + .slider-track:before {
+      transform: translateX(20px);
+    }
+    .switch-status-label {
+      font-size: 12.5px;
+      font-weight: 700;
+      width: 26px;
+      text-align: left;
+    }
+    .switch-status-label.status-yes {
+      color: #10b981;
+    }
+    .switch-status-label.status-no {
+      color: #64748b;
+    }
+
+    /* Green Edit Button matching reference image */
+    .btn-content-edit {
+      background-color: #10b981;
+      border: 1px solid #10b981;
+      color: #ffffff;
+      border-radius: 20px;
+      padding: 5px 22px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      transition: all 0.15s ease-in-out;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      text-decoration: none !important;
+      box-shadow: 0 1px 3px rgba(16, 185, 129, 0.2);
+    }
+    .btn-content-edit:hover, .btn-content-edit:focus {
+      background-color: #059669;
+      border-color: #059669;
+      color: #ffffff;
+      box-shadow: 0 3px 8px rgba(16, 185, 129, 0.35);
+      transform: translateY(-1px);
     }
 
     /* Keyword Pills */
@@ -141,7 +232,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
       box-shadow: 0 2px 6px rgba(37,99,235,0.25);
     }
 
-    /* Preview Bubble */
+    /* Live Preview */
     .preview-wa-bubble {
       background-color: #e2f7cb;
       border-radius: 8px 8px 8px 0px;
@@ -160,6 +251,18 @@ module.exports = function createAdminNotificationsPage({ db }) {
       background: #ffffff;
       padding: 14px;
       font-size: 13px;
+    }
+
+    /* Floating Toast */
+    #floatingToast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 10050;
+      min-width: 300px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      border-radius: 8px;
+      display: none;
     }
   </style>
 </head>
@@ -202,237 +305,215 @@ module.exports = function createAdminNotificationsPage({ db }) {
 
     <main class="main-content">
       <div class="container-fluid px-3 py-3">
+
+        <!-- Floating Toast Alert -->
+        <div id="floatingToast" class="alert alert-success alert-dismissible fade show p-3 shadow-lg" role="alert">
+          <div class="d-flex align-items-center">
+            <i class="fa fa-circle-check fa-lg mr-2" id="floatingToastIcon"></i>
+            <span id="floatingToastText" class="font-weight-bold small"></span>
+          </div>
+        </div>
         
-        <!-- Header -->
-        <div class="page-header d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h4 class="page-title mb-1 font-weight-bold text-dark">
-              <i class="fa fa-bell text-primary mr-2"></i> Notification Settings &amp; Templates
-            </h4>
-            <p class="text-muted mb-0 small">Configure automated notification templates and toggle WhatsApp and Email delivery per event.</p>
-          </div>
-          <div>
-            <a href="/admin/settings/service-settings" class="btn btn-outline-secondary btn-sm mr-1">
-              <i class="fa fa-cogs mr-1"></i> Gateway Settings
-            </a>
-            <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.reload()">
-              <i class="fa fa-refresh mr-1"></i> Refresh
-            </button>
-          </div>
-        </div>
+        <!-- Header & Search Bar -->
+        <div class="card card-notif-table mb-3">
+          <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div>
+                <h4 class="page-title mb-1 font-weight-bold text-dark">
+                  <i class="fa fa-bell text-primary mr-2"></i> Notification Settings
+                </h4>
+                <p class="text-muted mb-0 small">Configure automated notification delivery channels and message templates per event.</p>
+              </div>
 
-        <div id="topAlert" class="alert alert-success alert-dismissible fade show py-2 small" style="display:none;" role="alert">
-          <span id="topAlertText"></span>
-          <button type="button" class="close py-2" onclick="document.getElementById('topAlert').style.display='none'"><span>&times;</span></button>
-        </div>
-
-        <!-- KPI Metrics -->
-        <div class="row mb-3">
-          <div class="col-xl-3 col-sm-6 mb-2">
-            <div class="card stat-card mb-0">
-              <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                <div>
-                  <div class="text-muted small font-weight-bold">Total Notifications</div>
-                  <div class="h4 font-weight-bold text-dark mb-0 mt-1">${stats.total} Events</div>
-                </div>
-                <div class="bg-primary-transparent rounded p-2 text-primary" style="font-size:22px;">
-                  <i class="fa fa-list-check"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-xl-3 col-sm-6 mb-2">
-            <div class="card stat-card mb-0">
-              <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                <div>
-                  <div class="text-muted small font-weight-bold">WhatsApp Active</div>
-                  <div class="h4 font-weight-bold text-success mb-0 mt-1">${stats.waActive} / ${stats.total}</div>
-                </div>
-                <div class="bg-success-transparent rounded p-2 text-success" style="font-size:22px;">
-                  <i class="fa-brands fa-whatsapp"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-xl-3 col-sm-6 mb-2">
-            <div class="card stat-card mb-0">
-              <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                <div>
-                  <div class="text-muted small font-weight-bold">Email Active</div>
-                  <div class="h4 font-weight-bold text-primary mb-0 mt-1">${stats.emailActive} / ${stats.total}</div>
-                </div>
-                <div class="bg-info-transparent rounded p-2 text-primary" style="font-size:22px;">
-                  <i class="fa fa-envelope"></i>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="col-xl-3 col-sm-6 mb-2">
-            <div class="card stat-card mb-0">
-              <div class="card-body p-3 d-flex align-items-center justify-content-between">
-                <div>
-                  <div class="text-muted small font-weight-bold">Admin Alert Events</div>
-                  <div class="h4 font-weight-bold text-warning mb-0 mt-1">${stats.adminAlerts} Alerts</div>
-                </div>
-                <div class="bg-warning-transparent rounded p-2 text-warning" style="font-size:22px;">
-                  <i class="fa fa-shield-halved"></i>
-                </div>
+              <!-- Compact KPI counters & Quick Actions -->
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="badge badge-light border text-dark px-2 py-1 mr-1" style="font-size:12px;">
+                  <i class="fa fa-list mr-1 text-primary"></i> Total: <strong id="kpiTotal">${stats.total} Events</strong>
+                </span>
+                <span class="badge badge-light border text-success px-2 py-1 mr-1" style="font-size:12px;">
+                  <i class="fa-brands fa-whatsapp mr-1"></i> WhatsApp: <strong id="kpiWa">${stats.waActive} Yes</strong>
+                </span>
+                <span class="badge badge-light border text-primary px-2 py-1 mr-2" style="font-size:12px;">
+                  <i class="fa fa-envelope mr-1"></i> Email: <strong id="kpiEmail">${stats.emailActive} Yes</strong>
+                </span>
+                <a href="/admin/settings/service-settings" class="btn btn-outline-secondary btn-sm mr-1">
+                  <i class="fa fa-cogs mr-1"></i> Gateways
+                </a>
+                <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.reload()">
+                  <i class="fa fa-refresh mr-1"></i> Refresh
+                </button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Master / Detail Container -->
-        <div class="row">
-          <!-- Left: List of Notifications with Compact On/Off Toggles -->
-          <div class="col-xl-5 col-lg-5 mb-3">
-            <div class="card notif-card h-100">
-              <div class="card-header bg-white py-2 px-3 border-bottom">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="font-weight-bold text-dark mb-0" style="font-size:14px;">
-                    <i class="fa fa-list mr-1 text-primary"></i> Notification List (${templates.length})
-                  </h6>
-                  <span class="badge badge-light border text-muted" style="font-size:11px;">WA &amp; Email Delivery</span>
-                </div>
-              </div>
-              
-              <div class="p-2 border-bottom bg-light">
-                <div class="input-group input-group-sm">
-                  <div class="input-group-prepend"><span class="input-group-text"><i class="fa fa-search"></i></span></div>
-                  <input type="text" class="form-control" id="searchNotifInput" placeholder="Filter notifications by name...">
-                </div>
-              </div>
-
-              <div class="card-body p-0" style="max-height: 720px; overflow-y: auto;" id="notifListContainer">
-                <!-- Dynamically rendered list items -->
+        <!-- Notification List Table (As per Reference Image) -->
+        <div class="card card-notif-table">
+          <div class="card-header bg-white py-3 px-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="font-weight-bold text-dark mb-0">
+              <i class="fa fa-table mr-2 text-primary"></i> Notification List
+            </h6>
+            <div class="d-flex align-items-center" style="max-width: 300px; width: 100%;">
+              <div class="input-group input-group-sm">
+                <div class="input-group-prepend"><span class="input-group-text bg-light border-right-0"><i class="fa fa-search text-muted"></i></span></div>
+                <input type="text" class="form-control border-left-0 bg-light" id="tableSearchInput" placeholder="Search notification type...">
               </div>
             </div>
           </div>
 
-          <!-- Right: Edit Box & Content Customizer -->
-          <div class="col-xl-7 col-lg-7 mb-3">
-            <div class="card notif-card h-100">
-              <div class="card-header bg-white py-2 px-3 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
-                <div>
-                  <span class="badge badge-primary px-2 py-1 mr-1" id="detailRecipientBadge">User</span>
-                  <strong class="text-dark font-weight-bold" id="detailTitle" style="font-size: 15px;">Select a notification</strong>
-                  <div class="text-muted small font-monospace" id="detailEventKey" style="font-size:11px;"></div>
-                </div>
-                <div class="d-flex align-items-center gap-2">
-                  <button type="button" class="btn btn-primary btn-sm font-weight-bold shadow-sm" id="btnSaveTemplate">
-                    <i class="fa fa-save mr-1"></i> Save Changes
-                  </button>
-                </div>
+          <div class="table-responsive">
+            <table class="table notif-table text-nowrap" id="notificationsTable">
+              <thead>
+                <tr>
+                  <th class="col-sr">SR NO</th>
+                  <th class="col-type">TYPE</th>
+                  <th class="text-center" style="width: 160px;">SEND WHATSAPP</th>
+                  <th class="text-center" style="width: 160px;">SEND EMAIL</th>
+                  <th class="text-center" style="width: 130px;">CONTENT</th>
+                </tr>
+              </thead>
+              <tbody id="notifTableBody">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Edit Content Modal Dialog -->
+<div class="modal fade" id="editContentModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true" data-backdrop="static">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content shadow-lg border-0" style="border-radius: 12px; overflow: hidden;">
+      
+      <div class="modal-header bg-light py-3 px-4 border-bottom d-flex justify-content-between align-items-center">
+        <div>
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="badge badge-primary px-2 py-1 mr-2" id="modalRecipientBadge">User</span>
+            <h5 class="modal-title font-weight-bold text-dark mb-0" id="modalTitle">Edit Notification Template</h5>
+          </div>
+          <div class="text-muted small font-monospace" id="modalSubtitle" style="font-size: 11.5px;"></div>
+        </div>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close" style="outline: none;">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body p-4">
+        <!-- Channel switches inside modal -->
+        <div class="row mb-3 bg-light p-2 rounded mx-0 border">
+          <div class="col-sm-6 d-flex align-items-center justify-content-between py-1">
+            <div class="d-flex align-items-center">
+              <i class="fa-brands fa-whatsapp text-success fa-lg mr-2"></i>
+              <div>
+                <span class="font-weight-bold text-dark small d-block">Send WhatsApp</span>
+                <small class="text-muted">Deliver WhatsApp message</small>
               </div>
+            </div>
+            <div class="switch-wrapper">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" id="modalSwitchWa">
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label status-yes" id="modalWaStatusLabel">Yes</span>
+            </div>
+          </div>
+          <div class="col-sm-6 d-flex align-items-center justify-content-between py-1 border-left">
+            <div class="d-flex align-items-center">
+              <i class="fa fa-envelope text-primary fa-lg mr-2"></i>
+              <div>
+                <span class="font-weight-bold text-dark small d-block">Send Email</span>
+                <small class="text-muted">Deliver email message</small>
+              </div>
+            </div>
+            <div class="switch-wrapper">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" id="modalSwitchEmail">
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label status-yes" id="modalEmailStatusLabel">Yes</span>
+            </div>
+          </div>
+        </div>
 
-              <div class="card-body p-3">
-                <div id="noSelectionNotice" class="text-center py-5 text-muted" style="display:none;">
-                  <i class="fa fa-envelope-open-text fa-3x mb-2 text-secondary"></i>
-                  <p class="mb-0">Please select a notification event from the left list to edit its content and channels.</p>
-                </div>
+        <!-- Allowed Dynamic Keywords -->
+        <div class="form-group mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="font-weight-bold text-dark small mb-0">
+              <i class="fa fa-tags text-primary mr-1"></i> Allowed Event Keywords
+            </label>
+            <small class="text-muted"><i class="fa fa-mouse-pointer mr-1"></i> Click any tag to insert into active input</small>
+          </div>
+          <div class="p-2 border rounded bg-white d-flex flex-wrap align-items-center" id="modalKeywordsContainer" style="min-height: 42px;">
+            <!-- Populated dynamically based on event -->
+          </div>
+        </div>
 
-                <div id="editorContent">
-                  <!-- Channel Delivery Switches -->
-                  <div class="row mb-3 bg-light p-2 rounded mx-0 border">
-                    <div class="col-sm-6 d-flex align-items-center justify-content-between py-1">
-                      <div class="d-flex align-items-center">
-                        <i class="fa-brands fa-whatsapp text-success fa-lg mr-2"></i>
-                        <div>
-                          <span class="font-weight-bold text-dark small d-block">Send WhatsApp</span>
-                          <small class="text-muted">Deliver WhatsApp message on this event</small>
-                        </div>
-                      </div>
-                      <div class="custom-control custom-switch ml-2">
-                        <input type="checkbox" class="custom-control-input" id="switchWhatsapp">
-                        <label class="custom-control-label" for="switchWhatsapp"></label>
-                      </div>
-                    </div>
-                    <div class="col-sm-6 d-flex align-items-center justify-content-between py-1 border-left">
-                      <div class="d-flex align-items-center">
-                        <i class="fa fa-envelope text-primary fa-lg mr-2"></i>
-                        <div>
-                          <span class="font-weight-bold text-dark small d-block">Send Email</span>
-                          <small class="text-muted">Deliver email message on this event</small>
-                        </div>
-                      </div>
-                      <div class="custom-control custom-switch ml-2">
-                        <input type="checkbox" class="custom-control-input" id="switchEmail">
-                        <label class="custom-control-label" for="switchEmail"></label>
-                      </div>
-                    </div>
-                  </div>
+        <!-- WhatsApp Message Content -->
+        <div class="form-group mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="font-weight-bold text-dark small mb-0">
+              <i class="fa-brands fa-whatsapp text-success mr-1"></i> WhatsApp Message Content <span class="text-danger">*</span>
+            </label>
+            <small class="text-muted font-monospace" id="modalWaCharCount">0 characters</small>
+          </div>
+          <textarea class="form-control font-monospace" id="modalWaTemplateInput" rows="4" placeholder="Type WhatsApp message template with {{keywords}}..." style="font-size: 13px;"></textarea>
+        </div>
 
-                  <!-- Dynamic / Required Keywords Section -->
-                  <div class="form-group mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                      <label class="font-weight-bold text-dark small mb-0">
-                        <i class="fa fa-tags text-primary mr-1"></i> Allowed Event Keywords
-                      </label>
-                      <small class="text-muted"><i class="fa fa-mouse-pointer mr-1"></i> Click any tag to insert into message</small>
-                    </div>
-                    <div class="p-2 border rounded bg-white d-flex flex-wrap align-items-center" id="keywordPillsContainer" style="min-height: 40px;">
-                      <!-- Populated dynamically based on event -->
-                    </div>
-                  </div>
+        <!-- Email Subject & Content -->
+        <div class="form-group mb-2">
+          <label class="font-weight-bold text-dark small mb-1">
+            <i class="fa fa-heading text-primary mr-1"></i> Email Subject <span class="text-danger">*</span>
+          </label>
+          <input type="text" class="form-control" id="modalEmailSubjectInput" placeholder="e.g. Your Account Verification OTP - {{app_name}}">
+        </div>
 
-                  <!-- WhatsApp Message Content -->
-                  <div class="form-group mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                      <label class="font-weight-bold text-dark small mb-0">
-                        <i class="fa-brands fa-whatsapp text-success mr-1"></i> WhatsApp Message Content <span class="text-danger">*</span>
-                      </label>
-                      <small class="text-muted font-monospace" id="waCharCount">0 characters</small>
-                    </div>
-                    <textarea class="form-control font-monospace" id="waTemplateInput" rows="4" placeholder="Type WhatsApp message template with {{keywords}}..." style="font-size: 13px;"></textarea>
-                  </div>
+        <div class="form-group mb-3">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="font-weight-bold text-dark small mb-0">
+              <i class="fa fa-envelope text-primary mr-1"></i> Email Body Template <span class="text-danger">*</span>
+            </label>
+            <small class="text-muted font-monospace" id="modalEmailCharCount">0 characters</small>
+          </div>
+          <textarea class="form-control font-monospace" id="modalEmailTemplateInput" rows="5" placeholder="Type Email body template with {{keywords}}..." style="font-size: 13px;"></textarea>
+        </div>
 
-                  <!-- Email Subject & Content -->
-                  <div class="form-group mb-2">
-                    <label class="font-weight-bold text-dark small mb-1">
-                      <i class="fa fa-heading text-primary mr-1"></i> Email Subject <span class="text-danger">*</span>
-                    </label>
-                    <input type="text" class="form-control" id="emailSubjectInput" placeholder="e.g. Your Account Verification OTP - {{app_name}}">
-                  </div>
-
-                  <div class="form-group mb-3">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                      <label class="font-weight-bold text-dark small mb-0">
-                        <i class="fa fa-envelope text-primary mr-1"></i> Email Body Template <span class="text-danger">*</span>
-                      </label>
-                      <small class="text-muted font-monospace" id="emailCharCount">0 characters</small>
-                    </div>
-                    <textarea class="form-control font-monospace" id="emailTemplateInput" rows="6" placeholder="Type Email body template with {{keywords}}..." style="font-size: 13px;"></textarea>
-                  </div>
-
-                  <!-- Live Rendered Preview -->
-                  <div class="card bg-light border mb-0">
-                    <div class="card-header bg-transparent py-2 border-bottom d-flex justify-content-between align-items-center">
-                      <span class="font-weight-bold small text-dark"><i class="fa fa-eye text-info mr-1"></i> Simulated Live Preview</span>
-                      <small class="text-muted">Simulates variable substitution</small>
-                    </div>
-                    <div class="card-body p-3">
-                      <div class="mb-2">
-                        <span class="badge badge-success px-2 py-1 mb-1"><i class="fa-brands fa-whatsapp mr-1"></i> WhatsApp Preview</span>
-                        <div class="preview-wa-bubble" id="previewWaBubble">—</div>
-                      </div>
-                      <div class="mt-3">
-                        <span class="badge badge-primary px-2 py-1 mb-1"><i class="fa fa-envelope mr-1"></i> Email Preview</span>
-                        <div class="preview-email-box">
-                          <div class="font-weight-bold border-bottom pb-1 mb-2 text-dark" id="previewEmailSubject">—</div>
-                          <div style="white-space: pre-wrap;" id="previewEmailBody">—</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
+        <!-- Live Rendered Preview -->
+        <div class="card bg-light border mb-0">
+          <div class="card-header bg-transparent py-2 border-bottom d-flex justify-content-between align-items-center">
+            <span class="font-weight-bold small text-dark"><i class="fa fa-eye text-info mr-1"></i> Simulated Live Preview</span>
+            <small class="text-muted">Simulates variable substitution</small>
+          </div>
+          <div class="card-body p-3">
+            <div class="mb-2">
+              <span class="badge badge-success px-2 py-1 mb-1"><i class="fa-brands fa-whatsapp mr-1"></i> WhatsApp Preview</span>
+              <div class="preview-wa-bubble" id="modalPreviewWaBubble">—</div>
+            </div>
+            <div class="mt-3">
+              <span class="badge badge-primary px-2 py-1 mb-1"><i class="fa fa-envelope mr-1"></i> Email Preview</span>
+              <div class="preview-email-box">
+                <div class="font-weight-bold border-bottom pb-1 mb-2 text-dark" id="modalPreviewEmailSubject">—</div>
+                <div style="white-space: pre-wrap;" id="modalPreviewEmailBody">—</div>
               </div>
             </div>
           </div>
         </div>
 
       </div>
-    </main>
+
+      <div class="modal-footer bg-light py-2 px-4 border-top d-flex justify-content-between">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">
+          <i class="fa fa-times mr-1"></i> Cancel
+        </button>
+        <button type="button" class="btn btn-primary btn-sm font-weight-bold shadow-sm" id="btnSaveModalTemplate">
+          <i class="fa fa-save mr-1"></i> Save Changes
+        </button>
+      </div>
+
+    </div>
   </div>
 </div>
 
@@ -442,11 +523,11 @@ module.exports = function createAdminNotificationsPage({ db }) {
 <script>
 (function() {
   const rawTemplates = ${templatesJson};
-  let currentKey = (rawTemplates[0] && rawTemplates[0].event_key) || null;
+  let activeEditingKey = null;
   let lastFocusedInput = null;
 
-  // Track focused textarea/input for keyword insertion
-  ['waTemplateInput', 'emailSubjectInput', 'emailTemplateInput'].forEach(id => {
+  // Track focused input inside modal for keyword insertion
+  ['modalWaTemplateInput', 'modalEmailSubjectInput', 'modalEmailTemplateInput'].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
       el.addEventListener('focus', () => { lastFocusedInput = el; });
@@ -454,18 +535,28 @@ module.exports = function createAdminNotificationsPage({ db }) {
   });
 
   function showToast(msg, isError = false) {
-    const alertBox = document.getElementById('topAlert');
-    const textEl = document.getElementById('topAlertText');
-    alertBox.className = 'alert py-2 small alert-dismissible fade show ' + (isError ? 'alert-danger' : 'alert-success');
+    const toast = document.getElementById('floatingToast');
+    const textEl = document.getElementById('floatingToastText');
+    const iconEl = document.getElementById('floatingToastIcon');
+    toast.className = 'alert alert-dismissible fade show p-3 shadow-lg ' + (isError ? 'alert-danger' : 'alert-success');
+    iconEl.className = 'fa mr-2 ' + (isError ? 'fa-triangle-exclamation' : 'fa-circle-check');
     textEl.textContent = msg;
-    alertBox.style.display = 'block';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-    setTimeout(() => { alertBox.style.display = 'none'; }, 3500);
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3500);
   }
 
-  function renderList(filterText = '') {
-    const container = document.getElementById('notifListContainer');
-    const term = filterText.toLowerCase().trim();
+  function updateKpis() {
+    const total = rawTemplates.length;
+    const wa = rawTemplates.filter(t => t.whatsapp_enabled).length;
+    const email = rawTemplates.filter(t => t.email_enabled).length;
+    document.getElementById('kpiTotal').textContent = total + ' Events';
+    document.getElementById('kpiWa').textContent = wa + ' Yes';
+    document.getElementById('kpiEmail').textContent = email + ' Yes';
+  }
+
+  function renderTable(searchTerm = '') {
+    const tbody = document.getElementById('notifTableBody');
+    const term = searchTerm.toLowerCase().trim();
 
     const filtered = rawTemplates.filter(t => {
       if (!term) return true;
@@ -475,213 +566,90 @@ module.exports = function createAdminNotificationsPage({ db }) {
     });
 
     if (filtered.length === 0) {
-      container.innerHTML = '<div class="text-center py-4 text-muted small"><i class="fa fa-search mb-1 d-block" style="font-size:18px;"></i>No notifications match your search.</div>';
+      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fa fa-search mb-1 d-block" style="font-size:18px;"></i>No notification events found matching your search.</td></tr>';
       return;
     }
 
-    container.innerHTML = filtered.map(t => {
-      const isSelected = t.event_key === currentKey;
+    tbody.innerHTML = filtered.map((t, idx) => {
       const isAdmin = t.recipient_type === 'admin';
-      const waClass = t.whatsapp_enabled ? 'active' : 'inactive';
-      const waLabel = t.whatsapp_enabled ? 'WA ON' : 'WA OFF';
-      const emailClass = t.email_enabled ? 'active' : 'inactive';
-      const emailLabel = t.email_enabled ? 'MAIL ON' : 'MAIL OFF';
+      const waChecked = Boolean(t.whatsapp_enabled);
+      const emailChecked = Boolean(t.email_enabled);
+
       const recBadge = isAdmin 
-        ? '<span class="badge badge-warning text-dark px-1" style="font-size:10px;"><i class="fa fa-user-shield mr-1"></i>Admin Alert</span>' 
-        : '<span class="badge badge-light border text-muted px-1" style="font-size:10px;">User</span>';
+        ? '<span class="badge badge-warning text-dark px-1 ml-1" style="font-size:10px;"><i class="fa fa-shield-halved mr-1"></i>Admin Alert</span>' 
+        : '';
 
       return \`
-        <div class="notif-item \${isSelected ? 'active' : ''}" data-key="\${t.event_key}">
-          <div class="d-flex justify-content-between align-items-start">
-            <div style="flex: 1; min-width: 0;">
-              <div class="d-flex align-items-center mb-1">
-                <span class="notif-item-title text-truncate mr-2">\${t.title}</span>
-                \${recBadge}
-              </div>
-              <div class="text-muted font-monospace" style="font-size: 11px;">\${t.event_key}</div>
+        <tr data-key="\${t.event_key}">
+          <td class="col-sr">\${idx + 1}</td>
+          <td class="col-type">
+            <div class="d-flex align-items-center flex-wrap">
+              <span class="type-title mr-1">\${t.title}</span>
+              \${recBadge}
             </div>
-            <div class="d-flex gap-1 ml-2" onclick="event.stopPropagation();">
-              <button type="button" class="btn btn-toggle-wa \${waClass}" data-key="\${t.event_key}" title="Toggle WhatsApp Delivery">
-                <i class="fa-brands fa-whatsapp mr-1"></i>\${waLabel}
-              </button>
-              <button type="button" class="btn btn-toggle-email \${emailClass} ml-1" data-key="\${t.event_key}" title="Toggle Email Delivery">
-                <i class="fa fa-envelope mr-1"></i>\${emailLabel}
-              </button>
+            <div class="type-key">\${t.event_key}</div>
+          </td>
+          <td class="text-center">
+            <div class="switch-wrapper" data-channel="whatsapp" data-key="\${t.event_key}">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" class="toggle-channel-wa" data-key="\${t.event_key}" \${waChecked ? 'checked' : ''}>
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label \${waChecked ? 'status-yes' : 'status-no'}">\${waChecked ? 'Yes' : 'No'}</span>
             </div>
-          </div>
-        </div>
+          </td>
+          <td class="text-center">
+            <div class="switch-wrapper" data-channel="email" data-key="\${t.event_key}">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" class="toggle-channel-email" data-key="\${t.event_key}" \${emailChecked ? 'checked' : ''}>
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label \${emailChecked ? 'status-yes' : 'status-no'}">\${emailChecked ? 'Yes' : 'No'}</span>
+            </div>
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn-content-edit" data-key="\${t.event_key}">
+              Edit
+            </button>
+          </td>
+        </tr>
       \`;
     }).join('');
 
-    // Bind item selection clicks
-    container.querySelectorAll('.notif-item').forEach(el => {
-      el.addEventListener('click', () => {
-        const key = el.getAttribute('data-key');
-        selectNotification(key);
+    // Attach switch change listeners
+    tbody.querySelectorAll('.toggle-channel-wa').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const key = input.getAttribute('data-key');
+        const nextState = input.checked;
+        await handleQuickToggle(key, 'whatsapp', nextState, input);
       });
     });
 
-    // Bind quick toggle buttons in list
-    container.querySelectorAll('.btn-toggle-wa').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
+    tbody.querySelectorAll('.toggle-channel-email').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const key = input.getAttribute('data-key');
+        const nextState = input.checked;
+        await handleQuickToggle(key, 'email', nextState, input);
+      });
+    });
+
+    // Attach Edit button listeners
+    tbody.querySelectorAll('.btn-content-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
         const key = btn.getAttribute('data-key');
-        const item = rawTemplates.find(x => x.event_key === key);
-        if (!item) return;
-        const nextState = !item.whatsapp_enabled;
-        await quickToggle(key, 'whatsapp', nextState);
-      });
-    });
-
-    container.querySelectorAll('.btn-toggle-email').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const key = btn.getAttribute('data-key');
-        const item = rawTemplates.find(x => x.event_key === key);
-        if (!item) return;
-        const nextState = !item.email_enabled;
-        await quickToggle(key, 'email', nextState);
+        openEditModal(key);
       });
     });
   }
 
-  function selectNotification(key) {
-    currentKey = key;
-    const item = rawTemplates.find(x => x.event_key === key);
-    if (!item) return;
+  async function handleQuickToggle(key, channel, nextState, inputEl) {
+    const labelSpan = inputEl.closest('.switch-wrapper').querySelector('.switch-status-label');
+    const originalChecked = !nextState;
 
-    renderList(document.getElementById('searchNotifInput').value);
-
-    // Update Header
-    document.getElementById('detailTitle').textContent = item.title;
-    document.getElementById('detailEventKey').textContent = item.event_key + ' (' + item.category + ')';
-    const recBadge = document.getElementById('detailRecipientBadge');
-    if (item.recipient_type === 'admin') {
-      recBadge.className = 'badge badge-warning text-dark px-2 py-1 mr-1';
-      recBadge.innerHTML = '<i class="fa fa-user-shield mr-1"></i> Admin Number Alert';
-    } else {
-      recBadge.className = 'badge badge-primary px-2 py-1 mr-1';
-      recBadge.innerHTML = '<i class="fa fa-user mr-1"></i> Client / User Message';
-    }
-
-    // Switches
-    document.getElementById('switchWhatsapp').checked = Boolean(item.whatsapp_enabled);
-    document.getElementById('switchEmail').checked = Boolean(item.email_enabled);
-
-    // Inputs
-    document.getElementById('waTemplateInput').value = item.whatsapp_template || '';
-    document.getElementById('emailSubjectInput').value = item.email_subject || '';
-    document.getElementById('emailTemplateInput').value = item.email_template || '';
-
-    // Render keyword pills
-    const pillsContainer = document.getElementById('keywordPillsContainer');
-    const keywords = Array.isArray(item.allowed_keywords) ? item.allowed_keywords : [];
-    if (keywords.length > 0) {
-      pillsContainer.innerHTML = keywords.map(kw => {
-        const fullTag = '{{' + kw + '}}';
-        return '<button type="button" class="keyword-pill" data-tag="' + fullTag + '" title="Click to insert ' + fullTag + '"><i class="fa fa-plus text-primary mr-1" style="font-size:9px;"></i>' + fullTag + '</button>';
-      }).join('');
-
-      pillsContainer.querySelectorAll('.keyword-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-          const tag = pill.getAttribute('data-tag');
-          insertTagIntoActiveInput(tag);
-        });
-      });
-    } else {
-      pillsContainer.innerHTML = '<span class="text-muted small">No specific dynamic variables for this template.</span>';
-    }
-
-    updateCounters();
-    updatePreview();
-  }
-
-  function insertTagIntoActiveInput(tag) {
-    const target = lastFocusedInput || document.getElementById('waTemplateInput');
-    if (!target) return;
-
-    const start = target.selectionStart || 0;
-    const end = target.selectionEnd || 0;
-    const val = target.value;
-    target.value = val.substring(0, start) + tag + val.substring(end);
-    target.focus();
-    target.selectionStart = target.selectionEnd = start + tag.length;
-
-    updateCounters();
-    updatePreview();
-  }
-
-  function updateCounters() {
-    const wa = document.getElementById('waTemplateInput').value;
-    const email = document.getElementById('emailTemplateInput').value;
-    document.getElementById('waCharCount').textContent = wa.length + ' characters';
-    document.getElementById('emailCharCount').textContent = email.length + ' characters';
-  }
-
-  function updatePreview() {
-    const item = rawTemplates.find(x => x.event_key === currentKey);
-    if (!item) return;
-
-    const sampleData = {
-      name: 'Rohan Sharma',
-      user_name: 'Rohan Sharma',
-      username: 'rohan_pay',
-      seller_name: 'FastPay Solutions',
-      otp: '749201',
-      expiry_minutes: '10',
-      app_name: 'Exchange Portal',
-      login_url: window.location.origin + '/login',
-      kyc_url: window.location.origin + '/setting/kyc',
-      reset_url: window.location.origin + '/reset-password?token=xyz987',
-      date_time: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      ip_address: '103.21.244.52',
-      device: 'Chrome on Windows 11',
-      amount: '5000.00',
-      utr: '429381928301',
-      bank_name: 'State Bank of India',
-      account_number: '394829103948',
-      admin_url: window.location.origin + '/admin/payment/fund-request',
-      status: 'approved',
-      reason: 'Transaction verified and credited',
-      wallet_balance: '12,500.00',
-      current_balance: '120.00',
-      threshold_amount: '500.00',
-      topup_url: window.location.origin + '/fund/wallet-topup-request',
-      order_id: 'EX-93821',
-      operator: 'Jio Mobile',
-      mobile_number: '9876543210',
-      complaint_id: 'DISP-4012'
-    };
-
-    const substitute = (text) => {
-      if (!text) return '—';
-      return text.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_, k) => {
-        return sampleData[k] !== undefined ? sampleData[k] : ('{{' + k + '}}');
-      });
-    };
-
-    const waText = document.getElementById('waTemplateInput').value;
-    const emailSubject = document.getElementById('emailSubjectInput').value;
-    const emailBody = document.getElementById('emailTemplateInput').value;
-
-    document.getElementById('previewWaBubble').textContent = substitute(waText);
-    document.getElementById('previewEmailSubject').textContent = 'Subject: ' + substitute(emailSubject);
-    document.getElementById('previewEmailBody').textContent = substitute(emailBody);
-  }
-
-  // Live preview typing listeners
-  document.getElementById('waTemplateInput').addEventListener('input', () => { updateCounters(); updatePreview(); });
-  document.getElementById('emailSubjectInput').addEventListener('input', updatePreview);
-  document.getElementById('emailTemplateInput').addEventListener('input', () => { updateCounters(); updatePreview(); });
-
-  // Search filter
-  document.getElementById('searchNotifInput').addEventListener('input', (e) => {
-    renderList(e.target.value);
-  });
-
-  // Quick toggle helper
-  async function quickToggle(key, channel, nextState) {
     try {
+      labelSpan.textContent = nextState ? 'Yes' : 'No';
+      labelSpan.className = 'switch-status-label ' + (nextState ? 'status-yes' : 'status-no');
+
       const res = await fetch('/api/admin/settings/notifications/toggle', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -696,36 +664,183 @@ module.exports = function createAdminNotificationsPage({ db }) {
         if (channel === 'whatsapp') item.whatsapp_enabled = nextState;
         if (channel === 'email') item.email_enabled = nextState;
       }
-      renderList(document.getElementById('searchNotifInput').value);
-      if (currentKey === key) {
-        document.getElementById('switchWhatsapp').checked = Boolean(item.whatsapp_enabled);
-        document.getElementById('switchEmail').checked = Boolean(item.email_enabled);
-      }
-      showToast(key + ' ' + channel.toUpperCase() + ' delivery turned ' + (nextState ? 'ON' : 'OFF'));
+      updateKpis();
+      showToast(item.title + ' ' + channel.toUpperCase() + ' delivery turned ' + (nextState ? 'YES' : 'NO'));
     } catch (err) {
+      inputEl.checked = originalChecked;
+      labelSpan.textContent = originalChecked ? 'Yes' : 'No';
+      labelSpan.className = 'switch-status-label ' + (originalChecked ? 'status-yes' : 'status-no');
       showToast(err.message, true);
     }
   }
 
-  // Save changes button
-  document.getElementById('btnSaveTemplate').addEventListener('click', async () => {
-    const item = rawTemplates.find(x => x.event_key === currentKey);
+  function openEditModal(key) {
+    activeEditingKey = key;
+    const item = rawTemplates.find(x => x.event_key === key);
     if (!item) return;
 
-    const btn = document.getElementById('btnSaveTemplate');
+    // Header info
+    document.getElementById('modalTitle').textContent = item.title;
+    document.getElementById('modalSubtitle').textContent = 'Key: ' + item.event_key + ' | Category: ' + item.category;
+    const badge = document.getElementById('modalRecipientBadge');
+    if (item.recipient_type === 'admin') {
+      badge.className = 'badge badge-warning text-dark px-2 py-1 mr-2';
+      badge.innerHTML = '<i class="fa fa-shield-halved mr-1"></i> Admin Alert';
+    } else {
+      badge.className = 'badge badge-primary px-2 py-1 mr-2';
+      badge.innerHTML = '<i class="fa fa-user mr-1"></i> User Message';
+    }
+
+    // Switches in modal
+    const switchWa = document.getElementById('modalSwitchWa');
+    const switchEmail = document.getElementById('modalSwitchEmail');
+    switchWa.checked = Boolean(item.whatsapp_enabled);
+    switchEmail.checked = Boolean(item.email_enabled);
+    updateModalSwitchLabels();
+
+    // Inputs
+    document.getElementById('modalWaTemplateInput').value = item.whatsapp_template || '';
+    document.getElementById('modalEmailSubjectInput').value = item.email_subject || '';
+    document.getElementById('modalEmailTemplateInput').value = item.email_template || '';
+
+    // Render keyword tags
+    const container = document.getElementById('modalKeywordsContainer');
+    const keywords = Array.isArray(item.allowed_keywords) ? item.allowed_keywords : [];
+    if (keywords.length > 0) {
+      container.innerHTML = keywords.map(kw => {
+        const fullTag = '{{' + kw + '}}';
+        return '<button type="button" class="keyword-pill" data-tag="' + fullTag + '" title="Click to insert ' + fullTag + '"><i class="fa fa-plus text-primary mr-1" style="font-size:9px;"></i>' + fullTag + '</button>';
+      }).join('');
+
+      container.querySelectorAll('.keyword-pill').forEach(pill => {
+        pill.addEventListener('click', () => {
+          const tag = pill.getAttribute('data-tag');
+          insertTagIntoActiveInput(tag);
+        });
+      });
+    } else {
+      container.innerHTML = '<span class="text-muted small">No specific dynamic variables for this template.</span>';
+    }
+
+    updateModalCounters();
+    updateModalPreview();
+
+    $('#editContentModal').modal('show');
+  }
+
+  function updateModalSwitchLabels() {
+    const waChecked = document.getElementById('modalSwitchWa').checked;
+    const emailChecked = document.getElementById('modalSwitchEmail').checked;
+    const waLabel = document.getElementById('modalWaStatusLabel');
+    const emailLabel = document.getElementById('modalEmailStatusLabel');
+    waLabel.textContent = waChecked ? 'Yes' : 'No';
+    waLabel.className = 'switch-status-label ' + (waChecked ? 'status-yes' : 'status-no');
+    emailLabel.textContent = emailChecked ? 'Yes' : 'No';
+    emailLabel.className = 'switch-status-label ' + (emailChecked ? 'status-yes' : 'status-no');
+  }
+
+  document.getElementById('modalSwitchWa').addEventListener('change', updateModalSwitchLabels);
+  document.getElementById('modalSwitchEmail').addEventListener('change', updateModalSwitchLabels);
+
+  function insertTagIntoActiveInput(tag) {
+    const target = lastFocusedInput || document.getElementById('modalWaTemplateInput');
+    if (!target) return;
+
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const val = target.value;
+    target.value = val.substring(0, start) + tag + val.substring(end);
+    target.focus();
+    target.selectionStart = target.selectionEnd = start + tag.length;
+
+    updateModalCounters();
+    updateModalPreview();
+  }
+
+  function updateModalCounters() {
+    const waVal = document.getElementById('modalWaTemplateInput').value;
+    const emailVal = document.getElementById('modalEmailTemplateInput').value;
+    document.getElementById('modalWaCharCount').textContent = waVal.length + ' characters';
+    document.getElementById('modalEmailCharCount').textContent = emailVal.length + ' characters';
+  }
+
+  function updateModalPreview() {
+    const item = rawTemplates.find(x => x.event_key === activeEditingKey);
+    const dummyData = {
+      name: 'Ramesh Kumar',
+      username: 'ramesh99',
+      otp: '739201',
+      expiry_minutes: '10',
+      login_url: 'https://exchange.portal/login',
+      kyc_url: 'https://exchange.portal/kyc',
+      reset_otp: '582910',
+      reset_url: 'https://exchange.portal/reset-password',
+      date_time: '23-Oct-2026 07:45 PM',
+      ip_address: '103.21.58.12',
+      device: 'Chrome on Android',
+      amount: '5,000.00',
+      utr: 'UTR9823417729',
+      payout_utr: 'PAY77294821',
+      bank_name: 'State Bank of India',
+      account_number: '•••• 4589',
+      ifsc: 'SBIN0001234',
+      request_id: 'REQ-10482',
+      status: 'APPROVED',
+      current_balance: '14,250.00',
+      remark: 'Verified and approved',
+      seller_name: 'Apex Telecom',
+      order_id: 'ORD-84920',
+      operator: 'Jio Prepaid',
+      mobile_number: '9876543210',
+      created_at: '23-Oct-2026 07:40 PM',
+      complaint_id: 'CMP-2918',
+      reason: 'Recharge not credited to consumer',
+      threshold_amount: '1,000.00',
+      topup_url: 'https://exchange.portal/fund/request',
+      admin_url: 'https://exchange.portal/admin/payment/fund-request',
+      app_name: 'Exchange Portal'
+    };
+
+    function replaceTags(str) {
+      if (!str) return '—';
+      return str.replace(/\\{\\{\\s*([a-zA-Z0-9_]+)\\s*\\}\\}/g, (match, key) => {
+        return dummyData[key] !== undefined ? dummyData[key] : match;
+      });
+    }
+
+    const waVal = document.getElementById('modalWaTemplateInput').value;
+    const emailSubject = document.getElementById('modalEmailSubjectInput').value;
+    const emailBody = document.getElementById('modalEmailTemplateInput').value;
+
+    document.getElementById('modalPreviewWaBubble').textContent = replaceTags(waVal);
+    document.getElementById('modalPreviewEmailSubject').textContent = replaceTags(emailSubject);
+    document.getElementById('modalPreviewEmailBody').textContent = replaceTags(emailBody);
+  }
+
+  // Live preview typing listeners in modal
+  document.getElementById('modalWaTemplateInput').addEventListener('input', () => { updateModalCounters(); updateModalPreview(); });
+  document.getElementById('modalEmailSubjectInput').addEventListener('input', updateModalPreview);
+  document.getElementById('modalEmailTemplateInput').addEventListener('input', () => { updateModalCounters(); updateModalPreview(); });
+
+  // Save changes button in modal
+  document.getElementById('btnSaveModalTemplate').addEventListener('click', async () => {
+    const item = rawTemplates.find(x => x.event_key === activeEditingKey);
+    if (!item) return;
+
+    const btn = document.getElementById('btnSaveModalTemplate');
     btn.disabled = true;
     btn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
 
     const payload = {
-      whatsapp_enabled: document.getElementById('switchWhatsapp').checked,
-      email_enabled: document.getElementById('switchEmail').checked,
-      whatsapp_template: document.getElementById('waTemplateInput').value.trim(),
-      email_subject: document.getElementById('emailSubjectInput').value.trim(),
-      email_template: document.getElementById('emailTemplateInput').value.trim()
+      whatsapp_enabled: document.getElementById('modalSwitchWa').checked,
+      email_enabled: document.getElementById('modalSwitchEmail').checked,
+      whatsapp_template: document.getElementById('modalWaTemplateInput').value.trim(),
+      email_subject: document.getElementById('modalEmailSubjectInput').value.trim(),
+      email_template: document.getElementById('modalEmailTemplateInput').value.trim()
     };
 
     try {
-      const res = await fetch('/api/admin/settings/notifications/' + currentKey, {
+      const res = await fetch('/api/admin/settings/notifications/' + activeEditingKey, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         credentials: 'same-origin',
@@ -736,7 +851,10 @@ module.exports = function createAdminNotificationsPage({ db }) {
 
       // Update in memory
       Object.assign(item, payload);
-      renderList(document.getElementById('searchNotifInput').value);
+      renderTable(document.getElementById('tableSearchInput').value);
+      updateKpis();
+
+      $('#editContentModal').modal('hide');
       showToast('Notification template for "' + item.title + '" saved successfully!');
     } catch (err) {
       showToast(err.message, true);
@@ -746,13 +864,14 @@ module.exports = function createAdminNotificationsPage({ db }) {
     }
   });
 
-  // Initial render
-  if (rawTemplates.length > 0) {
-    selectNotification(rawTemplates[0].event_key);
-  } else {
-    document.getElementById('noSelectionNotice').style.display = 'block';
-    document.getElementById('editorContent').style.display = 'none';
-  }
+  // Search filter
+  document.getElementById('tableSearchInput').addEventListener('input', (e) => {
+    renderTable(e.target.value);
+  });
+
+  // Initial table render
+  renderTable();
+  updateKpis();
 })();
 </script>
 </body>
