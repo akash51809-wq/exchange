@@ -28,14 +28,54 @@ module.exports = function createAdminNotificationsPage({ db }) {
       templates = result.rows || [];
     }
 
-    const stats = {
-      total: templates.length,
-      waActive: templates.filter(t => t.whatsapp_enabled).length,
-      emailActive: templates.filter(t => t.email_enabled).length,
-      adminAlerts: templates.filter(t => t.recipient_type === 'admin').length,
-    };
+    // Pre-render table rows on server side so data is immediately visible
+    const rowsHtml = templates.map((t, idx) => {
+      const isAdmin = t.recipient_type === 'admin';
+      const waChecked = Boolean(t.whatsapp_enabled);
+      const emailChecked = Boolean(t.email_enabled);
 
-    const templatesJson = escapeHtml(JSON.stringify(templates));
+      const recBadge = isAdmin 
+        ? '<span class="badge badge-warning text-dark px-1 ml-1" style="font-size:10px;"><i class="fa fa-shield-halved mr-1"></i>Admin Alert</span>' 
+        : '';
+
+      return `
+        <tr data-key="${escapeHtml(t.event_key)}" id="row-${escapeHtml(t.event_key)}">
+          <td class="col-sr text-center font-weight-bold text-muted">${idx + 1}</td>
+          <td class="col-type">
+            <div class="d-flex align-items-center flex-wrap">
+              <span class="type-title mr-1 font-weight-bold">${escapeHtml(t.title)}</span>
+              ${recBadge}
+            </div>
+            <div class="type-key text-muted small font-monospace">${escapeHtml(t.event_key)}</div>
+          </td>
+          <td class="text-center">
+            <div class="switch-wrapper" data-channel="whatsapp" data-key="${escapeHtml(t.event_key)}">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" class="toggle-channel-wa" data-key="${escapeHtml(t.event_key)}" ${waChecked ? 'checked' : ''}>
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label ${waChecked ? 'status-yes' : 'status-no'}">${waChecked ? 'Yes' : 'No'}</span>
+            </div>
+          </td>
+          <td class="text-center">
+            <div class="switch-wrapper" data-channel="email" data-key="${escapeHtml(t.event_key)}">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" class="toggle-channel-email" data-key="${escapeHtml(t.event_key)}" ${emailChecked ? 'checked' : ''}>
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label ${emailChecked ? 'status-yes' : 'status-no'}">${emailChecked ? 'Yes' : 'No'}</span>
+            </div>
+          </td>
+          <td class="text-center">
+            <button type="button" class="btn-content-edit" data-key="${escapeHtml(t.event_key)}">
+              Edit
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const safeJsonPayload = JSON.stringify(templates).replace(/</g, '\\u003c');
 
     const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -84,9 +124,6 @@ module.exports = function createAdminNotificationsPage({ db }) {
     .notif-table tbody tr:hover {
       background-color: #f8fafc;
     }
-    .notif-table tbody tr.row-active {
-      background-color: #f1f5f9;
-    }
     .notif-table tbody td {
       padding: 12px 16px;
       vertical-align: middle;
@@ -98,9 +135,6 @@ module.exports = function createAdminNotificationsPage({ db }) {
     /* Sr No column */
     .col-sr {
       width: 70px;
-      text-align: center;
-      font-weight: 600;
-      color: #64748b;
     }
     
     /* Type column */
@@ -108,15 +142,13 @@ module.exports = function createAdminNotificationsPage({ db }) {
       min-width: 260px;
     }
     .type-title {
-      font-weight: 600;
+      font-size: 13.5px;
       color: #1e293b;
       margin-bottom: 2px;
-      font-size: 13.5px;
     }
     .type-key {
-      font-size: 11px;
+      font-size: 11.5px;
       color: #64748b;
-      font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
     
     /* Modern Slider Switch matching reference image */
@@ -314,7 +346,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
           </div>
         </div>
         
-        <!-- Header & Search Bar -->
+        <!-- Clean Header (Removed Gateway button and KPI badges as requested) -->
         <div class="card card-notif-table mb-3">
           <div class="card-body p-3">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -324,21 +356,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 </h4>
                 <p class="text-muted mb-0 small">Configure automated notification delivery channels and message templates per event.</p>
               </div>
-
-              <!-- Compact KPI counters & Quick Actions -->
-              <div class="d-flex align-items-center flex-wrap gap-2">
-                <span class="badge badge-light border text-dark px-2 py-1 mr-1" style="font-size:12px;">
-                  <i class="fa fa-list mr-1 text-primary"></i> Total: <strong id="kpiTotal">${stats.total} Events</strong>
-                </span>
-                <span class="badge badge-light border text-success px-2 py-1 mr-1" style="font-size:12px;">
-                  <i class="fa-brands fa-whatsapp mr-1"></i> WhatsApp: <strong id="kpiWa">${stats.waActive} Yes</strong>
-                </span>
-                <span class="badge badge-light border text-primary px-2 py-1 mr-2" style="font-size:12px;">
-                  <i class="fa fa-envelope mr-1"></i> Email: <strong id="kpiEmail">${stats.emailActive} Yes</strong>
-                </span>
-                <a href="/admin/settings/service-settings" class="btn btn-outline-secondary btn-sm mr-1">
-                  <i class="fa fa-cogs mr-1"></i> Gateways
-                </a>
+              <div>
                 <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.reload()">
                   <i class="fa fa-refresh mr-1"></i> Refresh
                 </button>
@@ -353,7 +371,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
             <h6 class="font-weight-bold text-dark mb-0">
               <i class="fa fa-table mr-2 text-primary"></i> Notification List
             </h6>
-            <div class="d-flex align-items-center" style="max-width: 300px; width: 100%;">
+            <div class="d-flex align-items-center" style="max-width: 320px; width: 100%;">
               <div class="input-group input-group-sm">
                 <div class="input-group-prepend"><span class="input-group-text bg-light border-right-0"><i class="fa fa-search text-muted"></i></span></div>
                 <input type="text" class="form-control border-left-0 bg-light" id="tableSearchInput" placeholder="Search notification type...">
@@ -365,15 +383,21 @@ module.exports = function createAdminNotificationsPage({ db }) {
             <table class="table notif-table text-nowrap" id="notificationsTable">
               <thead>
                 <tr>
-                  <th class="col-sr">SR NO</th>
+                  <th class="col-sr text-center">SR NO</th>
                   <th class="col-type">TYPE</th>
-                  <th class="text-center" style="width: 160px;">SEND WHATSAPP</th>
-                  <th class="text-center" style="width: 160px;">SEND EMAIL</th>
-                  <th class="text-center" style="width: 130px;">CONTENT</th>
+                  <th class="text-center" style="width: 170px;">SEND WHATSAPP</th>
+                  <th class="text-center" style="width: 170px;">SEND EMAIL</th>
+                  <th class="text-center" style="width: 140px;">CONTENT</th>
                 </tr>
               </thead>
               <tbody id="notifTableBody">
-                <!-- Populated dynamically via JS -->
+                ${rowsHtml}
+                <tr id="notifEmptyRow" style="display:none;">
+                  <td colspan="5" class="text-center py-4 text-muted">
+                    <i class="fa fa-search mb-1 d-block" style="font-size:18px;"></i>
+                    No notification events found matching your search.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -517,12 +541,25 @@ module.exports = function createAdminNotificationsPage({ db }) {
   </div>
 </div>
 
+<script id="notifTemplatesData" type="application/json">
+${safeJsonPayload}
+</script>
+
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="/auth-client.js"></script>
 <script>
 (function() {
-  const rawTemplates = ${templatesJson};
+  let rawTemplates = [];
+  try {
+    const rawDataEl = document.getElementById('notifTemplatesData');
+    if (rawDataEl) {
+      rawTemplates = JSON.parse(rawDataEl.textContent);
+    }
+  } catch (err) {
+    console.error('Failed to parse notification templates payload:', err);
+  }
+
   let activeEditingKey = null;
   let lastFocusedInput = null;
 
@@ -538,103 +575,34 @@ module.exports = function createAdminNotificationsPage({ db }) {
     const toast = document.getElementById('floatingToast');
     const textEl = document.getElementById('floatingToastText');
     const iconEl = document.getElementById('floatingToastIcon');
+    if (!toast) return;
     toast.className = 'alert alert-dismissible fade show p-3 shadow-lg ' + (isError ? 'alert-danger' : 'alert-success');
-    iconEl.className = 'fa mr-2 ' + (isError ? 'fa-triangle-exclamation' : 'fa-circle-check');
-    textEl.textContent = msg;
+    if (iconEl) iconEl.className = 'fa mr-2 ' + (isError ? 'fa-triangle-exclamation' : 'fa-circle-check');
+    if (textEl) textEl.textContent = msg;
     toast.style.display = 'block';
     setTimeout(() => { toast.style.display = 'none'; }, 3500);
   }
 
-  function updateKpis() {
-    const total = rawTemplates.length;
-    const wa = rawTemplates.filter(t => t.whatsapp_enabled).length;
-    const email = rawTemplates.filter(t => t.email_enabled).length;
-    document.getElementById('kpiTotal').textContent = total + ' Events';
-    document.getElementById('kpiWa').textContent = wa + ' Yes';
-    document.getElementById('kpiEmail').textContent = email + ' Yes';
-  }
-
-  function renderTable(searchTerm = '') {
-    const tbody = document.getElementById('notifTableBody');
-    const term = searchTerm.toLowerCase().trim();
-
-    const filtered = rawTemplates.filter(t => {
-      if (!term) return true;
-      return t.title.toLowerCase().includes(term) ||
-             t.event_key.toLowerCase().includes(term) ||
-             t.category.toLowerCase().includes(term);
-    });
-
-    if (filtered.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted"><i class="fa fa-search mb-1 d-block" style="font-size:18px;"></i>No notification events found matching your search.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = filtered.map((t, idx) => {
-      const isAdmin = t.recipient_type === 'admin';
-      const waChecked = Boolean(t.whatsapp_enabled);
-      const emailChecked = Boolean(t.email_enabled);
-
-      const recBadge = isAdmin 
-        ? '<span class="badge badge-warning text-dark px-1 ml-1" style="font-size:10px;"><i class="fa fa-shield-halved mr-1"></i>Admin Alert</span>' 
-        : '';
-
-      return \`
-        <tr data-key="\${t.event_key}">
-          <td class="col-sr">\${idx + 1}</td>
-          <td class="col-type">
-            <div class="d-flex align-items-center flex-wrap">
-              <span class="type-title mr-1">\${t.title}</span>
-              \${recBadge}
-            </div>
-            <div class="type-key">\${t.event_key}</div>
-          </td>
-          <td class="text-center">
-            <div class="switch-wrapper" data-channel="whatsapp" data-key="\${t.event_key}">
-              <label class="custom-switch-slider mb-0">
-                <input type="checkbox" class="toggle-channel-wa" data-key="\${t.event_key}" \${waChecked ? 'checked' : ''}>
-                <span class="slider-track"></span>
-              </label>
-              <span class="switch-status-label \${waChecked ? 'status-yes' : 'status-no'}">\${waChecked ? 'Yes' : 'No'}</span>
-            </div>
-          </td>
-          <td class="text-center">
-            <div class="switch-wrapper" data-channel="email" data-key="\${t.event_key}">
-              <label class="custom-switch-slider mb-0">
-                <input type="checkbox" class="toggle-channel-email" data-key="\${t.event_key}" \${emailChecked ? 'checked' : ''}>
-                <span class="slider-track"></span>
-              </label>
-              <span class="switch-status-label \${emailChecked ? 'status-yes' : 'status-no'}">\${emailChecked ? 'Yes' : 'No'}</span>
-            </div>
-          </td>
-          <td class="text-center">
-            <button type="button" class="btn-content-edit" data-key="\${t.event_key}">
-              Edit
-            </button>
-          </td>
-        </tr>
-      \`;
-    }).join('');
-
-    // Attach switch change listeners
-    tbody.querySelectorAll('.toggle-channel-wa').forEach(input => {
-      input.addEventListener('change', async (e) => {
+  // Quick toggle switches in table rows
+  function initTableSwitches() {
+    document.querySelectorAll('.toggle-channel-wa').forEach(input => {
+      input.addEventListener('change', async () => {
         const key = input.getAttribute('data-key');
         const nextState = input.checked;
         await handleQuickToggle(key, 'whatsapp', nextState, input);
       });
     });
 
-    tbody.querySelectorAll('.toggle-channel-email').forEach(input => {
-      input.addEventListener('change', async (e) => {
+    document.querySelectorAll('.toggle-channel-email').forEach(input => {
+      input.addEventListener('change', async () => {
         const key = input.getAttribute('data-key');
         const nextState = input.checked;
         await handleQuickToggle(key, 'email', nextState, input);
       });
     });
 
-    // Attach Edit button listeners
-    tbody.querySelectorAll('.btn-content-edit').forEach(btn => {
+    // Edit button listeners
+    document.querySelectorAll('.btn-content-edit').forEach(btn => {
       btn.addEventListener('click', () => {
         const key = btn.getAttribute('data-key');
         openEditModal(key);
@@ -643,13 +611,16 @@ module.exports = function createAdminNotificationsPage({ db }) {
   }
 
   async function handleQuickToggle(key, channel, nextState, inputEl) {
-    const labelSpan = inputEl.closest('.switch-wrapper').querySelector('.switch-status-label');
+    const wrapper = inputEl.closest('.switch-wrapper');
+    const labelSpan = wrapper ? wrapper.querySelector('.switch-status-label') : null;
     const originalChecked = !nextState;
 
-    try {
+    if (labelSpan) {
       labelSpan.textContent = nextState ? 'Yes' : 'No';
       labelSpan.className = 'switch-status-label ' + (nextState ? 'status-yes' : 'status-no');
+    }
 
+    try {
       const res = await fetch('/api/admin/settings/notifications/toggle', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -663,13 +634,14 @@ module.exports = function createAdminNotificationsPage({ db }) {
       if (item) {
         if (channel === 'whatsapp') item.whatsapp_enabled = nextState;
         if (channel === 'email') item.email_enabled = nextState;
+        showToast(item.title + ' ' + channel.toUpperCase() + ' delivery turned ' + (nextState ? 'YES' : 'NO'));
       }
-      updateKpis();
-      showToast(item.title + ' ' + channel.toUpperCase() + ' delivery turned ' + (nextState ? 'YES' : 'NO'));
     } catch (err) {
       inputEl.checked = originalChecked;
-      labelSpan.textContent = originalChecked ? 'Yes' : 'No';
-      labelSpan.className = 'switch-status-label ' + (originalChecked ? 'status-yes' : 'status-no');
+      if (labelSpan) {
+        labelSpan.textContent = originalChecked ? 'Yes' : 'No';
+        labelSpan.className = 'switch-status-label ' + (originalChecked ? 'status-yes' : 'status-no');
+      }
       showToast(err.message, true);
     }
   }
@@ -851,8 +823,29 @@ module.exports = function createAdminNotificationsPage({ db }) {
 
       // Update in memory
       Object.assign(item, payload);
-      renderTable(document.getElementById('tableSearchInput').value);
-      updateKpis();
+
+      // Update table row in DOM
+      const row = document.getElementById('row-' + activeEditingKey);
+      if (row) {
+        const waCheckbox = row.querySelector('.toggle-channel-wa');
+        const emailCheckbox = row.querySelector('.toggle-channel-email');
+        if (waCheckbox) {
+          waCheckbox.checked = item.whatsapp_enabled;
+          const label = waCheckbox.closest('.switch-wrapper').querySelector('.switch-status-label');
+          if (label) {
+            label.textContent = item.whatsapp_enabled ? 'Yes' : 'No';
+            label.className = 'switch-status-label ' + (item.whatsapp_enabled ? 'status-yes' : 'status-no');
+          }
+        }
+        if (emailCheckbox) {
+          emailCheckbox.checked = item.email_enabled;
+          const label = emailCheckbox.closest('.switch-wrapper').querySelector('.switch-status-label');
+          if (label) {
+            label.textContent = item.email_enabled ? 'Yes' : 'No';
+            label.className = 'switch-status-label ' + (item.email_enabled ? 'status-yes' : 'status-no');
+          }
+        }
+      }
 
       $('#editContentModal').modal('hide');
       showToast('Notification template for "' + item.title + '" saved successfully!');
@@ -865,13 +858,28 @@ module.exports = function createAdminNotificationsPage({ db }) {
   });
 
   // Search filter
-  document.getElementById('tableSearchInput').addEventListener('input', (e) => {
-    renderTable(e.target.value);
-  });
+  const searchInput = document.getElementById('tableSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase().trim();
+      let matchedCount = 0;
+      document.querySelectorAll('#notifTableBody tr[data-key]').forEach(tr => {
+        const key = tr.getAttribute('data-key');
+        const item = rawTemplates.find(x => x.event_key === key);
+        if (!item) return;
+        const match = !term || item.title.toLowerCase().includes(term) || item.event_key.toLowerCase().includes(term) || item.category.toLowerCase().includes(term);
+        tr.style.display = match ? '' : 'none';
+        if (match) matchedCount++;
+      });
+      const emptyRow = document.getElementById('notifEmptyRow');
+      if (emptyRow) {
+        emptyRow.style.display = matchedCount === 0 ? '' : 'none';
+      }
+    });
+  }
 
-  // Initial table render
-  renderTable();
-  updateKpis();
+  // Initialize switches and buttons
+  initTableSwitches();
 })();
 </script>
 </body>

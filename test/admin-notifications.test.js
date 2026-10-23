@@ -141,7 +141,7 @@ test('Admin Notifications - Page Component Rendering', async () => {
 
   // Assert essential elements in HTML output matching reference table UI
   assert.ok(responseBody.includes('Notification Settings'));
-  assert.ok(responseBody.includes('17 Events'));
+  assert.ok(responseBody.includes('Notification List'));
   assert.ok(responseBody.includes('SEND WHATSAPP'));
   assert.ok(responseBody.includes('SEND EMAIL'));
   assert.ok(responseBody.includes('CONTENT'));
