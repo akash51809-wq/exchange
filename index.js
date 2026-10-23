@@ -93,6 +93,7 @@ const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
 const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-history');
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
 const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
+const createAdminNotificationsPage = require('./pages/admin-notifications');
 const createUserWalletExchangePage = require('./pages/user-wallet-exchange');
 const createUserIntegrationRequestPage = require('./pages/user-integration-request');
 const {
@@ -129,7 +130,13 @@ const { calculateTransactionMargin } = require('./lib/margin-calculator');
 const { executeStockApiCall, extractValueByPath } = require('./lib/stock-api-helper');
 const { assertSafePublicUrl } = require('./lib/ssrf-filter');
 const createBuyerApiService = require('./lib/buyer-api-service');
-const { sendWhatsappNotification, sendEmailNotification } = require('./lib/notification-service');
+const {
+  sendWhatsappNotification,
+  sendEmailNotification,
+  DEFAULT_NOTIFICATION_TEMPLATES,
+  seedNotificationTemplates,
+  sendNotificationEvent,
+} = require('./lib/notification-service');
 const { fetchOperatorLookup } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
 const { getClientIp } = require('./lib/client-ip');
@@ -316,6 +323,11 @@ const {
   formatMinorUnits,
   sendJson,
   httpError,
+});
+const {
+  sendAdminNotificationsPage,
+} = createAdminNotificationsPage({
+  db,
 });
 const {
   sendUserWalletExchangePage,
@@ -904,6 +916,25 @@ const DATABASE_SCHEMA = `
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   );
   CREATE INDEX IF NOT EXISTS idx_wallet_exchange_transfers_user_id ON wallet_exchange_transfers(user_id, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS admin_notification_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_key TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL,
+    category TEXT NOT NULL DEFAULT 'general',
+    recipient_type TEXT NOT NULL DEFAULT 'user' CHECK (recipient_type IN ('user', 'admin')),
+    whatsapp_enabled BOOLEAN NOT NULL DEFAULT true,
+    email_enabled BOOLEAN NOT NULL DEFAULT true,
+    whatsapp_template TEXT NOT NULL DEFAULT '',
+    email_subject TEXT NOT NULL DEFAULT '',
+    email_template TEXT NOT NULL DEFAULT '',
+    allowed_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_key ON admin_notification_templates(event_key);
+  CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_sort ON admin_notification_templates(sort_order);
 `;
 
 async function initializeDatabase() {
@@ -918,6 +949,7 @@ async function initializeDatabase() {
   try {
     await client.query('BEGIN');
     await client.query(DATABASE_SCHEMA);
+    await seedNotificationTemplates(client);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -3929,6 +3961,14 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/settings/notifications' || url.pathname === '/admin/settings/notification') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminNotificationsPage(admin, response);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -4798,6 +4838,77 @@ async function handleRequest(request, response) {
         const input = await readJson(request);
         await handleSaveMarginDifferenceSettings(request, response, input);
         statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/notifications' && request.method === 'GET') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const res = await db.query(
+          `SELECT id, event_key, title, category, recipient_type,
+                  whatsapp_enabled, email_enabled, whatsapp_template,
+                  email_subject, email_template, allowed_keywords, sort_order, updated_at
+           FROM admin_notification_templates
+           ORDER BY sort_order ASC, title ASC`
+        );
+        sendJson(response, 200, { ok: true, templates: res.rows });
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/notifications/toggle' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        const eventKey = String(input.eventKey || '').trim();
+        const channel = String(input.channel || '').trim().toLowerCase();
+        const enabled = Boolean(input.enabled);
+        if (!eventKey) throw httpError('Event key is required', 400);
+        if (channel !== 'whatsapp' && channel !== 'email') {
+          throw httpError('Channel must be whatsapp or email', 400);
+        }
+        const col = channel === 'whatsapp' ? 'whatsapp_enabled' : 'email_enabled';
+        const res = await db.query(
+          `UPDATE admin_notification_templates
+           SET ${col} = $1, updated_at = now()
+           WHERE event_key = $2
+           RETURNING id, event_key, title, whatsapp_enabled, email_enabled, updated_at`,
+          [enabled, eventKey]
+        );
+        if (!res.rowCount) throw httpError('Notification event not found', 404);
+        sendJson(response, 200, { ok: true, channel, enabled, updated: res.rows[0] });
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname.startsWith('/api/admin/settings/notifications/') && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const eventKey = decodeURIComponent(url.pathname.replace('/api/admin/settings/notifications/', '')).trim();
+        if (!eventKey) throw httpError('Event key is required', 400);
+        const input = await readJson(request);
+        const whatsapp_enabled = Boolean(input.whatsapp_enabled);
+        const email_enabled = Boolean(input.email_enabled);
+        const whatsapp_template = String(input.whatsapp_template ?? '').trim();
+        const email_subject = String(input.email_subject ?? '').trim();
+        const email_template = String(input.email_template ?? '').trim();
+        const res = await db.query(
+          `UPDATE admin_notification_templates
+           SET whatsapp_enabled = $1,
+               email_enabled = $2,
+               whatsapp_template = $3,
+               email_subject = $4,
+               email_template = $5,
+               updated_at = now()
+           WHERE event_key = $6
+           RETURNING *`,
+          [whatsapp_enabled, email_enabled, whatsapp_template, email_subject, email_template, eventKey]
+        );
+        if (!res.rowCount) throw httpError('Notification event not found', 404);
+        sendJson(response, 200, { ok: true, message: 'Notification template saved successfully.', template: res.rows[0] });
+        statusCode = 200;
         return;
       }
       if (url.pathname === '/api/buyer/disputes') {
