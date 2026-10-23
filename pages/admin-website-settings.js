@@ -28,6 +28,9 @@ module.exports = function createAdminWebsiteSettingsPage({
       favicon_data: null,
       favicon_mime: null,
       favicon_url: null,
+      dashboard_banner_data: null,
+      dashboard_banner_mime: null,
+      dashboard_banner_url: null,
       support_phone: '+91 98765 43210',
       support_whatsapp: '+91 98765 43210',
       support_email: 'support@easyrechargesolution.com',
@@ -47,6 +50,7 @@ module.exports = function createAdminWebsiteSettingsPage({
     const s = await fetchSettings();
     const hasCustomLogo = Boolean(s.logo_data || s.logo_url);
     const hasCustomFavicon = Boolean(s.favicon_data || s.favicon_url);
+    const hasCustomBanner = Boolean(s.dashboard_banner_data || s.dashboard_banner_url);
 
     const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -340,6 +344,38 @@ module.exports = function createAdminWebsiteSettingsPage({
                   </div>
                 </div>
               </div>
+
+              <!-- User Dashboard Banner Upload -->
+              <div class="card-settings">
+                <div class="card-settings-header">
+                  <i class="fa fa-image text-primary"></i>
+                  <h5>3B. User Dashboard Banner Image</h5>
+                  <span class="badge badge-status-pill ${hasCustomBanner ? 'badge-success' : 'badge-secondary'} ml-auto" id="banner-status-badge">
+                    ${hasCustomBanner ? 'Custom Banner Active' : 'Default Banner Active'}
+                  </span>
+                </div>
+                <div class="card-settings-body">
+                  <div class="upload-box mb-3" id="banner-drop-area">
+                    <input type="file" id="dashboard_banner_file" name="dashboard_banner_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                    <i class="fa fa-cloud-upload fa-2x text-primary mb-2"></i>
+                    <h6 class="font-weight-bold mb-1">Drag &amp; drop dashboard banner or click to browse</h6>
+                    <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Wide horizontal banner, e.g. 1920×240px)</p>
+                  </div>
+
+                  <!-- Live Banner Preview -->
+                  <div class="mb-3">
+                    <small class="font-weight-bold text-muted d-block mb-1">Live Dashboard Banner Preview</small>
+                    <div class="border rounded p-1 bg-light text-center" style="max-height: 140px; overflow: hidden;">
+                      <img id="banner-preview-img" src="/api/dashboard-banner?t=${Date.now()}" alt="Banner Preview" style="width: 100%; height: 110px; object-fit: cover; border-radius: 6px;">
+                    </div>
+                  </div>
+
+                  <div class="custom-control custom-checkbox">
+                    <input type="checkbox" class="custom-control-input" id="reset_dashboard_banner" name="reset_dashboard_banner" value="1">
+                    <label class="custom-control-label text-danger" for="reset_dashboard_banner">Reset to system default banner</label>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- Right Column: Contact Details & SEO -->
@@ -433,6 +469,8 @@ module.exports = function createAdminWebsiteSettingsPage({
       const logoPreviewLight = document.getElementById('logo-preview-light');
       const logoPreviewDark = document.getElementById('logo-preview-dark');
       const faviconPreviewImg = document.getElementById('favicon-preview-img');
+      const bannerInput = document.getElementById('dashboard_banner_file');
+      const bannerPreviewImg = document.getElementById('banner-preview-img');
       const nameInput = document.getElementById('website_name');
       const tabTitlePreview = document.getElementById('tab-title-preview');
       const toastBox = document.getElementById('toast-box');
@@ -472,6 +510,22 @@ module.exports = function createAdminWebsiteSettingsPage({
         }
       });
 
+      // Live Dashboard Banner Preview
+      if (bannerInput && bannerPreviewImg) {
+        bannerInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              bannerPreviewImg.src = evt.target.result;
+              const resetBox = document.getElementById('reset_dashboard_banner');
+              if (resetBox) resetBox.checked = false;
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+
       // Show toast
       function showToast(title, message, isSuccess = true) {
         toastBox.className = 'toast-popup alert ' + (isSuccess ? 'alert-success' : 'alert-danger') + ' alert-dismissible fade show shadow-lg';
@@ -505,6 +559,7 @@ module.exports = function createAdminWebsiteSettingsPage({
             meta_description: formData.get('meta_description'),
             reset_logo: formData.get('reset_logo') === '1',
             reset_favicon: formData.get('reset_favicon') === '1',
+            reset_dashboard_banner: formData.get('reset_dashboard_banner') === '1',
           };
 
           // Read logo file if provided
@@ -521,6 +576,13 @@ module.exports = function createAdminWebsiteSettingsPage({
             payload.favicon_mime = faviconFile.type || 'image/x-icon';
           }
 
+          // Read dashboard banner file if provided
+          const bannerFile = bannerInput ? bannerInput.files[0] : null;
+          if (bannerFile) {
+            payload.dashboard_banner_data_b64 = await readFileAsBase64(bannerFile);
+            payload.dashboard_banner_mime = bannerFile.type || 'image/png';
+          }
+
           const res = await fetch('/api/admin/settings/website', {
             method: 'POST',
             headers: {
@@ -535,13 +597,32 @@ module.exports = function createAdminWebsiteSettingsPage({
             throw new Error(data.message || data.error || 'Failed to save settings.');
           }
 
-          showToast('Success!', 'Website settings and logo saved successfully. Changes are now live!', true);
+          showToast('Success!', 'Website settings, logo & dashboard banner saved successfully. Changes are now live!', true);
           
           // Refresh previews with cache buster
           const timestamp = Date.now();
           logoPreviewLight.src = '/api/logo?t=' + timestamp;
           logoPreviewDark.src = '/api/logo?t=' + timestamp;
           faviconPreviewImg.src = '/api/favicon?t=' + timestamp;
+          if (bannerPreviewImg) {
+            bannerPreviewImg.src = '/api/dashboard-banner?t=' + timestamp;
+          }
+
+          if (payload.reset_dashboard_banner) {
+            const bBadge = document.getElementById('banner-status-badge');
+            if (bBadge) {
+              bBadge.textContent = 'Default Banner Active';
+              bBadge.className = 'badge badge-status-pill badge-secondary ml-auto';
+            }
+            const rbb = document.getElementById('reset_dashboard_banner');
+            if (rbb) rbb.checked = false;
+          } else if (bannerFile) {
+            const bBadge = document.getElementById('banner-status-badge');
+            if (bBadge) {
+              bBadge.textContent = 'Custom Banner Active';
+              bBadge.className = 'badge badge-status-pill badge-success ml-auto';
+            }
+          }
 
           if (payload.reset_logo) {
             document.getElementById('logo-status-badge').textContent = 'Default Logo Active';
@@ -624,6 +705,9 @@ module.exports = function createAdminWebsiteSettingsPage({
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       );
       INSERT INTO website_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_data BYTEA;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_mime TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_url TEXT;
     `);
 
     // Prepare update parameters
@@ -684,6 +768,15 @@ module.exports = function createAdminWebsiteSettingsPage({
       const buf = Buffer.from(input.favicon_data_b64, 'base64');
       const mime = String(input.favicon_mime || 'image/x-icon').trim();
       await db.query('UPDATE website_settings SET favicon_data = $1, favicon_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+    }
+
+    // Handle dashboard banner reset or upload
+    if (input.reset_dashboard_banner) {
+      await db.query('UPDATE website_settings SET dashboard_banner_data = NULL, dashboard_banner_mime = NULL, dashboard_banner_url = NULL, updated_at = now() WHERE id = 1');
+    } else if (input.dashboard_banner_data_b64) {
+      const buf = Buffer.from(input.dashboard_banner_data_b64, 'base64');
+      const mime = String(input.dashboard_banner_mime || 'image/png').trim();
+      await db.query('UPDATE website_settings SET dashboard_banner_data = $1, dashboard_banner_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
     }
 
     sendJson(response, 200, {

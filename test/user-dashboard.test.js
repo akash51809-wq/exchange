@@ -6,7 +6,7 @@ const createUserDashboardPage = require('../pages/user-dashboard');
 const { clearPolicyCache } = require('../lib/wallet-helper');
 
 describe('User Dashboard Component Tests', () => {
-  it('renders running news ticker bar, single wallet mode, lean balance, and all 6 KPI cards with counts and values', async () => {
+  it('renders top banner, running news ticker bar, single wallet mode, lean balance, all 8 KPI cards, and operator summary tables', async () => {
     clearPolicyCache();
     const mockDb = {
       query: async (sql, params) => {
@@ -49,6 +49,40 @@ describe('User Dashboard Component Tests', () => {
               txn_role: 'Purchase',
             }],
             rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallet_fund_requests')) {
+          // Today topups
+          return {
+            rows: [{ total_count: 2, total_val: 50000n, approved_count: 2, approved_val: 50000n }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM payout_requests')) {
+          // Today redeems
+          return {
+            rows: [{ total_count: 1, total_val: 20000n, active_count: 1, active_val: 20000n }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('GROUP BY') && sql.includes('seller_user_id = $1')) {
+          // Today operator sales summary
+          return {
+            rows: [
+              { op_name: 'Jio', txn_count: 5, amount_minor: 150000n, margin_minor: 4500n },
+              { op_name: 'Airtel', txn_count: 2, amount_minor: 70000n, margin_minor: 2100n },
+            ],
+            rowCount: 2,
+          };
+        }
+        if (sql.includes('GROUP BY') && sql.includes('user_id = $1')) {
+          // Today operator purchase summary
+          return {
+            rows: [
+              { op_name: 'Jio', txn_count: 3, amount_minor: 75000n, margin_minor: 2250n },
+              { op_name: 'Vodafone', txn_count: 1, amount_minor: 25000n, margin_minor: 750n },
+            ],
+            rowCount: 2,
           };
         }
         if (sql.includes('seller_user_id = $1') && sql.includes('created_at AT TIME ZONE')) {
@@ -125,6 +159,10 @@ describe('User Dashboard Component Tests', () => {
     assert.strictEqual(writtenStatus, 200);
     assert.match(writtenHeaders['content-type'], /text\/html/);
 
+    // 0. Verify top horizontal banner image
+    assert.match(writtenBody, /class="user-dashboard-banner-container"/);
+    assert.match(writtenBody, /src="\/api\/dashboard-banner"/);
+
     // 1. Verify running news ticker bar is rendered touching below menu
     assert.match(writtenBody, /class="user-news-ticker-strip"/);
     assert.match(writtenBody, /LIVE NEWS/);
@@ -138,7 +176,7 @@ describe('User Dashboard Component Tests', () => {
     assert.match(writtenBody, /Net Available Balance/i);
     assert.match(writtenBody, /₹1200\.00/); // 1250 - 50 = 1200
 
-    // 3. Verify all 6 KPI cards with both count and value
+    // 3. Verify all 8 KPI cards with both count and value
     // Today Purchase
     assert.match(writtenBody, /Today Purchase/i);
     assert.match(writtenBody, /4 Orders/);
@@ -168,6 +206,30 @@ describe('User Dashboard Component Tests', () => {
     assert.match(writtenBody, /Pending Sales/i);
     assert.match(writtenBody, /1 Pending/);
     assert.match(writtenBody, /₹199\.00/);
+
+    // Today Total Topup
+    assert.match(writtenBody, /Today Topup/i);
+    assert.match(writtenBody, /2 Approved/);
+    assert.match(writtenBody, /₹500\.00/);
+
+    // Today Total Redeem
+    assert.match(writtenBody, /Today Redeem/i);
+    assert.match(writtenBody, /1 Redeems/);
+    assert.match(writtenBody, /₹200\.00/);
+
+    // 4. Verify Operator Summaries (Sales & Purchase)
+    // Sales Summary Operator Wise
+    assert.match(writtenBody, /Today Sales Summary \(Operator Wise\)/i);
+    assert.match(writtenBody, /Jio/);
+    assert.match(writtenBody, /Airtel/);
+    assert.match(writtenBody, /₹1500\.00/);
+    assert.match(writtenBody, /₹700\.00/);
+
+    // Purchase Summary Operator Wise
+    assert.match(writtenBody, /Today Purchase Summary \(Operator Wise\)/i);
+    assert.match(writtenBody, /Vodafone/);
+    assert.match(writtenBody, /₹750\.00/);
+    assert.match(writtenBody, /₹250\.00/);
   });
 
   it('renders Separate Wallet mode showing Buyer Wallet, Seller Wallet, and Lean Balance', async () => {

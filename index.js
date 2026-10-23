@@ -106,7 +106,7 @@ const {
   applyDisputeRefundPenalty,
 } = require('./lib/wallet-helper');
 const createFrontLandingPage = require('./pages/front-landing-page');
-const { getDefaultLogoSvg, getDefaultFaviconSvg } = require('./lib/default-brand-assets');
+const { getDefaultLogoSvg, getDefaultFaviconSvg, getDefaultDashboardBannerSvg } = require('./lib/default-brand-assets');
 const { parseUserAgent, resolveLocation } = require('./lib/user-agent-parser');
 const createSystemChartPage = require('./pages/system-chart');
 const { sendNotFoundPage } = require('./pages/not-found');
@@ -831,6 +831,9 @@ const DATABASE_SCHEMA = `
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_days INT NOT NULL DEFAULT 7;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker TEXT DEFAULT 'Welcome to Exchange Recharge Platform! Lightning-fast automated LAPU stock swapping, instant recharge execution, and 24x7 real-time settlement.';
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_data BYTEA;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_mime TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_url TEXT;
 
   ALTER TABLE wallets ADD COLUMN IF NOT EXISTS lien_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (lien_balance_minor >= 0);
 
@@ -3329,6 +3332,39 @@ async function handleRequest(request, response) {
           'cache-control': 'public, max-age=300',
         });
         response.end(defaultFavicon);
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/dashboard-banner' || url.pathname === '/api/website/banner' || url.pathname === '/assets/dashboard-banner') {
+        try {
+          const res = await db.query('SELECT dashboard_banner_data, dashboard_banner_mime, dashboard_banner_url FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.dashboard_banner_data) {
+            response.writeHead(200, {
+              'content-type': row.dashboard_banner_mime || 'image/png',
+              'content-length': row.dashboard_banner_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.dashboard_banner_data);
+            statusCode = 200;
+            return;
+          }
+          if (row && row.dashboard_banner_url) {
+            response.writeHead(302, { location: row.dashboard_banner_url });
+            response.end();
+            statusCode = 302;
+            return;
+          }
+        } catch (_) {}
+        const defaultBanner = getDefaultDashboardBannerSvg();
+        response.writeHead(200, {
+          'content-type': 'image/svg+xml; charset=utf-8',
+          'content-length': Buffer.byteLength(defaultBanner),
+          'cache-control': 'public, max-age=300',
+        });
+        response.end(defaultBanner);
         statusCode = 200;
         return;
       }

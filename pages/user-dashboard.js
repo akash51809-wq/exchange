@@ -60,7 +60,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       }
     } catch (_) {}
 
-    // 3. Fetch KPI metrics in parallel (Today Purchase, Today Sales, Today Disputes, Pending Orders)
+    // 3. Fetch KPI metrics in parallel (Today Purchase, Today Sales, Today Disputes, Pending Orders, Topups, Redeems, Operator Summaries)
     const [
       todayPurchaseRes,
       todaySalesRes,
@@ -68,6 +68,10 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       todaySalesDisputeRes,
       pendingPurchaseRes,
       pendingSalesRes,
+      todayTopupRes,
+      todayRedeemRes,
+      todayOperatorSalesRes,
+      todayOperatorPurchaseRes,
       recentTxnsRes,
     ] = await Promise.all([
       // A. Today Purchases (Buyer: user_id = user.id)
@@ -136,7 +140,63 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
           AND status IN ('pending', 'processing')
       `, [user.id]).catch(() => ({ rows: [{}] })),
 
-      // G. Recent 6 transactions for this user (Buy or Sell)
+      // G. Today Wallet Topup Requests (Approved or Total placed today)
+      db.query(`
+        SELECT
+          COUNT(*) AS total_count,
+          COALESCE(SUM(amount_minor), 0) AS total_val,
+          COUNT(*) FILTER (WHERE status = 'approved') AS approved_count,
+          COALESCE(SUM(amount_minor) FILTER (WHERE status = 'approved'), 0) AS approved_val
+        FROM wallet_fund_requests
+        WHERE user_id = $1
+          AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
+      `, [user.id]).catch(() => ({ rows: [{}] })),
+
+      // H. Today Wallet Redeem Requests (Success, Pending, or Total placed today)
+      db.query(`
+        SELECT
+          COUNT(*) AS total_count,
+          COALESCE(SUM(amount_minor), 0) AS total_val,
+          COUNT(*) FILTER (WHERE status IN ('success', 'pending')) AS active_count,
+          COALESCE(SUM(amount_minor) FILTER (WHERE status IN ('success', 'pending')), 0) AS active_val
+        FROM payout_requests
+        WHERE user_id = $1
+          AND (created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
+      `, [user.id]).catch(() => ({ rows: [{}] })),
+
+      // I. Today Sales Summary Operator Wise (Seller)
+      db.query(`
+        SELECT
+          COALESCE(o.operator_name, r.operator_name, 'Other') AS op_name,
+          COUNT(*)::int AS txn_count,
+          COALESCE(SUM(r.amount_minor), 0)::bigint AS amount_minor,
+          COALESCE(SUM(r.seller_margin_minor), 0)::bigint AS margin_minor
+        FROM recharge_orders r
+        LEFT JOIN operator_definitions o ON o.id = r.operator_id
+        WHERE r.seller_user_id = $1
+          AND r.status = 'successful'
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
+        GROUP BY COALESCE(o.operator_name, r.operator_name, 'Other')
+        ORDER BY amount_minor DESC, txn_count DESC
+      `, [user.id]).catch(() => ({ rows: [] })),
+
+      // J. Today Purchase Summary Operator Wise (Buyer)
+      db.query(`
+        SELECT
+          COALESCE(o.operator_name, r.operator_name, 'Other') AS op_name,
+          COUNT(*)::int AS txn_count,
+          COALESCE(SUM(r.amount_minor), 0)::bigint AS amount_minor,
+          COALESCE(SUM(r.margin_minor), 0)::bigint AS margin_minor
+        FROM recharge_orders r
+        LEFT JOIN operator_definitions o ON o.id = r.operator_id
+        WHERE r.user_id = $1
+          AND r.status = 'successful'
+          AND (r.created_at AT TIME ZONE 'Asia/Kolkata')::date = (now() AT TIME ZONE 'Asia/Kolkata')::date
+        GROUP BY COALESCE(o.operator_name, r.operator_name, 'Other')
+        ORDER BY amount_minor DESC, txn_count DESC
+      `, [user.id]).catch(() => ({ rows: [] })),
+
+      // K. Recent 6 transactions for this user (Buy or Sell)
       db.query(`
         SELECT r.id, r.mobile_number, r.operator_name, r.circle_name, r.amount_minor,
                r.status, r.provider_reference, r.idempotency_key, r.created_at,
@@ -177,6 +237,80 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     const pSellRow = pendingSalesRes.rows[0] || {};
     const pendingSellCount = Number(pSellRow.count || 0);
     const pendingSellVal = formatRupees(pSellRow.val || 0);
+
+    // Parse Today Topup
+    const topupRow = todayTopupRes.rows[0] || {};
+    const todayTopupCount = Number(topupRow.approved_count || topupRow.total_count || 0);
+    const todayTopupVal = formatRupees(topupRow.approved_val || topupRow.total_val || 0);
+
+    // Parse Today Redeem
+    const redeemRow = todayRedeemRes.rows[0] || {};
+    const todayRedeemCount = Number(redeemRow.active_count || redeemRow.total_count || 0);
+    const todayRedeemVal = formatRupees(redeemRow.active_val || redeemRow.total_val || 0);
+
+    // Build Today Sales Summary Operator Wise Table
+    const salesOpRows = todayOperatorSalesRes.rows || [];
+    let salesTotalTxns = 0;
+    let salesTotalAmountMinor = 0n;
+    let salesTotalMarginMinor = 0n;
+
+    for (const row of salesOpRows) {
+      salesTotalTxns += Number(row.txn_count || 0);
+      salesTotalAmountMinor += BigInt(row.amount_minor || 0);
+      salesTotalMarginMinor += BigInt(row.margin_minor || 0);
+    }
+    const salesOverallAvgMargin = salesTotalAmountMinor > 0n
+      ? `${(Number(salesTotalMarginMinor * 10000n / salesTotalAmountMinor) / 100).toFixed(2)}%`
+      : '0.00%';
+
+    const salesOpRowsHtml = salesOpRows.length > 0
+      ? salesOpRows.map((r, idx) => {
+        const amt = BigInt(r.amount_minor || 0);
+        const mgn = BigInt(r.margin_minor || 0);
+        const pct = amt > 0n ? `${(Number(mgn * 10000n / amt) / 100).toFixed(2)}%` : '0.00%';
+        return `
+          <tr>
+            <td class="text-center font-weight-bold text-muted">${idx + 1}</td>
+            <td class="font-weight-bold text-dark">${escapeHtml(r.op_name || 'Operator')}</td>
+            <td class="text-center"><span class="badge badge-light border font-weight-bold">${Number(r.txn_count || 0)}</span></td>
+            <td class="text-right font-weight-bold text-success font-monospace">₹${formatRupees(amt)}</td>
+            <td class="text-right font-weight-bold text-primary font-monospace">${pct}</td>
+          </tr>
+        `;
+      }).join('')
+      : `<tr><td colspan="5" class="text-center py-3 text-muted"><i class="fa fa-chart-line mb-1 d-block opacity-50"></i>No sales transactions completed today.</td></tr>`;
+
+    // Build Today Purchase Summary Operator Wise Table
+    const purchaseOpRows = todayOperatorPurchaseRes.rows || [];
+    let purchaseTotalTxns = 0;
+    let purchaseTotalAmountMinor = 0n;
+    let purchaseTotalMarginMinor = 0n;
+
+    for (const row of purchaseOpRows) {
+      purchaseTotalTxns += Number(row.txn_count || 0);
+      purchaseTotalAmountMinor += BigInt(row.amount_minor || 0);
+      purchaseTotalMarginMinor += BigInt(row.margin_minor || 0);
+    }
+    const purchaseOverallAvgMargin = purchaseTotalAmountMinor > 0n
+      ? `${(Number(purchaseTotalMarginMinor * 10000n / purchaseTotalAmountMinor) / 100).toFixed(2)}%`
+      : '0.00%';
+
+    const purchaseOpRowsHtml = purchaseOpRows.length > 0
+      ? purchaseOpRows.map((r, idx) => {
+        const amt = BigInt(r.amount_minor || 0);
+        const mgn = BigInt(r.margin_minor || 0);
+        const pct = amt > 0n ? `${(Number(mgn * 10000n / amt) / 100).toFixed(2)}%` : '0.00%';
+        return `
+          <tr>
+            <td class="text-center font-weight-bold text-muted">${idx + 1}</td>
+            <td class="font-weight-bold text-dark">${escapeHtml(r.op_name || 'Operator')}</td>
+            <td class="text-center"><span class="badge badge-light border font-weight-bold">${Number(r.txn_count || 0)}</span></td>
+            <td class="text-right font-weight-bold text-dark font-monospace">₹${formatRupees(amt)}</td>
+            <td class="text-right font-weight-bold text-info font-monospace">${pct}</td>
+          </tr>
+        `;
+      }).join('')
+      : `<tr><td colspan="5" class="text-center py-3 text-muted"><i class="fa fa-shopping-cart mb-1 d-block opacity-50"></i>No purchase transactions completed today.</td></tr>`;
 
     // Format Recent Transactions rows
     const recentRows = recentTxnsRes.rows || [];
@@ -238,6 +372,25 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     }
     .user-dashboard-container {
       padding: 16px 20px 48px;
+    }
+
+    /* Top Horizontal Dashboard Banner (full width & limited height) */
+    .user-dashboard-banner-container {
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      background: #0f172a;
+      max-height: 160px;
+    }
+    .user-dashboard-banner-img {
+      width: 100%;
+      height: 140px;
+      max-height: 160px;
+      object-fit: cover;
+      display: block;
     }
 
     /* Running News Bar directly touching below menu bar */
@@ -395,6 +548,8 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     .kpi-card-today-sales-disp { border-top: 4px solid #ef4444; }
     .kpi-card-pending-purchase { border-top: 4px solid #06b6d4; }
     .kpi-card-pending-sales { border-top: 4px solid #8b5cf6; }
+    .kpi-card-today-topup { border-top: 4px solid #0d9488; }
+    .kpi-card-today-redeem { border-top: 4px solid #4f46e5; }
 
     .kpi-header {
       display: flex;
@@ -425,6 +580,8 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     .bubble-red { background: #fef2f2; color: #ef4444; }
     .bubble-cyan { background: #ecfeff; color: #06b6d4; }
     .bubble-purple { background: #f5f3ff; color: #8b5cf6; }
+    .bubble-teal { background: #f0fdfa; color: #0d9488; }
+    .bubble-indigo { background: #eef2ff; color: #4f46e5; }
 
     .kpi-body {
       margin-bottom: 12px;
@@ -450,6 +607,8 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     .pill-red { background: #fee2e2; color: #991b1b; }
     .pill-cyan { background: #cffafe; color: #155e75; }
     .pill-purple { background: #ede9fe; color: #5b21b6; }
+    .pill-teal { background: #ccfbf1; color: #115e59; }
+    .pill-indigo { background: #e0e7ff; color: #3730a3; }
 
     .kpi-footer-link {
       font-size: 12px;
@@ -517,6 +676,11 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     </div>
 
     <div class="user-dashboard-container">
+      <!-- 0. Top Horizontal Dashboard Banner (full width & limited height) -->
+      <div class="user-dashboard-banner-container">
+        <img src="/api/dashboard-banner" alt="Dashboard Banner" class="user-dashboard-banner-img">
+      </div>
+
       <!-- Welcome Header -->
       <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
         <div>
@@ -674,10 +838,10 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
         `}
       </div>
 
-      <!-- 3. KPI METRIC CARDS (No. and Value both) -->
-      <div class="row mb-4">
+      <!-- 3. KPI METRIC CARDS (8 Real-Time Metrics, Number & Value Both) -->
+      <div class="row mb-3">
         <!-- 1. Today Purchase -->
-        <div class="col-xl-4 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
           <div class="kpi-stat-card kpi-card-today-purchase">
             <div class="kpi-header">
               <span class="kpi-title">Today Purchase</span>
@@ -699,7 +863,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
         </div>
 
         <!-- 2. Today Sales -->
-        <div class="col-xl-4 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
           <div class="kpi-stat-card kpi-card-today-sales">
             <div class="kpi-header">
               <span class="kpi-title">Today Sales</span>
@@ -720,52 +884,8 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
           </div>
         </div>
 
-        <!-- 3. Today Purchase Dispute -->
-        <div class="col-xl-4 col-md-6 mb-4">
-          <div class="kpi-stat-card kpi-card-today-purchase-disp">
-            <div class="kpi-header">
-              <span class="kpi-title">Today Purchase Dispute</span>
-              <div class="kpi-icon-bubble bubble-amber">
-                <i class="fa fa-triangle-exclamation"></i>
-              </div>
-            </div>
-            <div class="kpi-body">
-              <div class="kpi-val-number text-warning">₹${todayBuyDispVal}</div>
-              <span class="kpi-count-pill pill-amber">
-                <i class="fa fa-flag mr-1"></i> ${todayBuyDispCount} Disputes
-              </span>
-            </div>
-            <a href="/buyer/recharge-dispute" class="kpi-footer-link">
-              <span>Manage Buyer Disputes</span>
-              <i class="fa fa-arrow-right"></i>
-            </a>
-          </div>
-        </div>
-
-        <!-- 4. Today Sales Dispute -->
-        <div class="col-xl-4 col-md-6 mb-4">
-          <div class="kpi-stat-card kpi-card-today-sales-disp">
-            <div class="kpi-header">
-              <span class="kpi-title">Today Sales Dispute</span>
-              <div class="kpi-icon-bubble bubble-red">
-                <i class="fa fa-scale-balanced"></i>
-              </div>
-            </div>
-            <div class="kpi-body">
-              <div class="kpi-val-number text-danger">₹${todaySellDispVal}</div>
-              <span class="kpi-count-pill pill-red">
-                <i class="fa fa-shield mr-1"></i> ${todaySellDispCount} Disputes
-              </span>
-            </div>
-            <a href="/seller/sales-dispute" class="kpi-footer-link">
-              <span>Manage Seller Disputes</span>
-              <i class="fa fa-arrow-right"></i>
-            </a>
-          </div>
-        </div>
-
-        <!-- 5. Pending Purchase -->
-        <div class="col-xl-4 col-md-6 mb-4">
+        <!-- 3. Pending Purchase -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
           <div class="kpi-stat-card kpi-card-pending-purchase">
             <div class="kpi-header">
               <span class="kpi-title">Pending Purchase</span>
@@ -786,8 +906,8 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
           </div>
         </div>
 
-        <!-- 6. Pending Sales -->
-        <div class="col-xl-4 col-md-6 mb-4">
+        <!-- 4. Pending Sales -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
           <div class="kpi-stat-card kpi-card-pending-sales">
             <div class="kpi-header">
               <span class="kpi-title">Pending Sales</span>
@@ -805,6 +925,173 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
               <span>Manage Pending Queue</span>
               <i class="fa fa-arrow-right"></i>
             </a>
+          </div>
+        </div>
+
+        <!-- 5. Today Purchase Dispute -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
+          <div class="kpi-stat-card kpi-card-today-purchase-disp">
+            <div class="kpi-header">
+              <span class="kpi-title">Today Purchase Dispute</span>
+              <div class="kpi-icon-bubble bubble-amber">
+                <i class="fa fa-triangle-exclamation"></i>
+              </div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-val-number text-warning">₹${todayBuyDispVal}</div>
+              <span class="kpi-count-pill pill-amber">
+                <i class="fa fa-flag mr-1"></i> ${todayBuyDispCount} Disputes
+              </span>
+            </div>
+            <a href="/buyer/recharge-dispute" class="kpi-footer-link">
+              <span>Manage Buyer Disputes</span>
+              <i class="fa fa-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- 6. Today Sales Dispute -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
+          <div class="kpi-stat-card kpi-card-today-sales-disp">
+            <div class="kpi-header">
+              <span class="kpi-title">Today Sales Dispute</span>
+              <div class="kpi-icon-bubble bubble-red">
+                <i class="fa fa-scale-balanced"></i>
+              </div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-val-number text-danger">₹${todaySellDispVal}</div>
+              <span class="kpi-count-pill pill-red">
+                <i class="fa fa-shield mr-1"></i> ${todaySellDispCount} Disputes
+              </span>
+            </div>
+            <a href="/seller/sales-dispute" class="kpi-footer-link">
+              <span>Manage Seller Disputes</span>
+              <i class="fa fa-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- 7. Today Total Topup -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
+          <div class="kpi-stat-card kpi-card-today-topup">
+            <div class="kpi-header">
+              <span class="kpi-title">Today Topup</span>
+              <div class="kpi-icon-bubble bubble-teal">
+                <i class="fa fa-money-bill-transfer"></i>
+              </div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-val-number" style="color:#0d9488;">₹${todayTopupVal}</div>
+              <span class="kpi-count-pill pill-teal">
+                <i class="fa fa-circle-check mr-1"></i> ${todayTopupCount} Approved
+              </span>
+            </div>
+            <a href="/fund/wallet-topup-request" class="kpi-footer-link">
+              <span>Topup Requests</span>
+              <i class="fa fa-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+
+        <!-- 8. Today Total Redeem -->
+        <div class="col-xl-3 col-lg-3 col-md-6 col-sm-6 mb-3">
+          <div class="kpi-stat-card kpi-card-today-redeem">
+            <div class="kpi-header">
+              <span class="kpi-title">Today Redeem</span>
+              <div class="kpi-icon-bubble bubble-indigo">
+                <i class="fa fa-hand-holding-dollar"></i>
+              </div>
+            </div>
+            <div class="kpi-body">
+              <div class="kpi-val-number" style="color:#4f46e5;">₹${todayRedeemVal}</div>
+              <span class="kpi-count-pill pill-indigo">
+                <i class="fa fa-arrow-up-right-from-square mr-1"></i> ${todayRedeemCount} Redeems
+              </span>
+            </div>
+            <a href="/fund/redeem" class="kpi-footer-link">
+              <span>Redeem History</span>
+              <i class="fa fa-arrow-right"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. OPERATOR WISE SUMMARIES (Today Sales & Today Purchase side-by-side) -->
+      <div class="row mb-4">
+        <!-- Sales Summary Operator Wise -->
+        <div class="col-lg-6 col-md-12 mb-4">
+          <div class="card border-0 shadow-sm rounded-3 h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+              <h6 class="font-weight-bold text-dark mb-0">
+                <i class="fa fa-chart-line text-success mr-2"></i> Today Sales Summary (Operator Wise)
+              </h6>
+              <span class="badge badge-success px-2 py-1">Seller</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 text-nowrap">
+                  <thead class="bg-light text-uppercase small text-muted font-weight-bold">
+                    <tr>
+                      <th class="text-center" style="width: 45px;">#</th>
+                      <th>Operator</th>
+                      <th class="text-center">Txns</th>
+                      <th class="text-right">Amount (₹)</th>
+                      <th class="text-right">Avg Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${salesOpRowsHtml}
+                  </tbody>
+                  <tfoot class="bg-light font-weight-bold border-top">
+                    <tr class="table-active">
+                      <td colspan="2" class="text-uppercase text-dark">Total</td>
+                      <td class="text-center text-dark">${salesTotalTxns}</td>
+                      <td class="text-right text-success font-monospace">₹${formatRupees(salesTotalAmountMinor)}</td>
+                      <td class="text-right text-primary font-monospace">${salesOverallAvgMargin}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Purchase Summary Operator Wise -->
+        <div class="col-lg-6 col-md-12 mb-4">
+          <div class="card border-0 shadow-sm rounded-3 h-100">
+            <div class="card-header bg-white py-3 border-bottom d-flex align-items-center justify-content-between">
+              <h6 class="font-weight-bold text-dark mb-0">
+                <i class="fa fa-cart-shopping text-primary mr-2"></i> Today Purchase Summary (Operator Wise)
+              </h6>
+              <span class="badge badge-primary px-2 py-1">Buyer</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 text-nowrap">
+                  <thead class="bg-light text-uppercase small text-muted font-weight-bold">
+                    <tr>
+                      <th class="text-center" style="width: 45px;">#</th>
+                      <th>Operator</th>
+                      <th class="text-center">Txns</th>
+                      <th class="text-right">Amount (₹)</th>
+                      <th class="text-right">Avg Margin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${purchaseOpRowsHtml}
+                  </tbody>
+                  <tfoot class="bg-light font-weight-bold border-top">
+                    <tr class="table-active">
+                      <td colspan="2" class="text-uppercase text-dark">Total</td>
+                      <td class="text-center text-dark">${purchaseTotalTxns}</td>
+                      <td class="text-right text-dark font-monospace">₹${formatRupees(purchaseTotalAmountMinor)}</td>
+                      <td class="text-right text-info font-monospace">${purchaseOverallAvgMargin}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
       </div>
