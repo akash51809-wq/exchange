@@ -35,8 +35,13 @@ module.exports = function createPageModule({ db }) {
       return `<tr>
         <td class="font-weight-bold text-center">${index + 1}</td>
         <td>
-          <div class="font-weight-bold text-primary">${escapeHtml(row.bank_name)}</div>
-          <small class="text-muted"><i class="fa fa-map-marker mr-1"></i>${escapeHtml(row.branch_name || 'Main Branch')}</small>
+          <div class="d-flex align-items-center">
+            <img src="/api/bank-logo/${row.id}" alt="" style="width:26px;height:26px;object-fit:contain;border-radius:4px;border:1px solid #dbe1ee;background:#fff;margin-right:8px;" onerror="this.style.display='none'">
+            <div>
+              <div class="font-weight-bold text-primary">${escapeHtml(row.bank_name)}</div>
+              <small class="text-muted"><i class="fa fa-map-marker mr-1"></i>${escapeHtml(row.branch_name || 'Main Branch')}</small>
+            </div>
+          </div>
         </td>
         <td><strong>${escapeHtml(row.account_holder)}</strong></td>
         <td><code class="font-weight-bold font-monospace text-dark" style="font-size: 14px;">${escapeHtml(row.account_number)}</code></td>
@@ -215,8 +220,17 @@ module.exports = function createPageModule({ db }) {
               <input type="text" class="form-control font-monospace" id="upiId" placeholder="e.g. business@axisbank">
             </div>
             <div class="form-group col-md-6">
-              <label for="qrImageUrl" class="font-weight-bold">QR Image URL / Bank Logo URL (Optional)</label>
+              <label for="qrImageUrl" class="font-weight-bold">QR Image URL (Optional)</label>
               <input type="url" class="form-control" id="qrImageUrl" placeholder="https://example.com/qr.png">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="bankLogoFile" class="font-weight-bold">Upload Bank Logo Image</label>
+            <input type="file" class="form-control-file" id="bankLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+            <small class="form-text text-muted">Upload PNG / JPEG / SVG logo (max 2 MB). This logo will appear in user topup and reports.</small>
+            <div id="bankLogoPreview" class="mt-2" style="display:none;">
+              <img id="bankLogoPreviewImg" src="" style="height:36px;border:1px solid #ddd;border-radius:4px;padding:2px;background:#fff;" alt="Preview">
             </div>
           </div>
 
@@ -262,6 +276,29 @@ function prepareAddBank() {
   document.getElementById('isActive').checked = true;
   document.getElementById('cashDepositCharges').value = '0.00';
   document.getElementById('billingInfo').value = '24×7 Auto Billing';
+  document.getElementById('bankLogoPreview').style.display = 'none';
+}
+
+const logoFileInput = document.getElementById('bankLogoFile');
+if (logoFileInput) {
+  logoFileInput.addEventListener('change', () => {
+    const file = logoFileInput.files && logoFileInput.files[0];
+    if (!file) {
+      document.getElementById('bankLogoPreview').style.display = 'none';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Bank logo must be under 2 MB.');
+      logoFileInput.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('bankLogoPreviewImg').src = reader.result;
+      document.getElementById('bankLogoPreview').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // Edit bank trigger
@@ -281,6 +318,9 @@ document.querySelectorAll('[data-edit-bank]').forEach(btn => {
       document.getElementById('upiId').value = data.upi_id || '';
       document.getElementById('qrImageUrl').value = data.qr_image_url || '';
       document.getElementById('isActive').checked = Boolean(data.is_active);
+      document.getElementById('bankLogoFile').value = '';
+      document.getElementById('bankLogoPreviewImg').src = '/api/bank-logo/' + data.id;
+      document.getElementById('bankLogoPreview').style.display = 'block';
       $('#bankModal').modal('show');
     } catch (e) {
       console.error(e);
@@ -352,6 +392,18 @@ document.getElementById('bankForm').addEventListener('submit', async (e) => {
     qr_image_url: document.getElementById('qrImageUrl').value.trim(),
     is_active: document.getElementById('isActive').checked,
   };
+
+  const fileInput = document.getElementById('bankLogoFile');
+  if (fileInput && fileInput.files && fileInput.files[0]) {
+    const file = fileInput.files[0];
+    payload.logo_mime = file.type || 'image/png';
+    payload.logo_data_b64 = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(',')[1]);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
 
   const url = bankId ? \`/api/admin/payment/banks/\${bankId}\` : '/api/admin/payment/banks';
   const method = bankId ? 'PUT' : 'POST';

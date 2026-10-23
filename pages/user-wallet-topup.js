@@ -26,7 +26,7 @@ async function sendWalletTopupRequestPage(user, response) {
   const activeBanks = bankResult.rows;
 
   const requests = await db.query(
-    `SELECT r.id, r.amount_minor, r.bank_code, r.payment_mode, r.status, r.review_note, r.created_at,
+    `SELECT r.id, r.amount_minor, r.bank_code, r.bank_account_id, r.payment_mode, r.status, r.review_note, r.created_at,
             COALESCE(b.bank_name, r.bank_name, r.bank_code) as display_bank,
             COALESCE(b.account_number, r.deposit_account) as display_account
      FROM wallet_fund_requests r
@@ -37,19 +37,21 @@ async function sendWalletTopupRequestPage(user, response) {
     [user.id],
   );
 
-  const menu = USER_PANEL_MENU.map((item) => {
-    const label = escapeHtml(item.label);
-    if (!item.items?.length) return `<li aria-haspopup="true"><a class="font-weight-bold" style="font-weight:700" href="${item.path}">${label}</a></li>`;
-    return `<li aria-haspopup="true"><a href="${item.path}" class="sub-icon font-weight-bold" style="font-weight:700">${label} <i class="fa fa-angle-down horizontal-icon"></i></a><ul class="sub-menu">${item.items.map((child) => `<li aria-haspopup="true"><a class="font-weight-bold" style="font-weight:700" href="${child.path}">${escapeHtml(child.label)}</a></li>`).join('')}</ul></li>`;
-  }).join('');
+  const navigationHtml = renderUserNavigation(walletMode, '/fund/wallet-topup-request');
 
   const statusLabels = { pending: 'Pending', approved: 'Approved', rejected: 'Rejected' };
   const historyRows = requests.rows.map((request) => {
-    const amount = (BigInt(request.amount_minor) / 100n).toString() + '.' + String(BigInt(request.amount_minor) % 100n).padStart(2, '0');
+    const minor = BigInt(request.amount_minor || 0);
+    const amount = (minor / 100n).toString() + '.' + String(minor % 100n).padStart(2, '0');
     const badgeClass = request.status === 'approved' ? 'badge-success' : (request.status === 'pending' ? 'badge-warning' : 'badge-danger');
     return `<tr>
       <td>${escapeHtml(new Date(request.created_at).toLocaleString('en-IN'))}</td>
-      <td><strong>${escapeHtml(request.display_bank || 'Bank')}</strong></td>
+      <td>
+        <div class="d-flex align-items-center">
+          ${request.bank_account_id ? `<img src="/api/bank-logo/${request.bank_account_id}" style="max-height:20px;max-width:28px;object-fit:contain;margin-right:6px;border-radius:2px;" alt="" onerror="this.style.display='none'">` : ''}
+          <strong>${escapeHtml(request.display_bank || 'Bank')}</strong>
+        </div>
+      </td>
       <td class="font-weight-bold text-primary">₹${amount}</td>
       <td>${escapeHtml(request.payment_mode)}</td>
       <td><span class="badge ${badgeClass}">${statusLabels[request.status] || request.status}</span></td>
@@ -65,7 +67,12 @@ async function sendWalletTopupRequestPage(user, response) {
 
     return `<tr>
       <td class="text-center font-weight-bold">${i + 1}</td>
-      <td><strong class="text-primary">${escapeHtml(b.bank_name)}</strong></td>
+      <td>
+        <div class="d-flex align-items-center">
+          <img src="/api/bank-logo/${b.id}" style="max-height:28px;max-width:38px;object-fit:contain;margin-right:8px;border-radius:3px;" alt="" onerror="this.style.display='none'">
+          <strong class="text-primary">${escapeHtml(b.bank_name)}</strong>
+        </div>
+      </td>
       <td>${escapeHtml(b.branch_name || 'Main Branch')}</td>
       <td>${escapeHtml(b.account_holder)}</td>
       <td><code class="font-weight-bold text-dark font-monospace" style="font-size:14px;">${escapeHtml(b.account_number)}</code></td>
@@ -78,7 +85,7 @@ async function sendWalletTopupRequestPage(user, response) {
   }).join('');
 
   const bankSelectOptions = activeBanks.map((b) => {
-    return `<option value="${b.id}" data-account="${escapeHtml(b.account_number)}" data-name="${escapeHtml(b.bank_name)}">${escapeHtml(b.bank_name)} - ${escapeHtml(b.branch_name || b.account_number)}</option>`;
+    return `<option value="${b.id}" data-account="${escapeHtml(b.account_number)}" data-name="${escapeHtml(b.bank_name)}" data-logo="/api/bank-logo/${b.id}">${escapeHtml(b.bank_name)} - ${escapeHtml(b.branch_name || b.account_number)}</option>`;
   }).join('');
 
   const html = `<!DOCTYPE html>
@@ -87,25 +94,31 @@ async function sendWalletTopupRequestPage(user, response) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Wallet Topup Request - Exchange</title>
+  <link rel="icon" type="image/x-icon" href="/api/favicon">
   <link rel="stylesheet" href="/assets/plugins/bootstrap/css/bootstrap.css">
   <link rel="stylesheet" href="/assets/css/style.css">
   <link rel="stylesheet" href="/assets/css/dark.css">
   <link rel="stylesheet" href="/assets/css/skins.css">
   <link rel="stylesheet" href="/assets/css/icons.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     .font-monospace { font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    /* Remove scroll arrows from number input */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    input[type=number] {
+      -moz-appearance: textfield;
+    }
   </style>
 </head>
 <body>
 <div class="page">
   <div class="page-main">
-    <div class="sticky">
-      <div class="horizontal-main hor-menu clearfix">
-        <div class="horizontal-mainwrapper container-fluid px-2 clearfix">
-          <nav class="horizontalMenu clearfix"><ul class="horizontalMenu-list">${menu}</ul></nav>
-        </div>
-      </div>
-    </div>
+    ${navigationHtml}
+
     <main class="main-content">
       <div class="container-fluid px-2">
         <div class="page-header d-flex justify-content-between align-items-center mb-3">
@@ -196,16 +209,19 @@ async function sendWalletTopupRequestPage(user, response) {
       </div>
       <div class="modal-body p-4">
         <div class="alert alert-info py-2">
-          <i class="fa fa-info-circle mr-1"></i> Wallet balance will be credited directly to your INR wallet once verified and approved by the admin team.
+          <i class="fa fa-info-circle mr-1"></i> Wallet balance will be credited directly to your wallet once verified and approved by the admin team.
         </div>
         <form id="wallet-topup-form">
           <div class="form-row">
             <div class="form-group col-md-6">
               <label for="topup-bank" class="font-weight-bold">Choose Bank <span class="text-danger">*</span></label>
-              <select id="topup-bank" class="form-control" required>
-                <option value="">Select Bank</option>
-                ${bankSelectOptions}
-              </select>
+              <div class="d-flex align-items-center">
+                <img id="topup-bank-logo" src="" style="width:36px;height:36px;object-fit:contain;margin-right:8px;border-radius:4px;border:1px solid #cbd5e1;display:none;" alt="Bank Logo">
+                <select id="topup-bank" class="form-control" required>
+                  <option value="">Select Bank</option>
+                  ${bankSelectOptions}
+                </select>
+              </div>
             </div>
             <div class="form-group col-md-6">
               <label for="topup-deposit-account" class="font-weight-bold">Deposit Account Number</label>
@@ -222,21 +238,18 @@ async function sendWalletTopupRequestPage(user, response) {
             </div>
             <div class="form-group col-md-6">
               <label for="topup-amount" class="font-weight-bold">Requested Amount (₹) <span class="text-danger">*</span></label>
-              <input id="topup-amount" type="number" class="form-control" min="0.01" max="10000000" step="0.01" placeholder="e.g. 5000" required>
+              <input id="topup-amount" type="number" class="form-control" min="0.01" max="10000000" step="0.01" placeholder="Enter amount manually, e.g. 5000" required>
             </div>
-            <div class="form-group col-md-6">
+            <div class="form-group col-md-12">
               <label for="topup-wallet-type" class="font-weight-bold">Wallet Type <span class="text-danger">*</span></label>
               <select id="topup-wallet-type" class="form-control" required>
                 <option>Prepaid</option>
               </select>
             </div>
-            <div class="form-group col-md-6">
-              <label for="topup-account-number" class="font-weight-bold">Your Depositor Account No. (Optional)</label>
-              <input id="topup-account-number" class="form-control font-monospace" maxlength="34" placeholder="Your sender account number">
-            </div>
             <div class="form-group col-md-12">
-              <label for="topup-transaction-id" class="font-weight-bold">UTR / Transaction Reference ID (Optional)</label>
-              <input id="topup-transaction-id" class="form-control font-monospace" maxlength="80" placeholder="e.g. UTR1234567890">
+              <label for="topup-transaction-id" class="font-weight-bold">UTR / Transaction Reference ID <span class="text-danger">*</span></label>
+              <input id="topup-transaction-id" class="form-control font-monospace" maxlength="80" placeholder="Enter unique bank UTR / Ref ID (e.g. 423456789012)" required>
+              <small class="form-text text-muted">Mandatory bank transaction reference number. Note: 1 UTR can only be submitted once lifetime across the entire system.</small>
             </div>
             <div class="form-group col-12">
               <label for="topup-proof" class="font-weight-bold">Upload Payment Slip / Screenshot (Optional, max 512 KB)</label>
@@ -262,13 +275,20 @@ async function sendWalletTopupRequestPage(user, response) {
 </div>
 
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
-<script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
-<script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
+<script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="/auth-client.js"></script>
 <script>
 document.getElementById('topup-bank').addEventListener('change', function() {
   const sel = this.options[this.selectedIndex];
   document.getElementById('topup-deposit-account').value = sel ? (sel.dataset.account || '') : '';
+  const logoEl = document.getElementById('topup-bank-logo');
+  if (sel && sel.dataset.logo) {
+    logoEl.src = sel.dataset.logo;
+    logoEl.style.display = 'inline-block';
+    logoEl.onerror = () => { logoEl.style.display = 'none'; };
+  } else {
+    logoEl.style.display = 'none';
+  }
 });
 
 const form = document.getElementById('wallet-topup-form');
@@ -287,7 +307,7 @@ form.addEventListener('submit', async function(event) {
   if (file) {
     if (file.size > 524288) {
       message.className = 'mb-0 font-weight-bold text-danger';
-      message.textContent = 'Image 512 KB se chhoti honi chahiye.';
+      message.textContent = 'Proof image must be under 512 KB.';
       submitBtn.disabled = false;
       return;
     }
@@ -318,17 +338,17 @@ form.addEventListener('submit', async function(event) {
         paymentMode: document.getElementById('topup-payment-mode').value,
         amount: document.getElementById('topup-amount').value,
         walletType: document.getElementById('topup-wallet-type').value,
-        accountNumber: document.getElementById('topup-account-number').value,
         transactionId: document.getElementById('topup-transaction-id').value,
         proof
       })
     });
     const body = await response.json();
-    if (!response.ok) throw new Error(body.error || 'Request submit nahin hua.');
+    if (!response.ok) throw new Error(body.error || 'Failed to submit fund request.');
     message.className = 'mb-0 font-weight-bold text-success';
-    message.textContent = 'Fund request submit hua! Admin approval ke baad wallet balance update hoga.';
+    message.textContent = 'Fund request submitted successfully! Wallet balance will update upon admin approval.';
     form.reset();
     document.getElementById('topup-deposit-account').value = '';
+    document.getElementById('topup-bank-logo').style.display = 'none';
     setTimeout(() => location.reload(), 1200);
   } catch (error) {
     message.className = 'mb-0 font-weight-bold text-danger';
@@ -346,9 +366,8 @@ form.addEventListener('submit', async function(event) {
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
-    'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
   });
-  response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db }));
+  response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db, currentPath: '/fund/wallet-topup-request' }));
 }
 
   return { sendWalletTopupRequestPage };

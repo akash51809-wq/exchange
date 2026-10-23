@@ -148,7 +148,7 @@ module.exports = function createUserAvailableStockPage({ db, formatMinorUnits, d
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
           <td>
             <div class="stock-op-cell">
-              <span class="stock-op-avatar">${escapeHtml(row.operator_name.slice(0, 1).toUpperCase())}</span>
+              <img src="/api/operator-logo/${row.operator_id}" alt="${escapeHtml(row.operator_name)}" class="stock-op-avatar mr-2" style="width:28px;height:28px;object-fit:contain;border-radius:4px;border:1px solid #dbe1ee;background:#fff;" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex'"><span class="stock-op-avatar mr-2" style="display:none;">${escapeHtml(row.operator_name.slice(0, 1).toUpperCase())}</span>
               <div>
                 <strong class="stock-op-name">${escapeHtml(row.operator_name)}</strong>
                 ${ownBadge}

@@ -74,9 +74,9 @@ async function sendUserFundOrderPage(user, response, searchParams) {
   }
   const limitParam = addValue(Number(filters.limit));
   const result = await db.query(
-    `SELECT r.id, r.amount_minor, r.bank_code, r.payment_mode, r.wallet_type,
+    `SELECT r.id, r.amount_minor, r.bank_code, r.bank_account_id, b.bank_name as admin_bank_name, r.payment_mode, r.wallet_type,
             r.source_account_ciphertext, r.transaction_id_ciphertext, r.status, r.review_note, r.created_at
-     FROM wallet_fund_requests r WHERE ${conditions.join(' AND ')}
+     FROM wallet_fund_requests r LEFT JOIN admin_bank_accounts b ON b.id = r.bank_account_id WHERE ${conditions.join(' AND ')}
      ORDER BY r.created_at DESC LIMIT ${limitParam}`,
     values,
   );
@@ -85,7 +85,7 @@ async function sendUserFundOrderPage(user, response, searchParams) {
     const sourceAccount = row.source_account_ciphertext ? decryptFundField(row.source_account_ciphertext, 'account') : '—';
     const transactionId = row.transaction_id_ciphertext ? decryptFundField(row.transaction_id_ciphertext, 'transaction') : '—';
     const badge = row.status === 'approved' ? 'success' : row.status === 'rejected' ? 'danger' : 'warning';
-    return `<tr><td>${index + 1}</td><td>${row.bank_code === 'axis' ? 'AXIS BANK' : escapeHtml(row.bank_code)}</td><td>S3 SOLUTION &amp; SERVICE COMPANY</td><td>${escapeHtml(sourceAccount)}</td><td>${escapeHtml(row.payment_mode)}</td><td>${escapeHtml(transactionId)}</td><td>—</td><td>—</td><td>—</td><td>${escapeHtml(new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))}</td><td>₹${formatMinorUnits(row.amount_minor)}</td><td><span class="badge badge-${badge}">${statusLabels[row.status]}</span></td><td>${escapeHtml(row.review_note || '—')}</td></tr>`;
+    return `<tr><td>${index + 1}</td><td>${row.bank_account_id ? `<img src="/api/bank-logo/${row.bank_account_id}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:6px;" onerror="this.style.display='none'">` : ''}${escapeHtml(row.admin_bank_name || (row.bank_code === 'axis' ? 'AXIS BANK' : row.bank_code || 'Bank'))}</td><td>S3 SOLUTION &amp; SERVICE COMPANY</td><td>${escapeHtml(sourceAccount)}</td><td>${escapeHtml(row.payment_mode)}</td><td>${escapeHtml(transactionId)}</td><td>—</td><td>—</td><td>—</td><td>${escapeHtml(new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }))}</td><td>₹${formatMinorUnits(row.amount_minor)}</td><td><span class="badge badge-${badge}">${statusLabels[row.status]}</span></td><td>${escapeHtml(row.review_note || '—')}</td></tr>`;
   }).join('');
   const selected = (name, value) => filters[name] === value ? ' selected' : '';
   const menu = USER_PANEL_MENU.map((item) => {

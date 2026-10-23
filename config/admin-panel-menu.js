@@ -18,7 +18,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'List of Wallet Exchange', path: '/admin/payment/wallet-exchange' },
   ] },
   { label: 'Disputes', path: '/admin/disputes' },
-  { label: 'Request API Approval', path: '/admin/seller-api/requests' },
+  { label: 'Seller API Requests', path: '/admin/seller-api/requests' },
   { label: 'Reports', path: '#', items: [
     { label: 'Daily Sales Report', path: '/admin/reports/daily-sales-report' },
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },

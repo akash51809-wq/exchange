@@ -10,7 +10,6 @@ const USER_PANEL_MENU = [
     { label: 'Fund Dr/Cr Statement', path: '/fund/statement' },
   ] },
   { label: 'Buyer', path: '/buyer', items: [
-    { label: 'Available Margin', path: '/buyer/available-margin' },
     { label: 'Buyer Margin', path: '/buyer/margin' },
     { label: 'Purchase Txn', path: '/buyer/purchase-txn' },
     { label: 'API Document', path: '/buyer/api-document' },
@@ -45,6 +44,9 @@ const USER_PANEL_MENU = [
     { label: 'Add Callback', path: '/setting/add-callback' },
     { label: 'Error List', path: '/setting/error-list' },
   ] },
+  { label: 'Help', path: '/help', items: [
+    { label: 'Integration Requests', path: '/help/integration-requests' },
+  ] },
   { label: 'Available Stock', path: '/available-stock' },
 ];
 
@@ -65,7 +67,6 @@ function getUserPanelMenu(walletMode = 'single') {
       { label: 'Fund Dr/Cr Statement', path: '/fund/statement' },
     ] },
     { label: 'Buyer', path: '/buyer', items: [
-      { label: 'Available Margin', path: '/buyer/available-margin' },
       { label: 'Buyer Margin', path: '/buyer/margin' },
       { label: 'Purchase Txn', path: '/buyer/purchase-txn' },
       { label: 'API Document', path: '/buyer/api-document' },
@@ -101,6 +102,9 @@ function getUserPanelMenu(walletMode = 'single') {
       { label: 'Add Callback', path: '/setting/add-callback' },
       { label: 'Error List', path: '/setting/error-list' },
     ] },
+    { label: 'Help', path: '/help', items: [
+      { label: 'Integration Requests', path: '/help/integration-requests' },
+    ] },
     { label: 'Available Stock', path: '/available-stock' },
   ];
 }
@@ -115,6 +119,8 @@ USER_PANEL_PAGES.set('/invoice/buyer-invoice', { title: 'Buyer GST Invoice', tem
 USER_PANEL_PAGES.set('/invoice/seller-invoice', { title: 'Seller GST Invoice', template: 'invoice-seller-gst-invoice.html' });
 USER_PANEL_PAGES.set('/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html' });
 USER_PANEL_PAGES.set('/user/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html' });
+USER_PANEL_PAGES.set('/help/integration-requests', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html' });
+USER_PANEL_PAGES.set('/help/integration-request', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html' });
 
 function renderUserMenuList(walletMode = 'single', activePath = '') {
   const menu = getUserPanelMenu(walletMode);

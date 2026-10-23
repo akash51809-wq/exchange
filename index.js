@@ -94,6 +94,7 @@ const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-histor
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
 const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
 const createUserWalletExchangePage = require('./pages/user-wallet-exchange');
+const createUserIntegrationRequestPage = require('./pages/user-integration-request');
 const {
   getWalletMode,
   setWalletMode,
@@ -331,6 +332,7 @@ const { sendFrontLandingPage, getWebsiteSettings } = createFrontLandingPage({
 });
 const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile });
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
+const { sendUserIntegrationRequestPage } = createUserIntegrationRequestPage({ db });
 const { sendSystemChartPage } = createSystemChartPage();
 const { checkAndSuspendSellerApiOnDailyRefund } = require('./lib/seller-api-rules');
 
@@ -513,6 +515,9 @@ const DATABASE_SCHEMA = `
   SELECT 'AXIS BANK', 'ETAWAH', 'S3 SOLUTION & SERVICE COMPANY', '93849335819868', 'UTIB0CCH274', '24×7 Auto Billing Above ₹5000', 500.00, true
   WHERE NOT EXISTS (SELECT 1 FROM admin_bank_accounts);
 
+  ALTER TABLE admin_bank_accounts ADD COLUMN IF NOT EXISTS logo_data BYTEA;
+  ALTER TABLE admin_bank_accounts ADD COLUMN IF NOT EXISTS logo_mime TEXT;
+
   UPDATE admin_service_settings SET is_enabled = true WHERE service_key = 'whatsapp' AND is_enabled = false;
 
   CREATE TABLE IF NOT EXISTS operator_definitions (
@@ -534,7 +539,35 @@ const DATABASE_SCHEMA = `
   );
   ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
   ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+  ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS logo_data BYTEA;
+  ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS logo_mime TEXT;
   CREATE UNIQUE INDEX IF NOT EXISTS operator_definitions_code_lower_unique ON operator_definitions (lower(operator_code));
+
+  CREATE UNIQUE INDEX IF NOT EXISTS wallet_fund_requests_txn_hash_unique ON wallet_fund_requests (transaction_id_hash) WHERE transaction_id_hash IS NOT NULL;
+
+  CREATE TABLE IF NOT EXISTS seller_api_integration_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    api_website TEXT NOT NULL,
+    api_username TEXT NOT NULL,
+    website_password TEXT DEFAULT '',
+    support_number TEXT DEFAULT '',
+    server_ip TEXT DEFAULT '',
+    api_token TEXT DEFAULT '',
+    api_pin TEXT DEFAULT '',
+    api_remark TEXT DEFAULT '',
+    doc_name TEXT,
+    doc_mime TEXT,
+    doc_data BYTEA,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'approved', 'rejected')),
+    admin_note TEXT DEFAULT '',
+    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS seller_api_integration_requests_user_idx ON seller_api_integration_requests (user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS seller_api_integration_requests_status_idx ON seller_api_integration_requests (status, created_at DESC);
 
   CREATE TABLE IF NOT EXISTS seller_margin_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1851,9 +1884,20 @@ async function createFundRequest(request, response) {
   const accountInput = String(input.accountNumber || '').trim();
   const accountNumber = accountInput ? accountInput.replace(/[\s-]/g, '').toUpperCase() : '';
   if (accountNumber && !/^[A-Z0-9]{5,34}$/.test(accountNumber)) throw httpError('Depositor account number format is invalid.', 400);
+
   const transactionInput = String(input.transactionId || '').trim();
   const transactionId = transactionInput ? transactionInput.toUpperCase() : '';
-  if (transactionId && !/^[A-Z0-9/._-]{3,80}$/.test(transactionId)) throw httpError('Transaction ID format is invalid.', 400);
+  if (!transactionId) throw httpError('UTR / Transaction reference ID is mandatory.', 400);
+  if (!/^[A-Z0-9/._-]{4,80}$/.test(transactionId)) throw httpError('Transaction ID / UTR format is invalid.', 400);
+
+  const txnHash = fundFieldHash('transaction', transactionId);
+  const existingTxn = await db.query(
+    'SELECT id FROM wallet_fund_requests WHERE transaction_id_hash = $1 LIMIT 1',
+    [txnHash]
+  );
+  if (existingTxn.rowCount > 0) {
+    throw httpError('This UTR / Transaction ID has already been used and cannot be submitted again.', 400);
+  }
 
   let proofMime = null;
   let proofData = null;
@@ -1978,13 +2022,21 @@ async function handleCreateAdminBank(request, response) {
   if (!accountNumber) throw httpError('Account number is required.', 400);
   if (!ifscCode) throw httpError('IFSC code is required.', 400);
 
+  let logoData = null;
+  let logoMime = null;
+  if (input.logo_data_b64) {
+    logoData = Buffer.from(input.logo_data_b64, 'base64');
+    logoMime = String(input.logo_mime || 'image/png').trim();
+    if (logoData.length > 2 * 1024 * 1024) throw httpError('Bank logo must be under 2 MB.', 400);
+  }
+
   const result = await db.query(
     `INSERT INTO admin_bank_accounts
        (bank_name, branch_name, account_holder, account_number, ifsc_code, billing_info,
-        cash_deposit_charges, upi_id, qr_image_url, is_active, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now(), now())
+        cash_deposit_charges, upi_id, qr_image_url, is_active, logo_data, logo_mime, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now(), now())
      RETURNING *`,
-    [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive]
+    [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive, logoData, logoMime]
   );
   sendJson(response, 201, { ok: true, bank: result.rows[0], message: 'Bank account added successfully.' });
 }
@@ -2011,14 +2063,32 @@ async function handleUpdateAdminBank(request, response, bankId) {
   if (!accountNumber) throw httpError('Account number is required.', 400);
   if (!ifscCode) throw httpError('IFSC code is required.', 400);
 
+  let logoData = null;
+  let logoMime = null;
+  if (input.logo_data_b64) {
+    logoData = Buffer.from(input.logo_data_b64, 'base64');
+    logoMime = String(input.logo_mime || 'image/png').trim();
+    if (logoData.length > 2 * 1024 * 1024) throw httpError('Bank logo must be under 2 MB.', 400);
+  }
+
+  const resetLogo = Boolean(input.reset_logo);
+  let logoUpdateClause = '';
+  const updateValues = [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive, bankId];
+  if (resetLogo) {
+    logoUpdateClause = ', logo_data = NULL, logo_mime = NULL';
+  } else if (logoData) {
+    updateValues.push(logoData, logoMime);
+    logoUpdateClause = `, logo_data = $${updateValues.length - 1}, logo_mime = $${updateValues.length}`;
+  }
+
   const result = await db.query(
     `UPDATE admin_bank_accounts
      SET bank_name = $1, branch_name = $2, account_holder = $3, account_number = $4,
          ifsc_code = $5, billing_info = $6, cash_deposit_charges = $7, upi_id = $8,
-         qr_image_url = $9, is_active = $10, updated_at = now()
+         qr_image_url = $9, is_active = $10, updated_at = now()${logoUpdateClause}
      WHERE id = $11
      RETURNING *`,
-    [bankName, branchName, accountHolder, accountNumber, ifscCode, billingInfo, cashDepositCharges, upiId, qrImageUrl, isActive, bankId]
+    updateValues
   );
   if (!result.rowCount) throw httpError('Bank account not found.', 404);
   sendJson(response, 200, { ok: true, bank: result.rows[0], message: 'Bank account updated successfully.' });
@@ -2097,16 +2167,24 @@ async function createOperator(request, response) {
     if (type === 'dropdown' && !options) throw httpError('Dropdown parameter ke List / Option bharna zaroori hai.', 400);
     return { name, hint, type, options, key };
   });
+  let logoData = null;
+  let logoMime = null;
+  if (input.logoData || input.logo_data_b64) {
+    logoData = Buffer.from(input.logoData || input.logo_data_b64, 'base64');
+    logoMime = String(input.logoMime || input.logo_mime || 'image/png').trim();
+    if (logoData.length > 2 * 1024 * 1024) throw httpError('Operator logo must be under 2 MB.', 400);
+  }
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const saved = await client.query(
       `INSERT INTO operator_definitions
        (operator_name, service_type, operator_code, minimum_amount_minor, maximum_amount_minor,
-        stop_amounts_minor, operator_number_length, bill_payment_parameters, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6::bigint[], $7, $8::jsonb, $9)
+        stop_amounts_minor, operator_number_length, bill_payment_parameters, logo_data, logo_mime, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6::bigint[], $7, $8::jsonb, $9, $10, $11)
        RETURNING id, operator_name, operator_code, created_at`,
-      [operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), operatorNumberLength, JSON.stringify(parameters), admin.id],
+      [operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), operatorNumberLength, JSON.stringify(parameters), logoData, logoMime, admin.id],
     );
     await client.query(
       'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1, $2, $3, $4, $5)',
@@ -2116,7 +2194,7 @@ async function createOperator(request, response) {
     sendJson(response, 201, { id: saved.rows[0].id, operatorName: saved.rows[0].operator_name, operatorCode: saved.rows[0].operator_code });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
-    if (error.code === '23505') throw httpError('Is Operator Code ka record pehle se maujood hai.', 409);
+    if (error.code === '23505') throw httpError('This Operator Code already exists.', 409);
     throw error;
   } finally {
     client.release();
@@ -2157,6 +2235,24 @@ async function updateOperator(request, response, operatorId) {
     numberLength = Number(input.operatorNumberLength);
     if (!Number.isInteger(numberLength) || numberLength < 1 || numberLength > 30) throw httpError('Operator Number Length must be between 1 and 30.', 400);
   }
+
+  let logoData = null;
+  let logoMime = null;
+  if (input.logoData || input.logo_data_b64) {
+    logoData = Buffer.from(input.logoData || input.logo_data_b64, 'base64');
+    logoMime = String(input.logoMime || input.logo_mime || 'image/png').trim();
+    if (logoData.length > 2 * 1024 * 1024) throw httpError('Operator logo must be under 2 MB.', 400);
+  }
+  const resetLogo = Boolean(input.resetLogo || input.reset_logo);
+  let logoUpdateClause = '';
+  const updateValues = [operatorId, operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), numberLength];
+  if (resetLogo) {
+    logoUpdateClause = ', logo_data = NULL, logo_mime = NULL';
+  } else if (logoData) {
+    updateValues.push(logoData, logoMime);
+    logoUpdateClause = `, logo_data = $${updateValues.length - 1}, logo_mime = $${updateValues.length}`;
+  }
+
   try {
     const client = await db.connect();
     try {
@@ -2164,9 +2260,9 @@ async function updateOperator(request, response, operatorId) {
       const updated = await client.query(
         `UPDATE operator_definitions SET operator_name=$2, service_type=$3, operator_code=$4,
            minimum_amount_minor=$5, maximum_amount_minor=$6, stop_amounts_minor=$7::bigint[],
-           operator_number_length=$8, updated_at=now()
+           operator_number_length=$8, updated_at=now()${logoUpdateClause}
          WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
-        [operatorId, operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), numberLength],
+        updateValues,
       );
       if (!updated.rowCount) throw httpError('Operator not found.', 404);
       await client.query(
@@ -3376,6 +3472,92 @@ async function handleRequest(request, response) {
         return;
       }
 
+      const bankLogoMatch = url.pathname.match(/^\/api\/bank-logo\/([0-9a-f-]{36})$/i);
+      if (bankLogoMatch && request.method === 'GET') {
+        const bankId = bankLogoMatch[1];
+        try {
+          const res = await db.query('SELECT logo_data, logo_mime, bank_name FROM admin_bank_accounts WHERE id = $1', [bankId]);
+          const row = res.rows[0];
+          if (row && row.logo_data) {
+            response.writeHead(200, {
+              'content-type': row.logo_mime || 'image/png',
+              'content-length': row.logo_data.length,
+              'cache-control': 'public, max-age=300',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.logo_data);
+            statusCode = 200;
+            return;
+          }
+          const bankName = row?.bank_name || 'BANK';
+          const letter = (bankName.trim().slice(0, 2) || 'BK').toUpperCase();
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#1e293b"/><text x="50%" y="54%" font-family="sans-serif" font-weight="700" font-size="20" fill="#38bdf8" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
+          response.writeHead(200, {
+            'content-type': 'image/svg+xml; charset=utf-8',
+            'content-length': Buffer.byteLength(svg),
+            'cache-control': 'public, max-age=300',
+          });
+          response.end(svg);
+          statusCode = 200;
+          return;
+        } catch (_) {}
+      }
+
+      const opLogoMatch = url.pathname.match(/^\/api\/operator-logo\/([0-9a-f-]{36})$/i);
+      if (opLogoMatch && request.method === 'GET') {
+        const opId = opLogoMatch[1];
+        try {
+          const res = await db.query('SELECT logo_data, logo_mime, operator_name FROM operator_definitions WHERE id = $1', [opId]);
+          const row = res.rows[0];
+          if (row && row.logo_data) {
+            response.writeHead(200, {
+              'content-type': row.logo_mime || 'image/png',
+              'content-length': row.logo_data.length,
+              'cache-control': 'public, max-age=300',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.logo_data);
+            statusCode = 200;
+            return;
+          }
+          const opName = row?.operator_name || 'OP';
+          const letter = (opName.trim().slice(0, 2) || 'OP').toUpperCase();
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="8" fill="#334155"/><text x="50%" y="54%" font-family="sans-serif" font-weight="700" font-size="20" fill="#fbbf24" text-anchor="middle" dominant-baseline="middle">${letter}</text></svg>`;
+          response.writeHead(200, {
+            'content-type': 'image/svg+xml; charset=utf-8',
+            'content-length': Buffer.byteLength(svg),
+            'cache-control': 'public, max-age=300',
+          });
+          response.end(svg);
+          statusCode = 200;
+          return;
+        } catch (_) {}
+      }
+
+      const intDocMatch = url.pathname.match(/^\/api\/integration-requests\/([0-9a-f-]{36})\/document$/i);
+      if (intDocMatch && request.method === 'GET') {
+        const session = await getSession(request);
+        if (!session) throw httpError('Authentication required.', 401);
+        const reqId = intDocMatch[1];
+        const rowRes = await db.query(
+          'SELECT user_id, doc_name, doc_mime, doc_data FROM seller_api_integration_requests WHERE id = $1',
+          [reqId]
+        );
+        if (!rowRes.rowCount || !rowRes.rows[0].doc_data) throw httpError('Document not found.', 404);
+        const row = rowRes.rows[0];
+        if (session.role !== 'admin' && session.id !== row.user_id) throw httpError('Access denied.', 403);
+
+        response.writeHead(200, {
+          'content-type': row.doc_mime || 'application/octet-stream',
+          'content-disposition': `attachment; filename="${encodeURIComponent(row.doc_name || 'document')}"`,
+          'content-length': row.doc_data.length,
+          'cache-control': 'private, no-cache',
+        });
+        response.end(row.doc_data);
+        statusCode = 200;
+        return;
+      }
+
       // Legacy & clean auth redirects
       const legacyRedirects = {
         '/admin/login-2.html': '/admin/login',
@@ -3505,6 +3687,8 @@ async function handleRequest(request, response) {
           await sendUserAvailableStockPage(session, response, url.searchParams);
         } else if (url.pathname === '/account/wallet-exchange' || url.pathname === '/user/account/wallet-exchange') {
           await sendUserWalletExchangePage(session, response);
+        } else if (url.pathname === '/help/integration-requests' || url.pathname === '/user/help/integration-requests') {
+          await sendUserIntegrationRequestPage(session, response);
         } else {
           await sendUserPanelPage(session, userPage, response);
         }
@@ -4453,6 +4637,70 @@ async function handleRequest(request, response) {
         }
 
         throw httpError('Invalid action.', 400);
+      }
+
+      if (url.pathname === '/api/integration-requests' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session || session.role !== 'user') throw httpError('Authentication required.', 401);
+        const input = await readJson(request);
+        const apiWebsite = String(input.apiWebsite || '').trim();
+        const apiUsername = String(input.apiUsername || '').trim();
+        if (!apiWebsite) throw httpError('API Website is required.', 400);
+        if (!apiUsername) throw httpError('API Username / ID is required.', 400);
+        const websitePassword = String(input.websitePassword || '').trim();
+        const supportNumber = String(input.supportNumber || '').trim();
+        const serverIp = String(input.serverIp || '').trim();
+        const apiToken = String(input.apiToken || '').trim();
+        const apiPin = String(input.apiPin || '').trim();
+        const apiRemark = String(input.apiRemark || '').trim();
+
+        let docName = null;
+        let docMime = null;
+        let docData = null;
+        if (input.document && input.document.base64) {
+          docName = String(input.document.name || 'document').slice(0, 200);
+          docMime = String(input.document.mime || 'application/octet-stream').slice(0, 100);
+          docData = Buffer.from(input.document.base64, 'base64');
+          if (docData.length > 5 * 1024 * 1024) throw httpError('Uploaded document must be under 5 MB.', 400);
+        }
+
+        const res = await db.query(
+          `INSERT INTO seller_api_integration_requests
+           (user_id, api_website, api_username, website_password, support_number, server_ip, api_token, api_pin, api_remark, doc_name, doc_mime, doc_data, status, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', now(), now())
+           RETURNING id`,
+          [session.id, apiWebsite, apiUsername, websitePassword, supportNumber, serverIp, apiToken, apiPin, apiRemark, docName, docMime, docData]
+        );
+        sendJson(response, 201, { ok: true, id: res.rows[0].id, message: 'Integration request submitted successfully.' });
+        statusCode = 201;
+        return;
+      }
+
+      const intAdminDecisionMatch = url.pathname.match(/^\/api\/admin\/integration-requests\/([0-9a-f-]{36})\/decision$/i);
+      if (intAdminDecisionMatch && (request.method === 'POST' || request.method === 'PATCH')) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const reqId = intAdminDecisionMatch[1];
+        const input = await readJson(request);
+        const status = String(input.status || '').trim().toLowerCase();
+        if (!['pending', 'in_progress', 'approved', 'rejected'].includes(status)) {
+          throw httpError('Invalid status value.', 400);
+        }
+        const adminNote = String(input.adminNote || input.admin_note || '').trim();
+        const updateRes = await db.query(
+          `UPDATE seller_api_integration_requests
+           SET status = $1, admin_note = $2, reviewed_by = $3, reviewed_at = now(), updated_at = now()
+           WHERE id = $4
+           RETURNING id`,
+          [status, adminNote, admin.id, reqId]
+        );
+        if (!updateRes.rowCount) throw httpError('Integration request not found.', 404);
+        sendJson(response, 200, { ok: true, message: 'Status updated successfully.' });
+        statusCode = 200;
+        return;
       }
       if (url.pathname === '/api/admin/settings/website') {
         checkSameOrigin(request);

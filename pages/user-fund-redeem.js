@@ -192,11 +192,6 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
               <div class="small text-light">${isSeparate ? 'Dual Wallet Mode Active: Payout requests are debited directly from your Seller Wallet (Sales earnings).' : 'You can request payout of full or partial available balance'}</div>
             `}
           </div>
-          <div class="d-flex gap-2">
-            <button type="button" class="btn btn-warning text-dark font-weight-bold" data-toggle="modal" data-target="#addBankModal">
-              <i class="fa fa-plus-circle mr-1"></i> Add Bank Account
-            </button>
-          </div>
         </div>
 
         <div id="topAlert" class="alert alert-success font-weight-bold" style="display:none;"></div>
@@ -334,8 +329,45 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
           <div class="modal-body">
             <div id="modalBankError" class="alert alert-danger py-2 small" style="display:none;"></div>
             <div class="form-group mb-2">
+              <label class="small font-weight-bold">Select Bank <span class="text-danger">*</span></label>
+              <select class="form-control form-control-sm" id="mbBankSelect" required>
+                <option value="">-- Choose Indian Bank --</option>
+                <option value="State Bank of India">State Bank of India (SBI)</option>
+                <option value="HDFC Bank">HDFC Bank</option>
+                <option value="ICICI Bank">ICICI Bank</option>
+                <option value="Punjab National Bank">Punjab National Bank (PNB)</option>
+                <option value="Bank of Baroda">Bank of Baroda (BOB)</option>
+                <option value="Axis Bank">Axis Bank</option>
+                <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                <option value="Canara Bank">Canara Bank</option>
+                <option value="Union Bank of India">Union Bank of India</option>
+                <option value="Bank of India">Bank of India (BOI)</option>
+                <option value="Indian Bank">Indian Bank</option>
+                <option value="Central Bank of India">Central Bank of India</option>
+                <option value="IndusInd Bank">IndusInd Bank</option>
+                <option value="Yes Bank">Yes Bank</option>
+                <option value="IDBI Bank">IDBI Bank</option>
+                <option value="Punjab & Sind Bank">Punjab &amp; Sind Bank</option>
+                <option value="UCO Bank">UCO Bank</option>
+                <option value="Indian Overseas Bank">Indian Overseas Bank</option>
+                <option value="Federal Bank">Federal Bank</option>
+                <option value="South Indian Bank">South Indian Bank</option>
+                <option value="RBL Bank">RBL Bank</option>
+                <option value="Bandhan Bank">Bandhan Bank</option>
+                <option value="IDFC FIRST Bank">IDFC FIRST Bank</option>
+                <option value="AU Small Finance Bank">AU Small Finance Bank</option>
+                <option value="Equitas Small Finance Bank">Equitas Small Finance Bank</option>
+                <option value="Ujjivan Small Finance Bank">Ujjivan Small Finance Bank</option>
+                <option value="Airtel Payments Bank">Airtel Payments Bank</option>
+                <option value="Paytm Payments Bank">Paytm Payments Bank</option>
+                <option value="India Post Payments Bank">India Post Payments Bank</option>
+                <option value="Fino Payments Bank">Fino Payments Bank</option>
+                <option value="__OTHER__">Other Bank (Type Name)</option>
+              </select>
+            </div>
+            <div class="form-group mb-2" id="mbCustomBankGroup" style="display:none;">
               <label class="small font-weight-bold">Bank Name <span class="text-danger">*</span></label>
-              <input type="text" class="form-control form-control-sm" id="mbBankName" placeholder="e.g. State Bank of India, HDFC Bank" required>
+              <input type="text" class="form-control form-control-sm" id="mbBankName" placeholder="Enter bank name">
             </div>
             <div class="form-group mb-2">
               <label class="small font-weight-bold">Account Holder Name <span class="text-danger">*</span></label>
@@ -386,13 +418,31 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
     const addBankForm = document.getElementById('addBankForm');
     const modalBankError = document.getElementById('modalBankError');
     const btnSaveBank = document.getElementById('btnSaveBank');
+    const mbBankSelect = document.getElementById('mbBankSelect');
+    const mbCustomBankGroup = document.getElementById('mbCustomBankGroup');
+    const mbBankName = document.getElementById('mbBankName');
+
+    if (mbBankSelect) {
+      mbBankSelect.addEventListener('change', function() {
+        if (this.value === '__OTHER__') {
+          mbCustomBankGroup.style.display = 'block';
+          mbBankName.required = true;
+          mbBankName.focus();
+        } else {
+          mbCustomBankGroup.style.display = 'none';
+          mbBankName.required = false;
+          mbBankName.value = this.value;
+        }
+      });
+    }
 
     if (addBankForm) {
       addBankForm.addEventListener('submit', async function(e) {
         e.preventDefault();
         modalBankError.style.display = 'none';
 
-        const bankName = document.getElementById('mbBankName').value.trim();
+        const selectedBank = mbBankSelect ? mbBankSelect.value : '';
+        const bankName = (selectedBank === '__OTHER__' ? mbBankName.value.trim() : (selectedBank || mbBankName.value.trim()));
         const accountHolderName = document.getElementById('mbHolderName').value.trim();
         const accountNumber = document.getElementById('mbAccountNumber').value.trim();
         const ifscCode = document.getElementById('mbIfsc').value.trim().toUpperCase();
