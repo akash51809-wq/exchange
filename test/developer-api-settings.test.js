@@ -375,6 +375,137 @@ test('Developer API Presets - real robo Recharge Forwarding Engine & Response Pa
   assert.equal(interceptedCall.requestType, 'POST');
 });
 
+
+test('Developer API Presets - Ivan Template Specification', () => {
+  const ivan = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Ivan');
+  assert.ok(ivan, 'Ivan template must exist in default presets');
+  assert.equal(ivan.developer_name, 'Ivan Infotech');
+  assert.equal(ivan.service_type, 'Mobile Recharge');
+  assert.equal(ivan.is_active, true);
+
+  // Check required parameters - domain and apiToken
+  const reqKeys = ivan.required_parameters.map(p => p.key);
+  assert.ok(reqKeys.includes('domain'), 'Must require domain');
+  assert.ok(reqKeys.includes('apiToken'), 'Must require apiToken');
+  assert.equal(ivan.required_parameters.length, 2, 'Should have exactly 2 required parameters (Domain & API Token)');
+
+  // Check Balance endpoint
+  const bal = ivan.config.balance;
+  assert.equal(bal.url, 'https://{domain}/apiservice.asmx/GetBalanceNew');
+  assert.equal(bal.balanceKey, 'balance');
+  assert.equal(bal.responseType, 'XML');
+
+  // Check Recharge endpoint
+  const rech = ivan.config.recharge;
+  assert.equal(rech.url, 'https://{domain}/apiservice.asmx/Recharge');
+  assert.equal(rech.requestType, 'GET');
+  assert.equal(rech.responseType, 'XML');
+  assert.equal(rech.statusKey, 'status');
+  assert.ok(rech.successCodes.includes('SUCCESS'));
+  assert.ok(rech.successCodes.includes('1000'));
+  assert.ok(rech.pendingCodes.includes('PENDING'));
+  assert.ok(rech.failedCodes.includes('FAILED'));
+  assert.equal(rech.supplierIdKey, 'field1');
+  assert.equal(rech.operatorIdKey, 'field1');
+  assert.equal(rech.memberReqIdKey, 'reqid');
+  assert.equal(rech.messageKey, 'remark');
+
+  // Check Status check endpoint
+  const status = ivan.config.statusCheck;
+  assert.equal(status.url, 'https://{domain}/apiservice.asmx/GetRechargeStatus');
+  assert.equal(status.responseType, 'XML');
+  assert.equal(status.supplierIdKey, 'field1');
+
+  // Check Dispute endpoint
+  const disp = ivan.config.dispute;
+  assert.equal(disp.url, 'https://{domain}/apiservice.asmx/RegisterComplaint');
+  assert.equal(disp.responseType, 'XML');
+
+  // Check Operator codes
+  const opCodes = ivan.config.operatorCodes;
+  assert.equal(opCodes.AIRTEL, '1');
+  assert.equal(opCodes.BSNL, '2');
+  assert.equal(opCodes.VODAFONE, '5');
+  assert.equal(opCodes.JIO, '12');
+  assert.equal(opCodes.DISHTV, '7');
+  assert.equal(opCodes.TATASKY, '8');
+});
+
+test('Developer API Presets - Ivan Credential Substitution & Dynamic Domain Engine', () => {
+  const ivan = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Ivan');
+  const userCredentials = {
+    domain: 'https://www.wonpay.in/',
+    apiToken: 'ivan-token-secret-777'
+  };
+
+  const configured = applyTemplateCredentials(ivan, userCredentials, 'WonPay Ivan Gateway');
+  assert.equal(configured.name, 'WonPay Ivan Gateway');
+  assert.equal(configured.balanceKey, 'balance');
+  assert.equal(configured.responseType, 'XML');
+
+  // Verify domain was cleaned and properly substituted without double https://
+  assert.equal(configured.url, 'https://www.wonpay.in/apiservice.asmx/GetBalanceNew?apiToken=ivan-token-secret-777');
+  assert.equal(configured.recharge.url, 'https://www.wonpay.in/apiservice.asmx/Recharge');
+  assert.equal(configured.statusCheck.url, 'https://www.wonpay.in/apiservice.asmx/GetRechargeStatus');
+  assert.equal(configured.dispute.url, 'https://www.wonpay.in/apiservice.asmx/RegisterComplaint');
+
+  // Verify recharge parameters
+  const rechParams = configured.recharge.parameters;
+  assert.equal(rechParams.find(p => p.key === 'apiToken').value, 'ivan-token-secret-777');
+  assert.equal(rechParams.find(p => p.key === 'mn').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'amt').value, '{AMOUNT}');
+  assert.equal(rechParams.find(p => p.key === 'op').value, '{OPCODE}');
+  assert.equal(rechParams.find(p => p.key === 'reqid').value, '{TXNID}');
+
+  // Also test with raw domain without protocol
+  const configuredRaw = applyTemplateCredentials(ivan, { domain: 'myivan.portal.com', apiToken: 'tok-123' });
+  assert.equal(configuredRaw.url, 'https://myivan.portal.com/apiservice.asmx/GetBalanceNew?apiToken=tok-123');
+  assert.equal(configuredRaw.recharge.url, 'https://myivan.portal.com/apiservice.asmx/Recharge');
+});
+
+test('Developer API Presets - Ivan XML Response Parsing & Live Engine Integration', () => {
+  const { extractValueByPath } = require('../lib/stock-api-helper');
+
+  const sampleXmlSuccess = '<?xml version="1.0" encoding="utf-8"?>' +
+    '<Result xmlns="http://tempuri.org/">' +
+    ' <reqid>TXN555888</reqid>' +
+    ' <status>SUCCESS</status>' +
+    ' <remark>Recharge Processed Successfully</remark>' +
+    ' <balance>850.50</balance>' +
+    ' <mn>9876543210</mn>' +
+    ' <field1>OPR9988776655</field1>' +
+    ' <ec>1000</ec>' +
+    '</Result>';
+
+  const ivan = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Ivan');
+  const rechConf = ivan.config.recharge;
+
+  const status = extractValueByPath(sampleXmlSuccess, rechConf.statusKey);
+  const operatorTxnId = extractValueByPath(sampleXmlSuccess, rechConf.operatorIdKey);
+  const supplierTxnId = extractValueByPath(sampleXmlSuccess, rechConf.supplierIdKey);
+  const message = extractValueByPath(sampleXmlSuccess, rechConf.messageKey);
+  const balance = extractValueByPath(sampleXmlSuccess, ivan.config.balance.balanceKey);
+
+  assert.equal(status, 'SUCCESS');
+  assert.equal(operatorTxnId, 'OPR9988776655');
+  assert.equal(supplierTxnId, 'OPR9988776655');
+  assert.equal(message, 'Recharge Processed Successfully');
+  assert.equal(balance, '850.50');
+
+  // Verify failure xml with error code
+  const sampleXmlFailed = '<?xml version="1.0" encoding="utf-8"?>' +
+    '<Result xmlns="http://tempuri.org/">' +
+    ' <status>FAILED</status>' +
+    ' <remark>INSUFFICIENT BALANCE</remark>' +
+    ' <ec>1015</ec>' +
+    '</Result>';
+
+  const failedStatus = extractValueByPath(sampleXmlFailed, rechConf.statusKey);
+  assert.equal(failedStatus, 'FAILED');
+  assert.ok(rechConf.failedCodes.split(',').includes('FAILED'));
+  assert.ok(rechConf.failedCodes.split(',').includes('1015'));
+});
+
 test('Admin Navigation - API Setting Menu in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
   assert.ok(settingsMenu, 'Settings menu must exist in Admin Panel');
