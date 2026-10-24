@@ -94,6 +94,12 @@ const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-histor
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
 const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
 const createAdminNotificationsPage = require('./pages/admin-notifications');
+const createAdminApiSettingPage = require('./pages/admin-api-setting');
+const {
+  DEFAULT_DEVELOPER_APIS,
+  seedDeveloperApiTemplates,
+  applyTemplateCredentials,
+} = require('./lib/developer-api-presets');
 const createUserWalletExchangePage = require('./pages/user-wallet-exchange');
 const createUserIntegrationRequestPage = require('./pages/user-integration-request');
 const {
@@ -328,6 +334,13 @@ const {
   sendAdminNotificationsPage,
 } = createAdminNotificationsPage({
   db,
+});
+const {
+  sendAdminApiSettingPage,
+} = createAdminApiSettingPage({
+  db,
+  httpError,
+  sendJson,
 });
 const {
   sendUserWalletExchangePage,
@@ -935,6 +948,20 @@ const DATABASE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_key ON admin_notification_templates(event_key);
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_sort ON admin_notification_templates(sort_order);
+
+  CREATE TABLE IF NOT EXISTS developer_api_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL UNIQUE,
+    developer_name TEXT DEFAULT '',
+    service_type TEXT DEFAULT 'Mobile Recharge',
+    description TEXT DEFAULT '',
+    is_active BOOLEAN DEFAULT true,
+    required_parameters JSONB NOT NULL DEFAULT '[]'::jsonb,
+    config JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_developer_api_templates_active ON developer_api_templates (is_active, name);
 `;
 
 async function initializeDatabase() {
@@ -950,6 +977,7 @@ async function initializeDatabase() {
     await client.query('BEGIN');
     await client.query(DATABASE_SCHEMA);
     await seedNotificationTemplates(client);
+    await seedDeveloperApiTemplates(client);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
@@ -3377,6 +3405,11 @@ async function handleRequest(request, response) {
             statusCheck: config.statusCheck || null,
             dispute: config.dispute || null,
             callbackConfig: config.callback || null,
+            templateId: config.templateId || null,
+            templateName: config.templateName || null,
+            credentials: config.credentials || null,
+            operatorCodes: config.operatorCodes || null,
+            circleCodes: config.circleCodes || null,
             isActive: row.is_active !== false,
             isAdminApproved: row.is_admin_approved === true,
             approvalStatus: row.approval_status || (row.is_admin_approved ? 'approved' : 'waiting'),
@@ -3915,6 +3948,14 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/settings/api-setting') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminApiSettingPage(admin, response);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/admin/settings/create-operator') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -3975,6 +4016,30 @@ async function handleRequest(request, response) {
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await handleGetServices(request, response);
         statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/developer-api-templates') {
+        const res = await db.query(
+          `SELECT id, name, developer_name, service_type, description, required_parameters, config
+           FROM developer_api_templates
+           WHERE is_active = true
+           ORDER BY name ASC`
+        );
+        sendJson(response, 200, { items: res.rows });
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/developer-apis') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const res = await db.query(
+          `SELECT id, name, developer_name, service_type, description, is_active, required_parameters, config, created_at, updated_at
+           FROM developer_api_templates
+           ORDER BY created_at ASC`
+        );
+        sendJson(response, 200, { items: res.rows });
+        statusCode = 200;
         return;
       }
       if (url.pathname === '/api/recharge/operator-lookup' || url.pathname === '/api/operator/lookup') {
@@ -4168,13 +4233,38 @@ async function handleRequest(request, response) {
         if (!session) throw httpError('Login required.', 401);
         if (session.role !== 'user') throw httpError('User access required.', 403);
         const input = await readJson(request);
-        const name = String(input.name || '').trim();
-        const targetUrl = String(input.url || (input.request && input.request.url) || '').trim();
-        const urlType = String(input.urlType || 'Balance URL').trim();
-        const requestType = String(input.requestType || (input.request && input.request.method) || 'GET').trim().toUpperCase();
-        const responseType = String(input.responseType || (input.response && input.response.type) || 'JSON').trim().toUpperCase();
-        const parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || []);
-        const balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || '').trim();
+        let name = String(input.name || '').trim();
+        let targetUrl = String(input.url || (input.request && input.request.url) || '').trim();
+        let urlType = String(input.urlType || 'Balance URL').trim();
+        let requestType = String(input.requestType || (input.request && input.request.method) || 'GET').trim().toUpperCase();
+        let responseType = String(input.responseType || (input.response && input.response.type) || 'JSON').trim().toUpperCase();
+        let parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || []);
+        let balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || '').trim();
+
+        // If templateId or templateName provided, auto-configure from developer API template
+        if (input.templateId || input.templateName) {
+          const tplRes = await db.query(
+            `SELECT * FROM developer_api_templates WHERE (id::text = $1 OR name = $2) AND is_active = true LIMIT 1`,
+            [input.templateId || '00000000-0000-0000-0000-000000000000', input.templateName || '']
+          );
+          if (!tplRes.rowCount) throw httpError('Selected Developer API template not found or is inactive.', 404);
+          const tpl = tplRes.rows[0];
+          const generated = applyTemplateCredentials(tpl, input.credentials || input, input.name);
+          name = generated.name;
+          targetUrl = generated.url;
+          urlType = generated.urlType;
+          requestType = generated.requestType;
+          responseType = generated.responseType;
+          parameters = generated.parameters;
+          balanceKey = generated.balanceKey;
+          input.recharge = generated.recharge;
+          input.statusCheck = generated.statusCheck;
+          input.dispute = generated.dispute;
+          input.operatorCodes = generated.operatorCodes;
+          input.circleCodes = generated.circleCodes;
+          input.templateId = tpl.id;
+          input.templateName = tpl.name;
+        }
 
         if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
         if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL is required.', 400);
@@ -4217,6 +4307,15 @@ async function handleRequest(request, response) {
           body: input.body || '',
           balanceKey,
           lastBalanceValue: balanceValue,
+          templateId: input.templateId || null,
+          templateName: input.templateName || null,
+          credentials: input.credentials || null,
+          recharge: input.recharge || null,
+          statusCheck: input.statusCheck || null,
+          dispute: input.dispute || null,
+          callback: input.callbackConfig || input.callback || null,
+          operatorCodes: input.operatorCodes || null,
+          circleCodes: input.circleCodes || null,
         };
 
         const saved = await db.query(
@@ -4322,6 +4421,11 @@ async function handleRequest(request, response) {
           if (input.statusCheck) config.statusCheck = input.statusCheck;
           if (input.dispute) config.dispute = input.dispute;
           if (input.callbackConfig || input.callback) config.callback = input.callbackConfig || input.callback;
+          if (input.credentials) config.credentials = input.credentials;
+          if (input.templateId) config.templateId = input.templateId;
+          if (input.templateName) config.templateName = input.templateName;
+          if (input.operatorCodes) config.operatorCodes = input.operatorCodes;
+          if (input.circleCodes) config.circleCodes = input.circleCodes;
 
           await db.query(
             `UPDATE seller_api_settings
@@ -4742,6 +4846,94 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+
+      if (url.pathname === '/api/admin/developer-apis') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        const name = String(input.name || '').trim();
+        if (!name) throw httpError('API Name is required.', 400);
+
+        const devName = String(input.developer_name || '').trim();
+        const serviceType = String(input.service_type || 'Mobile Recharge').trim();
+        const description = String(input.description || '').trim();
+        const isActive = input.is_active !== false;
+        const reqParameters = Array.isArray(input.required_parameters) ? input.required_parameters : [];
+        const config = input.config && typeof input.config === 'object' ? input.config : {};
+
+        const res = await db.query(
+          `INSERT INTO developer_api_templates (name, developer_name, service_type, description, is_active, required_parameters, config)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id, name, created_at`,
+          [name, devName, serviceType, description, isActive, JSON.stringify(reqParameters), JSON.stringify(config)]
+        );
+
+        sendJson(response, 201, { message: 'Developer API template created.', item: res.rows[0] });
+        statusCode = 201;
+        return;
+      }
+
+      const updateDevApiMatch = url.pathname.match(/^\/api\/admin\/developer-apis\/([0-9a-f-]{36})\/update$/i);
+      if (updateDevApiMatch) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const templateId = updateDevApiMatch[1];
+        const input = await readJson(request);
+        const name = String(input.name || '').trim();
+        if (!name) throw httpError('API Name is required.', 400);
+
+        const devName = String(input.developer_name || '').trim();
+        const serviceType = String(input.service_type || 'Mobile Recharge').trim();
+        const description = String(input.description || '').trim();
+        const isActive = input.is_active !== false;
+        const reqParameters = Array.isArray(input.required_parameters) ? input.required_parameters : [];
+        const config = input.config && typeof input.config === 'object' ? input.config : {};
+
+        await db.query(
+          `UPDATE developer_api_templates
+           SET name = $1, developer_name = $2, service_type = $3, description = $4,
+               is_active = $5, required_parameters = $6, config = $7, updated_at = now()
+           WHERE id = $8`,
+          [name, devName, serviceType, description, isActive, JSON.stringify(reqParameters), JSON.stringify(config), templateId]
+        );
+
+        sendJson(response, 200, { message: 'Developer API template updated.' });
+        statusCode = 200;
+        return;
+      }
+
+      const toggleDevApiMatch = url.pathname.match(/^\/api\/admin\/developer-apis\/([0-9a-f-]{36})\/toggle-active$/i);
+      if (toggleDevApiMatch) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const templateId = toggleDevApiMatch[1];
+        const input = await readJson(request);
+        const active = Boolean(input.active);
+        await db.query('UPDATE developer_api_templates SET is_active = $1, updated_at = now() WHERE id = $2', [active, templateId]);
+        sendJson(response, 200, { active, message: 'Status updated.' });
+        statusCode = 200;
+        return;
+      }
+
+      const deleteDevApiMatch = url.pathname.match(/^\/api\/admin\/developer-apis\/([0-9a-f-]{36})\/delete$/i);
+      if (deleteDevApiMatch) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const templateId = deleteDevApiMatch[1];
+        await db.query('DELETE FROM developer_api_templates WHERE id = $1', [templateId]);
+        sendJson(response, 200, { message: 'Developer API template deleted.' });
+        statusCode = 200;
+        return;
+      }
+
       if (url.pathname === '/api/admin/settings/website') {
         checkSameOrigin(request);
         const admin = await getSession(request);

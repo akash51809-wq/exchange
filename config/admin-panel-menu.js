@@ -30,6 +30,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
   { label: 'Settings', path: '#', items: [
+    { label: 'API Setting', path: '/admin/settings/api-setting' },
     { label: 'Create Operator', path: '/admin/settings/create-operator' },
     { label: 'Show Operator', path: '/admin/settings/show-operator' },
     { label: 'Service Settings', path: '/admin/settings/service-settings' },

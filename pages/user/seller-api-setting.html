@@ -291,14 +291,50 @@
               
               <!-- TAB 1: Balance API -->
               <div id="balance-tab" class="api-tab-pane active">
-                <form id="balanceApiForm" novalidate>
+                                <form id="balanceApiForm" novalidate>
+
+                  <!-- 1. PRE-CONFIGURED DEVELOPER API PRESET SELECTOR -->
+                  <div class="template-selector-box mb-3 p-3" style="background: linear-gradient(135deg, #f0fdf4 0%, #e0f2fe 100%); border: 1.5px solid #38bdf8; border-radius: 8px;">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                      <label class="api-label font-weight-bold text-dark mb-0" for="apiTemplateSelect" style="font-size: 13.5px;">
+                        <i class="fa fa-cubes text-primary mr-1"></i> <strong>Choose API Provider / Developer API</strong>
+                      </label>
+                      <span id="tplActiveBadge" class="badge badge-success px-2 py-1" style="display:none; font-size: 11px;">
+                        <i class="fa fa-check mr-1"></i> Pre-configured Template
+                      </span>
+                    </div>
+                    <select class="form-control api-control-compact font-weight-bold" id="apiTemplateSelect" style="border: 2px solid #2563eb; font-size: 13.5px; height: 38px; background: #ffffff;">
+                      <option value="custom">⚡ Manual / Custom API (Enter URLs Manually)</option>
+                    </select>
+                    <div id="tplDescriptionText" class="small text-muted mt-2 font-italic" style="display:none;"></div>
+                  </div>
+
+                  <!-- 2. QUICK CREDENTIALS BOX (Shown when a pre-configured template like Robotic Exchange is selected) -->
+                  <div id="quickCredentialsContainer" class="mb-3 p-3" style="display:none; background: #ffffff; border: 1.5px solid #93c5fd; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+                    <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
+                      <h6 class="font-weight-bold text-primary mb-0" style="font-size: 13.5px;">
+                        <i class="fa fa-key text-warning mr-1"></i> Enter Required Provider Credentials
+                      </h6>
+                      <span class="badge badge-pill badge-primary px-2 py-1" style="font-size: 10.5px;">Auto Config Mode</span>
+                    </div>
+                    <div class="small text-muted mb-3">
+                      Aapko poora API add karne ki zaroorat nahi hai. Sirf apne provider ke credentials daliye, baki settings (Balance, Recharge, Status Check, Dispute & Operator codes) system apne se set kar lega:
+                    </div>
+                    <div id="quickCredentialInputs" class="row"></div>
+                    <div class="mt-2 text-right">
+                      <button type="button" class="btn btn-xs btn-outline-secondary" id="btnToggleManualView" style="font-size: 11px;">
+                        <i class="fa fa-cog mr-1"></i> <span id="manualToggleText">Show Advanced URL Settings</span>
+                      </button>
+                    </div>
+                  </div>
                   
                   <div class="form-group form-group-compact">
                     <label class="api-label" for="apiName">Name <span class="api-required">*</span></label>
                     <input type="text" class="form-control api-control-compact font-weight-bold" id="apiName" required placeholder="Enter API Name (e.g. Easyrechargesolution)" maxlength="100">
                   </div>
 
-                  <div class="form-group form-group-compact">
+                  <div id="manualFieldsContainer">
+                    <div class="form-group form-group-compact">
                     <label class="api-label" for="apiUrl">API URL <span class="api-required">*</span></label>
                     <textarea class="form-control api-url-input" id="apiUrl" rows="2" required placeholder="Enter API URL (e.g. https://provider.com/balance?userid=123&token=abc)"></textarea>
                     <div id="urlHintMsg" class="api-hint-red">Paste full URL with query parameters — they will separate into PARAMETERS LIST below!</div>
@@ -378,6 +414,7 @@
                     </div>
                   </div>
 
+                  </div>
                   <div class="d-flex justify-content-end gap-2 mt-2 pt-2 border-top">
                     <button type="button" class="btn btn-light btn-sm mr-2" id="btnCancelDrawer">Cancel</button>
                     <button type="submit" class="btn btn-primary btn-sm px-4 font-weight-bold" id="btnSaveApi">
@@ -855,6 +892,116 @@
     let currentCallbackResponseData = null;
     let savedApisList = [];
     let editingApiId = null;
+      if ($('apiTemplateSelect')) $('apiTemplateSelect').value = 'custom';
+      if ($('quickCredentialsContainer')) $('quickCredentialsContainer').style.display = 'none';
+      if ($('manualFieldsContainer')) $('manualFieldsContainer').style.display = 'block';
+      if ($('tplActiveBadge')) $('tplActiveBadge').style.display = 'none';
+      if ($('tplDescriptionText')) $('tplDescriptionText').style.display = 'none';
+      if ($('manualToggleText')) $('manualToggleText').textContent = 'Show Advanced URL Settings';
+
+        let developerTemplates = [];
+
+    async function loadDeveloperTemplates() {
+      try {
+        const res = await fetch('/api/developer-api-templates');
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.items)) {
+          developerTemplates = data.items;
+          populateTemplateSelect();
+        }
+      } catch (err) {
+        console.warn('Could not load developer API templates:', err);
+      }
+    }
+
+    function populateTemplateSelect() {
+      const select = $('apiTemplateSelect');
+      if (!select) return;
+      select.innerHTML = '<option value="custom">⚡ Manual / Custom API (Enter URLs Manually)</option>';
+      developerTemplates.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.name} (by ${t.developer_name || 'Vendor'})`;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderQuickCredentialFields(template, savedCreds = {}) {
+      const container = $('quickCredentialInputs');
+      container.innerHTML = '';
+      const reqs = Array.isArray(template.required_parameters) ? template.required_parameters : [];
+      reqs.forEach(p => {
+        const col = document.createElement('div');
+        col.className = 'form-group col-md-6 mb-2';
+        const label = document.createElement('label');
+        label.className = 'api-label font-weight-bold';
+        label.htmlFor = 'cred_' + p.key;
+        label.innerHTML = `${escapeHtml(p.label || p.key)} ${p.required ? '<span class="text-danger">*</span>' : ''}`;
+        col.appendChild(label);
+
+        const curVal = savedCreds[p.key] !== undefined ? savedCreds[p.key] : (p.default || '');
+
+        if (p.type === 'select' && Array.isArray(p.options) && p.options.length > 0) {
+          const sel = document.createElement('select');
+          sel.className = 'form-control api-control-compact';
+          sel.id = 'cred_' + p.key;
+          p.options.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = opt.value;
+            o.textContent = opt.label;
+            if (String(opt.value) === String(curVal)) o.selected = true;
+            sel.appendChild(o);
+          });
+          col.appendChild(sel);
+        } else {
+          const input = document.createElement('input');
+          input.type = p.type === 'password' ? 'password' : 'text';
+          input.className = 'form-control api-control-compact';
+          input.id = 'cred_' + p.key;
+          input.placeholder = p.placeholder || `Enter ${p.label || p.key}`;
+          input.value = curVal;
+          if (p.required) input.required = true;
+          col.appendChild(input);
+        }
+
+        if (p.description) {
+          const help = document.createElement('small');
+          help.className = 'form-text text-muted';
+          help.textContent = p.description;
+          col.appendChild(help);
+        }
+        container.appendChild(col);
+      });
+    }
+
+    $('apiTemplateSelect').onchange = () => {
+      const val = $('apiTemplateSelect').value;
+      if (val === 'custom') {
+        $('quickCredentialsContainer').style.display = 'none';
+        $('manualFieldsContainer').style.display = 'block';
+        $('tplActiveBadge').style.display = 'none';
+        $('tplDescriptionText').style.display = 'none';
+      } else {
+        const tpl = developerTemplates.find(t => t.id === val);
+        if (!tpl) return;
+        $('quickCredentialsContainer').style.display = 'block';
+        $('manualFieldsContainer').style.display = 'none';
+        $('tplActiveBadge').style.display = 'inline-block';
+        $('tplDescriptionText').style.display = 'block';
+        $('tplDescriptionText').textContent = tpl.description || `${tpl.name} pre-configured API`;
+        if (!$('apiName').value.trim() || $('apiName').value === 'Easyrechargesolution') {
+          $('apiName').value = tpl.name;
+        }
+        renderQuickCredentialFields(tpl);
+      }
+    };
+
+    $('btnToggleManualView').onclick = () => {
+      const container = $('manualFieldsContainer');
+      const isHidden = container.style.display === 'none';
+      container.style.display = isHidden ? 'block' : 'none';
+      $('manualToggleText').textContent = isHidden ? 'Hide Advanced URL Settings' : 'Show Advanced URL Settings';
+    };
 
     function resetFormToNew() {
       editingApiId = null;
@@ -1201,6 +1348,69 @@
     $('balanceApiForm').onsubmit = async (e) => {
       e.preventDefault();
       const name = $('apiName').value.trim();
+      const selectedTemplateId = $('apiTemplateSelect').value;
+      if (selectedTemplateId !== 'custom') {
+        const template = developerTemplates.find(t => t.id === selectedTemplateId);
+        if (!template) { alert('Selected template not found.'); return; }
+        if (!name) { alert('Please enter API Name.'); $('apiName').focus(); return; }
+
+        const credentials = {};
+        const reqs = Array.isArray(template.required_parameters) ? template.required_parameters : [];
+        for (const p of reqs) {
+          const el = $('cred_' + p.key);
+          const val = el ? el.value.trim() : '';
+          if (p.required && !val) {
+            alert('Please enter required parameter: ' + (p.label || p.key));
+            if (el) el.focus();
+            return;
+          }
+          credentials[p.key] = val;
+        }
+
+        const saveBtn = $('btnSaveApi');
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Connecting & Saving API...';
+
+        try {
+          const isUpdate = !!editingApiId;
+          const payload = {
+            name,
+            templateId: template.id,
+            templateName: template.name,
+            credentials,
+          };
+          const targetUrl = isUpdate ? `/api/seller/api-settings/${editingApiId}/update` : '/api/seller/api-settings';
+
+          const res = await fetch(targetUrl, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save API settings.');
+
+          if (!isUpdate && data.id) {
+            editingApiId = data.id;
+            $('drawerTitleText').textContent = 'Edit API: ' + (name || 'API');
+            $('drawerModeBadge').style.display = 'inline-block';
+            $('btnResetToNew').style.display = 'inline-block';
+            $('btnSaveApi').innerHTML = '<i class="fa fa-save mr-1"></i> Update API Settings';
+            $('callbackSystemUrl').value = `http://${window.location.host || '127.0.0.1:3000'}/CallBack/${data.id}`;
+            alert(`✓ ${template.name} API saved successfully!\nLive Wallet Balance: ₹ ${data.balance || '0.00'}\nAll endpoints (Balance, Recharge, Status Check, Dispute) have been configured automatically!`);
+          } else {
+            alert(`✓ ${template.name} API updated successfully!\nLive Wallet Balance: ₹ ${data.balance || '0.00'}`);
+          }
+
+          await loadSavedApis();
+        } catch (err) {
+          alert('Error: ' + err.message);
+        } finally {
+          saveBtn.disabled = false;
+          saveBtn.innerHTML = editingApiId ? '<i class="fa fa-save mr-1"></i> Update API Settings' : '<i class="fa fa-check-circle mr-1"></i> Save & Add to List';
+        }
+        return;
+      }
       const url = $('apiUrl').value.trim();
       const urlType = $('apiUrlType').value;
       const requestType = $('requestType').value;
@@ -2233,6 +2443,24 @@
 
             // 1. Preload Balance API
             $('apiName').value = api.name || '';
+            if (api.templateId || api.templateName) {
+              const matchedTpl = developerTemplates.find(t => t.id === api.templateId || t.name === api.templateName);
+              if (matchedTpl) {
+                $('apiTemplateSelect').value = matchedTpl.id;
+                $('quickCredentialsContainer').style.display = 'block';
+                $('manualFieldsContainer').style.display = 'none';
+                $('tplActiveBadge').style.display = 'inline-block';
+                $('tplDescriptionText').style.display = 'block';
+                $('tplDescriptionText').textContent = matchedTpl.description || '';
+                renderQuickCredentialFields(matchedTpl, api.credentials || {});
+              }
+            } else {
+              $('apiTemplateSelect').value = 'custom';
+              $('quickCredentialsContainer').style.display = 'none';
+              $('manualFieldsContainer').style.display = 'block';
+              $('tplActiveBadge').style.display = 'none';
+              $('tplDescriptionText').style.display = 'none';
+            }
             $('apiUrl').value = api.rawUrl || api.url || '';
             $('apiUrlType').value = api.urlType || 'Balance URL';
             $('requestType').value = api.requestType || 'GET';
@@ -2445,6 +2673,7 @@
     addRechargeParamRow();
     addStatusParamRow();
     addDisputeParamRow();
+    loadDeveloperTemplates();
     loadSavedApis();
   })();
   </script>
