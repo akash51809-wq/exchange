@@ -111,6 +111,94 @@ test('Developer API Presets - Credential Substitution Engine', () => {
   assert.equal(dispParams.find(p => p.key === 'OurRefTxnId').value, '{ORDERID}');
 });
 
+test('Developer API Presets - M robo Template Specification', () => {
+  const mRobo = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'M robo');
+  assert.ok(mRobo, 'M robo template must exist in default presets');
+  assert.equal(mRobo.developer_name, 'MRobotics');
+  assert.equal(mRobo.service_type, 'Mobile Recharge');
+  assert.equal(mRobo.is_active, true);
+
+  // Check required parameters - only api_token
+  const reqKeys = mRobo.required_parameters.map(p => p.key);
+  assert.ok(reqKeys.includes('api_token'), 'Must require api_token');
+  assert.equal(mRobo.required_parameters.length, 1, 'Should only have 1 required parameter (API Token)');
+
+  // Check Balance endpoint
+  const bal = mRobo.config.balance;
+  assert.equal(bal.url, 'https://mrobotics.in/api/operator_balance');
+  assert.equal(bal.balanceKey, 'data');
+  assert.equal(bal.requestType, 'GET');
+
+  // Check Recharge endpoint
+  const rech = mRobo.config.recharge;
+  assert.equal(rech.url, 'https://mrobotics.in/api/recharge');
+  assert.equal(rech.requestType, 'POST');
+  assert.equal(rech.statusKey, 'status');
+  assert.equal(rech.successCodes, 'success');
+  assert.equal(rech.pendingCodes, 'pending');
+  assert.equal(rech.failedCodes, 'failure,failed');
+  assert.equal(rech.supplierIdKey, 'id');
+  assert.equal(rech.operatorIdKey, 'tnx_id');
+  assert.equal(rech.messageKey, 'response');
+
+  // Check Status check endpoint
+  const status = mRobo.config.statusCheck;
+  assert.equal(status.url, 'https://mrobotics.in/api/order_id_status');
+  assert.equal(status.requestType, 'GET');
+  assert.equal(status.statusKey, 'status');
+  assert.equal(status.supplierIdKey, 'id');
+  assert.equal(status.operatorIdKey, 'tnx_id');
+
+  // Check operator code mappings
+  const opCodes = mRobo.config.operatorCodes;
+  assert.equal(opCodes.AIRTEL, '2');
+  assert.equal(opCodes.AT, '2');
+  assert.equal(opCodes.JIO, '5');
+  assert.equal(opCodes.JO, '5');
+  assert.equal(opCodes.VODAFONE, '1');
+  assert.equal(opCodes.IDEA, '3');
+  assert.equal(opCodes.BSNL, '4');
+  assert.equal(opCodes.DISHTV, '6');
+  assert.equal(opCodes.TATASKY, '7');
+  assert.equal(opCodes.SUNDIRECT, '12');
+  assert.equal(opCodes.VIDEOCON, '28');
+  assert.equal(opCodes['AIRTEL DTH'], '24');
+});
+
+test('Developer API Presets - M robo Credential Substitution Engine', () => {
+  const mRobo = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'M robo');
+  const userCredentials = {
+    api_token: '12345678-1234-1234-1234-123456789012',
+  };
+
+  const configured = applyTemplateCredentials(mRobo, userCredentials, 'My M Robo');
+  assert.equal(configured.name, 'My M Robo');
+  assert.equal(configured.balanceKey, 'data');
+  assert.equal(configured.url, 'https://mrobotics.in/api/operator_balance?api_token=12345678-1234-1234-1234-123456789012');
+
+  // Balance params
+  const balTokenParam = configured.parameters.find(p => p.key === 'api_token');
+  assert.equal(balTokenParam.value, '12345678-1234-1234-1234-123456789012');
+
+  // Recharge params
+  assert.equal(configured.recharge.requestType, 'POST');
+  assert.equal(configured.recharge.url, 'https://mrobotics.in/api/recharge');
+  const rechParams = configured.recharge.parameters;
+  assert.equal(rechParams.find(p => p.key === 'api_token').value, '12345678-1234-1234-1234-123456789012');
+  assert.equal(rechParams.find(p => p.key === 'mobile_no').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'amount').value, '{AMOUNT}');
+  assert.equal(rechParams.find(p => p.key === 'company_id').value, '{OPCODE}');
+  assert.equal(rechParams.find(p => p.key === 'order_id').value, '{TXNID}');
+  assert.equal(rechParams.find(p => p.key === 'is_stv').value, 'false');
+
+  // Status check params
+  assert.equal(configured.statusCheck.requestType, 'GET');
+  assert.equal(configured.statusCheck.url, 'https://mrobotics.in/api/order_id_status');
+  const stParams = configured.statusCheck.parameters;
+  assert.equal(stParams.find(p => p.key === 'api_token').value, '12345678-1234-1234-1234-123456789012');
+  assert.equal(stParams.find(p => p.key === 'order_id').value, '{ORDERID}');
+});
+
 test('Admin Navigation - API Setting Menu in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
   assert.ok(settingsMenu, 'Settings menu must exist in Admin Panel');
