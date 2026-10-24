@@ -3058,9 +3058,9 @@ async function handleRequest(request, response) {
       const successVal = (callbackConfig.successValue || 'SUCCESS,0,SUCCESSFUL,200,TRUE,OK').split(',').map((s) => s.trim().toUpperCase());
       const failureVal = (callbackConfig.failureValue || 'FAILED,FAILURE,ERR,ERROR,1,REJECTED').split(',').map((s) => s.trim().toUpperCase());
 
-      const ourTxnId = String(extractValueByPath(incomingPayload, ourTxnKey) || incomingPayload.ref_id || incomingPayload.recharge_id || incomingPayload.txnid || '').trim();
-      const supplierTxnId = String(extractValueByPath(incomingPayload, supplierTxnKey) || incomingPayload.supplier_id || '').trim();
-      const operatorTxnId = String(extractValueByPath(incomingPayload, operatorTxnKey) || incomingPayload.operator_id || incomingPayload.op_ref || supplierTxnId).trim();
+      const ourTxnId = String(extractValueByPath(incomingPayload, ourTxnKey) || incomingPayload.agentid || incomingPayload.ref_id || incomingPayload.recharge_id || incomingPayload.txnid || '').trim();
+      const supplierTxnId = String(extractValueByPath(incomingPayload, supplierTxnKey) || incomingPayload.rpid || incomingPayload.supplier_id || '').trim();
+      const operatorTxnId = String(extractValueByPath(incomingPayload, operatorTxnKey) || incomingPayload.opid || incomingPayload.operator_id || incomingPayload.op_ref || supplierTxnId).trim();
       const statusVal = String(extractValueByPath(incomingPayload, statusKey) || incomingPayload.status || '').trim().toUpperCase();
 
       let matchedOrderId = null;
@@ -4260,6 +4260,7 @@ async function handleRequest(request, response) {
           input.recharge = generated.recharge;
           input.statusCheck = generated.statusCheck;
           input.dispute = generated.dispute;
+          input.callback = generated.callback;
           input.operatorCodes = generated.operatorCodes;
           input.circleCodes = generated.circleCodes;
           input.templateId = tpl.id;

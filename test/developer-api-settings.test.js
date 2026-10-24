@@ -506,6 +506,217 @@ test('Developer API Presets - Ivan XML Response Parsing & Live Engine Integratio
   assert.ok(rechConf.failedCodes.split(',').includes('1015'));
 });
 
+
+test('Developer API Presets - Roundpay Template Specification', () => {
+  const roundpay = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Roundpay');
+  assert.ok(roundpay, 'Roundpay template must exist in default presets');
+  assert.equal(roundpay.developer_name, 'Roundpay Techno Media');
+  assert.equal(roundpay.service_type, 'Mobile Recharge');
+  assert.equal(roundpay.is_active, true);
+
+  // Check required parameters
+  const reqKeys = roundpay.required_parameters.map(p => p.key);
+  assert.ok(reqKeys.includes('domain'), 'Must require domain parameter for custom provider hosts');
+  assert.ok(reqKeys.includes('UserID'), 'Must require UserID parameter');
+  assert.ok(reqKeys.includes('Token'), 'Must require Token parameter');
+  assert.ok(reqKeys.includes('OutletID'), 'Must include OutletID parameter');
+
+  // Check Balance endpoint
+  const bal = roundpay.config.balance;
+  assert.equal(bal.url, 'https://{domain}/API/Balance');
+  assert.equal(bal.balanceKey, 'bal');
+  assert.equal(bal.requestType, 'GET');
+  assert.equal(bal.responseType, 'JSON');
+
+  // Check Recharge endpoint
+  const rech = roundpay.config.recharge;
+  assert.equal(rech.url, 'https://{domain}/API/TransactionAPI');
+  assert.equal(rech.requestType, 'GET');
+  assert.equal(rech.responseType, 'JSON');
+  assert.equal(rech.statusKey, 'STATUS');
+  assert.ok(rech.successCodes.includes('2'));
+  assert.ok(rech.successCodes.includes('SUCCESS'));
+  assert.ok(rech.pendingCodes.includes('1'));
+  assert.ok(rech.failedCodes.includes('3'));
+  assert.ok(rech.failedCodes.includes('4'));
+  assert.equal(rech.supplierIdKey, 'RPID');
+  assert.equal(rech.operatorIdKey, 'OPID');
+  assert.equal(rech.memberReqIdKey, 'AGENTID');
+  assert.equal(rech.messageKey, 'MSG');
+
+  // Check Status check endpoint
+  const status = roundpay.config.statusCheck;
+  assert.equal(status.url, 'https://{domain}/API/StatusCheck');
+  assert.equal(status.responseType, 'JSON');
+  assert.equal(status.statusKey, 'Status');
+  assert.equal(status.supplierIdKey, 'RPID');
+  assert.equal(status.operatorIdKey, 'OPID');
+
+  // Check Dispute endpoint
+  const disp = roundpay.config.dispute;
+  assert.equal(disp.url, 'https://{domain}/API/RefundRequest');
+  assert.equal(disp.responseType, 'JSON');
+
+  // Check Callback endpoint
+  const cb = roundpay.config.callback;
+  assert.equal(cb.ourTxnIdKey, 'agentid');
+  assert.equal(cb.supplierTxnIdKey, 'rpid');
+  assert.equal(cb.operatorTxnIdKey, 'opid');
+  assert.equal(cb.statusKey, 'status');
+
+  // Check Operator codes
+  const opCodes = roundpay.config.operatorCodes;
+  assert.equal(opCodes.AIRTEL, 'AT');
+  assert.equal(opCodes.BSNL, 'BS');
+  assert.equal(opCodes.VODAFONE, 'VI');
+  assert.equal(opCodes.JIO, 'JO');
+  assert.equal(opCodes.DISHTV, 'DT');
+  assert.equal(opCodes.TATASKY, 'TS');
+});
+
+test('Developer API Presets - Roundpay Credential Substitution & Dynamic Domain Engine', () => {
+  const roundpay = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Roundpay');
+  const userCredentials = {
+    domain: 'https://api.myroundpay.in/',
+    UserID: '111',
+    Token: 'ac74a8588293c84ee38319d3c13902bd'
+  };
+
+  const configured = applyTemplateCredentials(roundpay, userCredentials, 'My Roundpay Gateway');
+  assert.equal(configured.name, 'My Roundpay Gateway');
+  assert.equal(configured.balanceKey, 'bal');
+  assert.equal(configured.responseType, 'JSON');
+
+  // Verify domain was cleaned and properly substituted without double https://
+  assert.equal(
+    configured.url,
+    'https://api.myroundpay.in/API/Balance?UserID=111&Token=ac74a8588293c84ee38319d3c13902bd&Format=1&OutletID=1'
+  );
+  assert.equal(configured.recharge.url, 'https://api.myroundpay.in/API/TransactionAPI');
+  assert.equal(configured.statusCheck.url, 'https://api.myroundpay.in/API/StatusCheck');
+  assert.equal(configured.dispute.url, 'https://api.myroundpay.in/API/RefundRequest');
+
+  // Verify recharge parameters
+  const rechParams = configured.recharge.parameters;
+  assert.equal(rechParams.find(p => p.key === 'UserID').value, '111');
+  assert.equal(rechParams.find(p => p.key === 'Token').value, 'ac74a8588293c84ee38319d3c13902bd');
+  assert.equal(rechParams.find(p => p.key === 'Account').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'Amount').value, '{AMOUNT}');
+  assert.equal(rechParams.find(p => p.key === 'SPKey').value, '{OPCODE}');
+  assert.equal(rechParams.find(p => p.key === 'APIRequestID').value, '{TXNID}');
+  assert.equal(rechParams.find(p => p.key === 'GEOCode').value, '26.8467,80.9462');
+  assert.equal(rechParams.find(p => p.key === 'CustomerNumber').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'Pincode').value, '226001');
+  assert.equal(rechParams.find(p => p.key === 'Format').value, '1');
+
+  // Check callback preservation
+  assert.ok(configured.callback);
+  assert.equal(configured.callback.ourTxnIdKey, 'agentid');
+  assert.equal(configured.callback.supplierTxnIdKey, 'rpid');
+
+  // Also test case-insensitive credential passing (e.g. userid and token in lowercase)
+  const configuredLower = applyTemplateCredentials(roundpay, {
+    domain: 'live.roundpay.net',
+    userid: '222',
+    token: 'token-lower-456',
+    OutletID: '99'
+  });
+  assert.equal(
+    configuredLower.url,
+    'https://live.roundpay.net/API/Balance?UserID=222&Token=token-lower-456&Format=1&OutletID=99'
+  );
+  assert.equal(configuredLower.recharge.parameters.find(p => p.key === 'UserID').value, '222');
+});
+
+test('Developer API Presets - Roundpay Live Response Parsing & Engine Integration (JSON & XML)', () => {
+  const { extractValueByPath } = require('../lib/stock-api-helper');
+  const roundpay = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Roundpay');
+  const rechConf = roundpay.config.recharge;
+
+  // 1. Test JSON Recharge Success Response
+  const sampleJsonSuccess = {
+    STATUS: '2',
+    MSG: 'SUCCESS',
+    BAL: '129846.22',
+    ERRORCODE: '200',
+    ACCOUNT: '9807341910',
+    AMOUNT: '149',
+    RPID: 'S201008105418617298BA',
+    AGENTID: '8822499',
+    OPID: 'UEH2010081054250066'
+  };
+
+  const status = extractValueByPath(sampleJsonSuccess, rechConf.statusKey);
+  const operatorTxnId = extractValueByPath(sampleJsonSuccess, rechConf.operatorIdKey);
+  const supplierTxnId = extractValueByPath(sampleJsonSuccess, rechConf.supplierIdKey);
+  const memberReqId = extractValueByPath(sampleJsonSuccess, rechConf.memberReqIdKey);
+  const message = extractValueByPath(sampleJsonSuccess, rechConf.messageKey);
+  const balance = extractValueByPath(sampleJsonSuccess, roundpay.config.balance.balanceKey);
+
+  assert.equal(status, '2');
+  assert.ok(rechConf.successCodes.split(',').includes(status));
+  assert.equal(operatorTxnId, 'UEH2010081054250066');
+  assert.equal(supplierTxnId, 'S201008105418617298BA');
+  assert.equal(memberReqId, '8822499');
+  assert.equal(message, 'SUCCESS');
+  assert.equal(balance, '129846.22');
+
+  // 2. Test XML Recharge Success Response
+  const sampleXmlSuccess = '<XMLRESPONSE>' +
+    ' <STATUS>2</STATUS>' +
+    ' <MSG>SUCCESS</MSG>' +
+    ' <BAL>129846.22</BAL>' +
+    ' <ERRORCODE>200</ERRORCODE>' +
+    ' <ACCOUNT>9807341910</ACCOUNT>' +
+    ' <AMOUNT>149</AMOUNT>' +
+    ' <RPID>S201008105418617298BA</RPID>' +
+    ' <AGENTID>8822499</AGENTID>' +
+    ' <OPID>UEH2010081054250066</OPID>' +
+    '</XMLRESPONSE>';
+
+  assert.equal(extractValueByPath(sampleXmlSuccess, rechConf.statusKey), '2');
+  assert.equal(extractValueByPath(sampleXmlSuccess, rechConf.supplierIdKey), 'S201008105418617298BA');
+  assert.equal(extractValueByPath(sampleXmlSuccess, rechConf.operatorIdKey), 'UEH2010081054250066');
+  assert.equal(extractValueByPath(sampleXmlSuccess, rechConf.memberReqIdKey), '8822499');
+  assert.equal(extractValueByPath(sampleXmlSuccess, roundpay.config.balance.balanceKey), '129846.22');
+
+  // 3. Test Status Check JSON response
+  const sampleStatusCheck = {
+    Status: 2,
+    Statuscode: 1,
+    ErrorCode: 200,
+    Message: 'SUCCESS'
+  };
+  const stStatus = extractValueByPath(sampleStatusCheck, roundpay.config.statusCheck.statusKey);
+  assert.equal(stStatus, '2');
+  assert.ok(roundpay.config.statusCheck.successCodes.split(',').includes(stStatus));
+
+  // 4. Test Balance Check JSON response
+  const sampleBalanceCheck = {
+    status: 2,
+    msg: 'Transaction_Successful',
+    bal: 100.00,
+    errorcode: '200'
+  };
+  const balValue = extractValueByPath(sampleBalanceCheck, roundpay.config.balance.balanceKey);
+  assert.equal(balValue, '100');
+
+  // 5. Test Webhook callback payload parsing
+  const webhookPayload = {
+    status: '2',
+    mobile: '9807341910',
+    amount: '149',
+    rpid: 'S4565622313',
+    agentid: '8822499',
+    opid: 'UE012345666',
+    msg: 'Transaction Successful'
+  };
+  assert.equal(extractValueByPath(webhookPayload, roundpay.config.callback.statusKey), '2');
+  assert.equal(extractValueByPath(webhookPayload, roundpay.config.callback.ourTxnIdKey), '8822499');
+  assert.equal(extractValueByPath(webhookPayload, roundpay.config.callback.supplierTxnIdKey), 'S4565622313');
+  assert.equal(extractValueByPath(webhookPayload, roundpay.config.callback.operatorTxnIdKey), 'UE012345666');
+});
+
 test('Admin Navigation - API Setting Menu in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
   assert.ok(settingsMenu, 'Settings menu must exist in Admin Panel');
