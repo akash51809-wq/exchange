@@ -199,6 +199,182 @@ test('Developer API Presets - M robo Credential Substitution Engine', () => {
   assert.equal(stParams.find(p => p.key === 'order_id').value, '{ORDERID}');
 });
 
+test('Developer API Presets - real robo Template Specification', () => {
+  const realRobo = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'real robo');
+  assert.ok(realRobo, 'real robo template must exist in default presets');
+  assert.equal(realRobo.developer_name, 'RealRobo');
+  assert.equal(realRobo.service_type, 'Mobile Recharge');
+  assert.equal(realRobo.is_active, true);
+
+  // Check required parameters - only api_token
+  const reqKeys = realRobo.required_parameters.map(p => p.key);
+  assert.ok(reqKeys.includes('api_token'), 'Must require api_token');
+  assert.equal(realRobo.required_parameters.length, 1, 'Should only have 1 required parameter (API Token)');
+
+  // Check Balance endpoint
+  const bal = realRobo.config.balance;
+  assert.equal(bal.url, 'https://realrobo.in/api/balance');
+  assert.equal(bal.balanceKey, 'data.balance');
+  assert.equal(bal.requestType, 'GET');
+
+  // Check Recharge endpoint
+  const rech = realRobo.config.recharge;
+  assert.equal(rech.url, 'https://realrobo.in/api/recharge');
+  assert.equal(rech.requestType, 'POST');
+  assert.equal(rech.statusKey, 'status');
+  assert.equal(rech.successCodes, 'success');
+  assert.equal(rech.pendingCodes, 'pending');
+  assert.equal(rech.failedCodes, 'failure,failed');
+  assert.equal(rech.supplierIdKey, 'recharge_id');
+  assert.equal(rech.operatorIdKey, 'txid');
+  assert.equal(rech.memberReqIdKey, 'req_id');
+  assert.equal(rech.messageKey, 'message');
+
+  // Check Status check endpoint
+  const status = realRobo.config.statusCheck;
+  assert.equal(status.url, 'https://realrobo.in/api/status_check');
+  assert.equal(status.requestType, 'GET');
+  assert.equal(status.statusKey, 'status');
+  assert.equal(status.supplierIdKey, 'recharge_id');
+  assert.equal(status.operatorIdKey, 'txid');
+
+  // Check Dispute endpoint
+  const disp = realRobo.config.dispute;
+  assert.equal(disp.url, 'https://realrobo.in/api/raise_complaint');
+  assert.equal(disp.requestType, 'POST');
+  assert.equal(disp.statusKey, 'status');
+  assert.equal(disp.successCodes, 'true,1,SUCCESS');
+
+  // Check operator code mappings
+  const opCodes = realRobo.config.operatorCodes;
+  assert.equal(opCodes.AIRTEL, '1');
+  assert.equal(opCodes.BSNL, '2');
+  assert.equal(opCodes.JIO, '3');
+  assert.equal(opCodes.VI, '4');
+  assert.equal(opCodes.VODAFONE, '4');
+  assert.equal(opCodes.IDEA, '4');
+  assert.equal(opCodes['AIRTEL DTH'], '5');
+  assert.equal(opCodes.DISHTV, '6');
+  assert.equal(opCodes.SUNDIRECT, '7');
+  assert.equal(opCodes.TATASKY, '8');
+  assert.equal(opCodes['TATA PLAY'], '8');
+  assert.equal(opCodes.VIDEOCON, '9');
+  assert.equal(opCodes.D2H, '9');
+
+  // Check circle code mappings
+  const circles = realRobo.config.circleCodes;
+  assert.equal(circles['ANDHRA PRADESH'], '1');
+  assert.equal(circles.DELHI, '5');
+  assert.equal(circles.MUMBAI, '15');
+  assert.equal(circles['UP WEST'], '22');
+  assert.equal(circles.BIHAR, '3');
+});
+
+test('Developer API Presets - real robo Credential Substitution Engine', () => {
+  const realRobo = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'real robo');
+  const userCredentials = {
+    api_token: 'realrobo-secret-token-12345',
+  };
+
+  const configured = applyTemplateCredentials(realRobo, userCredentials, 'My RealRobo Seller API');
+  assert.equal(configured.name, 'My RealRobo Seller API');
+  assert.equal(configured.balanceKey, 'data.balance');
+  assert.equal(configured.url, 'https://realrobo.in/api/balance?api_token=realrobo-secret-token-12345');
+
+  // Balance params
+  const balTokenParam = configured.parameters.find(p => p.key === 'api_token');
+  assert.equal(balTokenParam.value, 'realrobo-secret-token-12345');
+
+  // Recharge params
+  assert.equal(configured.recharge.requestType, 'POST');
+  assert.equal(configured.recharge.url, 'https://realrobo.in/api/recharge');
+  const rechParams = configured.recharge.parameters;
+  assert.equal(rechParams.find(p => p.key === 'api_token').value, 'realrobo-secret-token-12345');
+  assert.equal(rechParams.find(p => p.key === 'number').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'amount').value, '{AMOUNT}');
+  assert.equal(rechParams.find(p => p.key === 'operator_id').value, '{OPCODE}');
+  assert.equal(rechParams.find(p => p.key === 'req_id').value, '{TXNID}');
+
+  // Status check params
+  assert.equal(configured.statusCheck.requestType, 'GET');
+  assert.equal(configured.statusCheck.url, 'https://realrobo.in/api/status_check');
+  const stParams = configured.statusCheck.parameters;
+  assert.equal(stParams.find(p => p.key === 'api_token').value, 'realrobo-secret-token-12345');
+  assert.equal(stParams.find(p => p.key === 'req_id').value, '{TXNID}');
+
+  // Dispute params
+  assert.equal(configured.dispute.requestType, 'POST');
+  assert.equal(configured.dispute.url, 'https://realrobo.in/api/raise_complaint');
+  const dispParams = configured.dispute.parameters;
+  assert.equal(dispParams.find(p => p.key === 'api_token').value, 'realrobo-secret-token-12345');
+  assert.equal(dispParams.find(p => p.key === 'req_id').value, '{TXNID}');
+  assert.equal(dispParams.find(p => p.key === 'recharge_id').value, '{ORDERID}');
+  assert.equal(dispParams.find(p => p.key === 'client_message').value, '{REASON}');
+});
+
+test('Developer API Presets - real robo Recharge Forwarding Engine & Response Parsing', async () => {
+  const realRobo = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'real robo');
+  const configured = applyTemplateCredentials(realRobo, { api_token: 'valid-token-xyz' }, 'Real Robo Stock API');
+
+  let interceptedCall = null;
+  const mockForwardRechargeToSeller = async ({ rechargeData }) => {
+    // Verify operator code and circle code translation
+    const opCodes = configured.operatorCodes;
+    const mappedOp = opCodes[rechargeData.operatorCode] || rechargeData.operatorCode;
+    const cirCodes = configured.circleCodes;
+    const mappedCir = cirCodes[rechargeData.circle] || rechargeData.circle;
+
+    interceptedCall = {
+      mappedOp,
+      mappedCir,
+      rechargeData,
+      url: configured.recharge.url,
+      requestType: configured.recharge.requestType
+    };
+
+    // Simulate RealRobo API success response
+    const mockApiResponse = {
+      status: 'success',
+      txid: '1523148787',
+      recharge_id: 1350579228,
+      message: 'recharge successful',
+      number: rechargeData.number,
+      amount: Number(rechargeData.amount)
+    };
+
+    const statusUpper = String(mockApiResponse.status).toUpperCase();
+    const isSuccess = configured.recharge.successCodes.toUpperCase().split(',').includes(statusUpper);
+
+    return {
+      ok: isSuccess,
+      status: isSuccess ? 'SUCCESS' : 'FAILURE',
+      supplierTxnId: String(mockApiResponse.recharge_id),
+      operatorTxnId: String(mockApiResponse.txid),
+      message: mockApiResponse.message
+    };
+  };
+
+  const result = await mockForwardRechargeToSeller({
+    rechargeData: {
+      number: '9876543210',
+      amount: '50.00',
+      operatorCode: 'AIRTEL',
+      circle: 'DELHI',
+      txnid: 'EXCH12345'
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'SUCCESS');
+  assert.equal(result.supplierTxnId, '1350579228');
+  assert.equal(result.operatorTxnId, '1523148787');
+  assert.equal(result.message, 'recharge successful');
+  assert.equal(interceptedCall.mappedOp, '1', 'Airtel must translate to RealRobo operator_id 1');
+  assert.equal(interceptedCall.mappedCir, '5', 'Delhi must translate to RealRobo circle_id 5');
+  assert.equal(interceptedCall.url, 'https://realrobo.in/api/recharge');
+  assert.equal(interceptedCall.requestType, 'POST');
+});
+
 test('Admin Navigation - API Setting Menu in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
   assert.ok(settingsMenu, 'Settings menu must exist in Admin Panel');
