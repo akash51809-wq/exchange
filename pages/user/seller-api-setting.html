@@ -309,6 +309,12 @@
                     <div id="tplDescriptionText" class="small text-muted mt-2 font-italic" style="display:none;"></div>
                   </div>
 
+                  <!-- Name field BEFORE Enter Required Provider Credentials -->
+                  <div class="form-group form-group-compact">
+                    <label class="api-label" for="apiName">Name <span class="api-required">*</span></label>
+                    <input type="text" class="form-control api-control-compact font-weight-bold" id="apiName" required placeholder="Enter API Name (e.g. Robotic Exchange)" maxlength="100">
+                  </div>
+
                   <!-- 2. QUICK CREDENTIALS BOX (Shown when a pre-configured template like Robotic Exchange is selected) -->
                   <div id="quickCredentialsContainer" class="mb-3 p-3" style="display:none; background: #ffffff; border: 1.5px solid #93c5fd; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
                     <div class="d-flex justify-content-between align-items-center mb-2 pb-2 border-bottom">
@@ -321,16 +327,6 @@
                       Aapko poora API add karne ki zaroorat nahi hai. Sirf apne provider ke credentials daliye, baki settings (Balance, Recharge, Status Check, Dispute & Operator codes) system apne se set kar lega:
                     </div>
                     <div id="quickCredentialInputs" class="row"></div>
-                    <div class="mt-2 text-right">
-                      <button type="button" class="btn btn-xs btn-outline-secondary" id="btnToggleManualView" style="font-size: 11px;">
-                        <i class="fa fa-cog mr-1"></i> <span id="manualToggleText">Show Advanced URL Settings</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="form-group form-group-compact">
-                    <label class="api-label" for="apiName">Name <span class="api-required">*</span></label>
-                    <input type="text" class="form-control api-control-compact font-weight-bold" id="apiName" required placeholder="Enter API Name (e.g. Easyrechargesolution)" maxlength="100">
                   </div>
 
                   <div id="manualFieldsContainer">
@@ -897,7 +893,7 @@
       if ($('manualFieldsContainer')) $('manualFieldsContainer').style.display = 'block';
       if ($('tplActiveBadge')) $('tplActiveBadge').style.display = 'none';
       if ($('tplDescriptionText')) $('tplDescriptionText').style.display = 'none';
-      if ($('manualToggleText')) $('manualToggleText').textContent = 'Show Advanced URL Settings';
+      
 
         let developerTemplates = [];
 
@@ -996,12 +992,7 @@
       }
     };
 
-    $('btnToggleManualView').onclick = () => {
-      const container = $('manualFieldsContainer');
-      const isHidden = container.style.display === 'none';
-      container.style.display = isHidden ? 'block' : 'none';
-      $('manualToggleText').textContent = isHidden ? 'Hide Advanced URL Settings' : 'Show Advanced URL Settings';
-    };
+
 
     function resetFormToNew() {
       editingApiId = null;

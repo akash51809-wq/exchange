@@ -22,7 +22,7 @@ test('Developer API Presets - Robotic Exchange Template Specification', () => {
   const reqKeys = roboticExchange.required_parameters.map(p => p.key);
   assert.ok(reqKeys.includes('Apimember_id'), 'Must require Apimember_id');
   assert.ok(reqKeys.includes('Api_password'), 'Must require Api_password');
-  assert.ok(reqKeys.includes('Route'), 'Must support Route parameter');
+  assert.equal(roboticExchange.required_parameters.length, 2, 'Should only have 2 required parameters (Member ID & Password)');
 
   // Check Balance endpoint
   const bal = roboticExchange.config.balance;
@@ -70,8 +70,6 @@ test('Developer API Presets - Credential Substitution Engine', () => {
   const userCredentials = {
     Apimember_id: '3083',
     Api_password: 'SecretPassword123',
-    Route: '1',
-    Mode: 'P2A',
   };
 
   const configured = applyTemplateCredentials(roboticExchange, userCredentials, 'My Robotic API');
@@ -93,7 +91,6 @@ test('Developer API Presets - Credential Substitution Engine', () => {
   const rechAmt = rechParams.find(p => p.key === 'Amount');
   const rechTxn = rechParams.find(p => p.key === 'Member_request_txnid');
   const rechCircle = rechParams.find(p => p.key === 'Circle');
-  const rechRoute = rechParams.find(p => p.key === 'Route');
 
   assert.equal(rechMember.value, '3083');
   assert.equal(rechPass.value, 'SecretPassword123');
@@ -102,7 +99,6 @@ test('Developer API Presets - Credential Substitution Engine', () => {
   assert.equal(rechAmt.value, '{AMOUNT}');
   assert.equal(rechTxn.value, '{TXNID}');
   assert.equal(rechCircle.value, '{CIRCLE}');
-  assert.equal(rechRoute.value, '1');
 
   // Status Check params
   const stParams = configured.statusCheck.parameters;
