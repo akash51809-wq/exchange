@@ -2,7 +2,7 @@
 
 const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { addPanelChrome } = require('../lib/panel-chrome');
-const { seedNotificationTemplates } = require('../lib/notification-service');
+const { seedNotificationTemplates, DEFAULT_NOTIFICATION_TEMPLATES } = require('../lib/notification-service');
 
 module.exports = function createAdminNotificationsPage({ db }) {
   async function sendAdminNotificationsPage(admin, response) {
@@ -16,7 +16,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
     ).catch(() => ({ rows: [] }));
 
     let templates = result.rows || [];
-    if (templates.length === 0) {
+    if (templates.length === 0 || (Array.isArray(DEFAULT_NOTIFICATION_TEMPLATES) && templates.length < DEFAULT_NOTIFICATION_TEMPLATES.length)) {
       await seedNotificationTemplates(db).catch(() => {});
       result = await db.query(
         `SELECT id, event_key, title, category, recipient_type,
@@ -761,6 +761,7 @@ ${safeJsonPayload}
       current_balance: '14,250.00',
       remark: 'Verified and approved',
       seller_name: 'Apex Telecom',
+      api_name: 'Ivan API',
       order_id: 'ORD-84920',
       operator: 'Jio Prepaid',
       mobile_number: '9876543210',

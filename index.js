@@ -1222,20 +1222,42 @@ async function requestWhatsappOtp(request, response) {
     throw httpError('Please wait 30 seconds before requesting OTP again.', 429);
   }
 
-  const waMsg = `Exchange Portal Verification OTP: ${otp}\n\nYour WhatsApp OTP for new account registration is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
-  const waResult = await sendWhatsappNotification({
-    db,
-    decryptServiceConfig,
-    toNumber: mobile,
-    message: waMsg,
-  });
+  // Send WhatsApp OTP strictly to WhatsApp number (never to email)
+  let waSent = false;
+  try {
+    const waResult = await sendNotificationEvent({
+      db,
+      decryptServiceConfig,
+      eventKey: 'signup_otp',
+      params: {
+        name: input.name || input.businessName || 'User',
+        otp,
+        expiry_minutes: 5,
+      },
+      recipientMobile: mobile,
+    });
+    waSent = Boolean(waResult?.whatsapp?.sent);
+  } catch (err) {
+    console.warn('[Signup WhatsApp OTP Event Error]:', err.message);
+  }
+
+  if (!waSent) {
+    const waMsg = `Exchange Portal Verification OTP: ${otp}\n\nYour WhatsApp OTP for new account registration is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
+    const waFallback = await sendWhatsappNotification({
+      db,
+      decryptServiceConfig,
+      toNumber: mobile,
+      message: waMsg,
+    }).catch(() => ({ sent: false }));
+    waSent = Boolean(waFallback?.sent);
+  }
 
   sendJson(response, 200, {
     ok: true,
-    message: waResult.sent
+    message: waSent
       ? 'OTP sent successfully on WhatsApp.'
       : 'OTP dispatched to WhatsApp. Please check.',
-    whatsappSent: waResult.sent,
+    whatsappSent: waSent,
   });
 }
 
@@ -1246,7 +1268,6 @@ async function requestEmailOtp(request, response) {
   checkSameOrigin(request);
   const input = await readJson(request);
   const email = String(input.email || '').trim().toLowerCase();
-  const mobileInput = input.mobile || input.whatsapp;
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw httpError('Please enter a valid email address.', 400);
@@ -1278,56 +1299,55 @@ async function requestEmailOtp(request, response) {
     throw httpError('Please wait 30 seconds before requesting OTP again.', 429);
   }
 
-  // Send Email OTP to user's WhatsApp number as requested
-  let waSent = false;
-  if (mobileInput) {
-    try {
-      const normalizedMobile = normalizeIndianMobile(mobileInput);
-      const waMsg = `Exchange Portal Email Verification OTP: ${otp}\n(For Email: ${email})\n\nThis OTP is valid for 5 minutes.`;
-      const waRes = await sendWhatsappNotification({
-        db,
-        decryptServiceConfig,
-        toNumber: normalizedMobile,
-        message: waMsg,
-      });
-      waSent = waRes.sent;
-    } catch (waErr) {
-      console.warn('Failed to send email OTP via WhatsApp:', waErr.message);
-    }
-  }
-
-  // Also send to Email inbox if SMTP is configured
+  // Send Email OTP strictly to Email inbox (NEVER to WhatsApp)
   let emailSent = false;
   try {
-    const emailRes = await sendEmailNotification({
+    const notifRes = await sendNotificationEvent({
       db,
       decryptServiceConfig,
-      toEmail: email,
-      subject: '[Exchange Portal] Email Verification OTP',
-      text: `Hello,\n\nYour Email verification OTP for Exchange Portal is: ${otp}\nValid for 5 minutes.\n\nRegards,\nExchange Portal Admin`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-          <h2 style="color: #1e3a8a; margin-top: 0;">Exchange Portal</h2>
-          <p>Hello,</p>
-          <p>Your Email verification OTP for registration is:</p>
-          <div style="background: #eff6ff; border: 1px dashed #3b82f6; padding: 12px; font-size: 24px; font-weight: bold; letter-spacing: 4px; text-align: center; color: #1e3a8a; border-radius: 6px; margin: 16px 0;">
-            ${otp}
-          </div>
-          <p style="font-size: 13px; color: #64748b;">This OTP is valid for 5 minutes. Do not share it with anyone.</p>
-        </div>
-      `,
+      eventKey: 'signup_otp',
+      params: {
+        name: input.name || input.businessName || 'User',
+        otp,
+        expiry_minutes: 5,
+      },
+      recipientEmail: email,
     });
-    emailSent = emailRes.sent;
-  } catch (mailErr) {
-    console.warn('Failed to send OTP via SMTP:', mailErr.message);
+    emailSent = Boolean(notifRes?.email?.sent);
+  } catch (err) {
+    console.warn('[Signup Email OTP Event Error]:', err.message);
+  }
+
+  // Fallback to direct SMTP if template not sent
+  if (!emailSent) {
+    try {
+      const emailRes = await sendEmailNotification({
+        db,
+        decryptServiceConfig,
+        toEmail: email,
+        subject: '[Exchange Portal] Email Verification OTP',
+        text: `Hello,\n\nYour Email verification OTP for Exchange Portal is: ${otp}\nValid for 5 minutes.\n\nRegards,\nExchange Portal Admin`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <h2 style="color: #1e3a8a; margin-top: 0;">Exchange Portal</h2>
+            <p>Hello,</p>
+            <p>Your Email verification OTP for registration is:</p>
+            <div style="background: #eff6ff; border: 1px dashed #3b82f6; padding: 12px; font-size: 24px; font-weight: bold; letter-spacing: 4px; text-align: center; color: #1e3a8a; border-radius: 6px; margin: 16px 0;">
+              ${otp}
+            </div>
+            <p style="font-size: 13px; color: #64748b;">This OTP is valid for 5 minutes. Do not share it with anyone.</p>
+          </div>
+        `,
+      });
+      emailSent = Boolean(emailRes.sent);
+    } catch (mailErr) {
+      console.warn('Failed to send OTP via SMTP:', mailErr.message);
+    }
   }
 
   sendJson(response, 200, {
     ok: true,
-    message: waSent
-      ? 'Email OTP has been sent to your WhatsApp number.'
-      : (emailSent ? 'Email OTP has been sent to your email.' : 'Email OTP sent successfully.'),
-    whatsappSent: waSent,
+    message: emailSent ? 'Email OTP has been sent to your email.' : 'Email OTP sent successfully.',
     emailSent,
   });
 }
@@ -1359,17 +1379,47 @@ async function requestPasswordResetOtp(request, response) {
   );
   if (!saved.rowCount) throw httpError('Please wait 60 seconds before requesting OTP again for this number.', 429);
 
-  // Send Password Reset OTP on WhatsApp
-  const waMsg = `Exchange Portal Password Reset OTP: ${otp}\n\nThis OTP is valid for 5 minutes. Do not share with anyone.`;
-  await sendWhatsappNotification({
-    db,
-    decryptServiceConfig,
-    toNumber: mobile,
-    message: waMsg,
-  });
+  // Send Password Reset notification (WhatsApp & Email)
+  try {
+    const userRes = await db.query(
+      "SELECT name, username, email FROM users WHERE phone_lookup_hash = $1 AND role = 'user' AND status = 'active' LIMIT 1",
+      [phoneHash]
+    );
+    const uName = userRes.rows[0]?.name || userRes.rows[0]?.username || 'User';
+    const uEmail = userRes.rows[0]?.email;
+    const requestHost = request.headers['x-forwarded-host'] || request.headers.host || 'exchange.easyrechargesolution.com';
+    const requestProto = request.headers['x-forwarded-proto'] || (IS_PRODUCTION ? 'https' : 'http');
+    const resetUrl = `${requestProto}://${requestHost}/auth/reset-password`;
+
+    const resetNotif = await sendNotificationEvent({
+      db,
+      decryptServiceConfig,
+      eventKey: 'forgot_password',
+      params: {
+        name: uName,
+        reset_otp: otp,
+        reset_url: resetUrl,
+        expiry_minutes: 5,
+      },
+      recipientMobile: mobile,
+      recipientEmail: uEmail || undefined,
+    });
+
+    if (!resetNotif?.whatsapp?.sent && !resetNotif?.whatsapp?.disabled) {
+      const waMsg = `Exchange Portal Password Reset OTP: ${otp}\n\nThis OTP is valid for 5 minutes. Do not share with anyone.`;
+      await sendWhatsappNotification({
+        db,
+        decryptServiceConfig,
+        toNumber: mobile,
+        message: waMsg,
+      }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('[Password Reset Notification Error]', err.message);
+  }
 
   sendJson(response, 200, {
-    message: 'If an active account exists for this mobile number, an OTP has been sent on WhatsApp.',
+    message: 'If an active account exists for this mobile number, an OTP has been dispatched.',
   });
 }
 
@@ -1419,6 +1469,34 @@ async function resetPassword(request, response) {
     await client.query('UPDATE user_sessions SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL', [account.rows[0].id]);
     await client.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [phoneHash]);
     await client.query('COMMIT');
+
+    // Send change_password notification (WhatsApp & Email)
+    try {
+      const uRes = await db.query(
+        'SELECT name, username, email, phone_ciphertext FROM users WHERE id = $1',
+        [account.rows[0].id]
+      );
+      if (uRes.rowCount > 0) {
+        const u = uRes.rows[0];
+        let uMobile = mobile;
+        if (u.phone_ciphertext && typeof decryptMobile === 'function') {
+          try { uMobile = decryptMobile(u.phone_ciphertext); } catch (_) {}
+        }
+        sendNotificationEvent({
+          db,
+          decryptServiceConfig,
+          eventKey: 'change_password',
+          params: {
+            name: u.name || u.username,
+            username: u.username,
+            date_time: new Date().toLocaleString('en-IN'),
+          },
+          recipientMobile: uMobile || undefined,
+          recipientEmail: u.email || undefined,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
     sendJson(response, 200, { message: 'Password updated successfully. Please login with your new password.' });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -1556,10 +1634,27 @@ async function registerUser(request, response) {
     client.release();
   }
 
-  // Send Welcome Message via WhatsApp & Email
+  // Send Welcome Message via Notification Template & Credentials dispatch
   const requestHost = request.headers['x-forwarded-host'] || request.headers.host || 'exchange.easyrechargesolution.com';
   const requestProto = request.headers['x-forwarded-proto'] || (IS_PRODUCTION ? 'https' : 'http');
   const loginUrl = `${requestProto}://${requestHost}/admin/login`;
+
+  try {
+    await sendNotificationEvent({
+      db,
+      decryptServiceConfig,
+      eventKey: 'welcome_msg_signup',
+      params: {
+        name: credentials.businessName,
+        username: credentials.userId,
+        login_url: loginUrl,
+      },
+      recipientMobile: credentials.mobile,
+      recipientEmail: credentials.email,
+    });
+  } catch (notifErr) {
+    console.warn('[Welcome Notification Error]:', notifErr.message);
+  }
 
   try {
     const welcomeWaMsg =
@@ -1730,6 +1825,19 @@ async function loginUser(request, response) {
         try { rawMobile = decryptMobile(userRow.phone_ciphertext); } catch (_) {}
       }
       const otpMsg = `Exchange Security: Your Login OTP is ${generatedOtp}. Valid for 5 minutes. Do not share with anyone.`;
+      sendNotificationEvent({
+        db,
+        decryptServiceConfig,
+        eventKey: 'login_otp',
+        params: {
+          name: user.name || user.username,
+          otp: generatedOtp,
+          expiry_minutes: 5,
+        },
+        recipientMobile: rawMobile || undefined,
+        recipientEmail: userRow.email || undefined,
+      }).catch((err) => console.warn('[Login OTP Notification Event Error]', err.message));
+
       if (rawMobile) {
         sendWhatsappNotification({
           db,
@@ -1809,6 +1917,29 @@ async function loginUser(request, response) {
         tokenHash,
       ]
     ).catch((logErr) => console.warn('[user_login_logs insert error]', logErr.message));
+    // Dispatch login_info_user notification (WhatsApp & Email)
+    try {
+      const uDetails = await db.query('SELECT email, phone_ciphertext FROM users WHERE id = $1', [user.id]);
+      const uRow = uDetails.rows[0] || {};
+      let uMobile = '';
+      if (uRow.phone_ciphertext && typeof decryptMobile === 'function') {
+        try { uMobile = decryptMobile(uRow.phone_ciphertext); } catch (_) {}
+      }
+      sendNotificationEvent({
+        db,
+        decryptServiceConfig,
+        eventKey: 'login_info_user',
+        params: {
+          name: user.name || user.username,
+          username: user.username,
+          ip_address: clientIp,
+          device: `${parsed.browserName || 'Browser'} on ${parsed.osName || 'Device'}`,
+          date_time: new Date().toLocaleString('en-IN'),
+        },
+        recipientMobile: uMobile || undefined,
+        recipientEmail: uRow.email || undefined,
+      }).catch(() => {});
+    } catch (_) {}
   } catch (err) {
     console.warn('[user_login_logs error]', err.message);
   }
@@ -2003,7 +2134,56 @@ async function createFundRequest(request, response) {
       transactionId ? fundFieldHash('transaction', transactionId) : null,
     ],
   );
-  sendJson(response, 201, { requestId: saved.rows[0].id, status: saved.rows[0].status, amount: formatMinorUnits(amountMinor) });
+
+  const reqId = saved.rows[0].id;
+  const formattedAmt = formatMinorUnits(amountMinor);
+  const requestHost = request.headers['x-forwarded-host'] || request.headers.host || 'exchange.easyrechargesolution.com';
+  const requestProto = request.headers['x-forwarded-proto'] || (IS_PRODUCTION ? 'https' : 'http');
+  const adminUrl = `${requestProto}://${requestHost}/admin/payment/fund-request`;
+
+  // 1) User confirmation notification (add_wallet_request_user)
+  try {
+    let uMobile = '';
+    if (user.phone_ciphertext && typeof decryptMobile === 'function') {
+      try { uMobile = decryptMobile(user.phone_ciphertext); } catch (_) {}
+    }
+    sendNotificationEvent({
+      db,
+      decryptServiceConfig,
+      eventKey: 'add_wallet_request_user',
+      params: {
+        name: user.name || user.username,
+        amount: formattedAmt,
+        utr: transactionId,
+        bank_name: bankRow.bank_name,
+        request_id: reqId,
+        date_time: new Date().toLocaleString('en-IN'),
+      },
+      recipientMobile: uMobile || undefined,
+      recipientEmail: user.email || undefined,
+    }).catch(() => {});
+  } catch (_) {}
+
+  // 2) Admin alert notification (add_wallet_request_admin)
+  try {
+    sendNotificationEvent({
+      db,
+      decryptServiceConfig,
+      eventKey: 'add_wallet_request_admin',
+      params: {
+        username: user.username,
+        user_name: user.name || user.username,
+        amount: formattedAmt,
+        utr: transactionId,
+        bank_name: bankRow.bank_name,
+        request_id: reqId,
+        admin_url: adminUrl,
+      },
+      decryptMobile,
+    }).catch(() => {});
+  } catch (_) {}
+
+  sendJson(response, 201, { requestId: reqId, status: saved.rows[0].status, amount: formattedAmt });
 }
 
 async function decideFundRequest(request, response, requestId) {
@@ -2057,6 +2237,46 @@ async function decideFundRequest(request, response, requestId) {
       [admin.id, `fund_request_${newStatus}`, 'wallet_fund_request', fundRequest.id, { amountMinor: fundRequest.amount_minor, userId: fundRequest.user_id }],
     );
     await client.query('COMMIT');
+
+    // Send wallet_approved_rejected_user notification (WhatsApp & Email)
+    try {
+      const uRes = await db.query(
+        `SELECT u.name, u.username, u.email, u.phone_ciphertext, w.balance_minor,
+                f.transaction_id_ciphertext
+         FROM wallet_fund_requests f
+         JOIN users u ON u.id = f.user_id
+         LEFT JOIN wallets w ON w.user_id = u.id AND w.currency = 'INR'
+         WHERE f.id = $1`,
+        [fundRequest.id]
+      );
+      if (uRes.rowCount > 0) {
+        const u = uRes.rows[0];
+        let uMobile = '';
+        if (u.phone_ciphertext && typeof decryptMobile === 'function') {
+          try { uMobile = decryptMobile(u.phone_ciphertext); } catch (_) {}
+        }
+        let rawUtr = '';
+        if (u.transaction_id_ciphertext && typeof decryptFundField === 'function') {
+          try { rawUtr = decryptFundField(u.transaction_id_ciphertext, 'transaction'); } catch (_) {}
+        }
+        sendNotificationEvent({
+          db,
+          decryptServiceConfig,
+          eventKey: 'wallet_approved_rejected_user',
+          params: {
+            name: u.name || u.username,
+            status: newStatus.toUpperCase(),
+            amount: formatMinorUnits(fundRequest.amount_minor),
+            utr: rawUtr || 'N/A',
+            current_balance: formatMinorUnits(u.balance_minor || 0n),
+            remark: note || (newStatus === 'approve' || newStatus === 'approved' ? 'Approved by Admin' : 'Rejected by Admin'),
+          },
+          recipientMobile: uMobile || undefined,
+          recipientEmail: u.email || undefined,
+        }).catch(() => {});
+      }
+    } catch (_) {}
+
     sendJson(response, 200, { status: newStatus });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -2986,8 +3206,25 @@ function startPendingRechargeNotifier() {
         if (row.phone_ciphertext && decryptMobile) {
           try { sellerPhone = decryptMobile(row.phone_ciphertext); } catch (_) {}
         }
+        const amt = (Number(row.amount_minor) / 100).toFixed(2);
+        
+        await sendNotificationEvent({
+          db,
+          decryptServiceConfig,
+          eventKey: 'pending_recharge_seller',
+          params: {
+            seller_name: row.name || row.username,
+            order_id: row.id,
+            operator: row.operator_code || 'Recharge',
+            amount: amt,
+            mobile_number: row.mobile_number || 'N/A',
+            created_at: new Date(row.created_at).toLocaleString('en-IN'),
+          },
+          recipientMobile: sellerPhone || undefined,
+          recipientEmail: row.email || undefined,
+        }).catch((err) => console.warn('[Pending Recharge Notification Event Error]', err.message));
+
         if (sellerPhone) {
-          const amt = (Number(row.amount_minor) / 100).toFixed(2);
           const msg = `🔔 *Pending Recharge Reminder*\nHello ${row.name || row.username},\nRecharge of ₹${amt} for Mobile: ${row.mobile_number || 'N/A'} is currently PENDING with your API since more than ${notifyMinutes} minutes.\nKindly clear or update the recharge status ASAP.\nThank you!`;
           await sendWhatsappNotification({
             db,
@@ -5199,6 +5436,40 @@ async function handleRequest(request, response) {
             sellerId: order.seller_user_id,
             rechargeAmountMinor: order.amount_minor,
           }).catch(() => {});
+
+          // Dispatch pending_complaint_seller notification (WhatsApp & Email)
+          try {
+            const sRes = await db.query(
+              `SELECT u.name, u.username, u.email, u.phone_ciphertext, r.operator_code, r.amount_minor, r.mobile_number
+               FROM recharge_orders r
+               LEFT JOIN users u ON u.id = r.seller_user_id
+               WHERE r.id = $1`,
+              [order.id]
+            );
+            if (sRes.rowCount > 0) {
+              const sRow = sRes.rows[0];
+              let sMobile = '';
+              if (sRow.phone_ciphertext && typeof decryptMobile === 'function') {
+                try { sMobile = decryptMobile(sRow.phone_ciphertext); } catch (_) {}
+              }
+              sendNotificationEvent({
+                db,
+                decryptServiceConfig,
+                eventKey: 'pending_complaint_seller',
+                params: {
+                  seller_name: sRow.name || sRow.username || 'Seller',
+                  complaint_id: dispCode,
+                  order_id: order.id,
+                  operator: sRow.operator_code || 'Recharge',
+                  amount: (Number(sRow.amount_minor || 0) / 100).toFixed(2),
+                  mobile_number: sRow.mobile_number || 'N/A',
+                  reason: reason,
+                },
+                recipientMobile: sMobile || undefined,
+                recipientEmail: sRow.email || undefined,
+              }).catch(() => {});
+            }
+          } catch (_) {}
         }
 
         sendJson(response, 200, { ok: true, message: 'Dispute submitted successfully.', disputeCode: dispCode });
@@ -5732,6 +6003,54 @@ async function handleRequest(request, response) {
           );
 
           await client.query('COMMIT');
+
+          // Send redeem_wallet_request_user & redeem_wallet_request_admin notifications
+          try {
+            const payoutAmount = (Number(amountMinor) / 100).toFixed(2);
+            const requestHost = request.headers['x-forwarded-host'] || request.headers.host || 'exchange.easyrechargesolution.com';
+            const requestProto = request.headers['x-forwarded-proto'] || (IS_PRODUCTION ? 'https' : 'http');
+            const adminUrl = `${requestProto}://${requestHost}/admin/payment/payout-request`;
+
+            let uMobile = '';
+            if (user.phone_ciphertext && typeof decryptMobile === 'function') {
+              try { uMobile = decryptMobile(user.phone_ciphertext); } catch (_) {}
+            }
+
+            // 1) User confirmation
+            sendNotificationEvent({
+              db,
+              decryptServiceConfig,
+              eventKey: 'redeem_wallet_request_user',
+              params: {
+                name: user.name || user.username,
+                amount: payoutAmount,
+                bank_name: bank.bank_name,
+                account_number: bank.account_number,
+                request_id: payoutId,
+                date_time: new Date().toLocaleString('en-IN'),
+              },
+              recipientMobile: uMobile || undefined,
+              recipientEmail: user.email || undefined,
+            }).catch(() => {});
+
+            // 2) Admin alert
+            sendNotificationEvent({
+              db,
+              decryptServiceConfig,
+              eventKey: 'redeem_wallet_request_admin',
+              params: {
+                username: user.username,
+                user_name: user.name || user.username,
+                amount: payoutAmount,
+                bank_name: bank.bank_name,
+                account_number: bank.account_number,
+                request_id: payoutId,
+                admin_url: adminUrl,
+              },
+              decryptMobile,
+            }).catch(() => {});
+          } catch (_) {}
+
           sendJson(response, 201, {
             ok: true,
             message: 'Payout request submitted successfully. Amount debited from wallet.',
@@ -5787,6 +6106,39 @@ async function handleRequest(request, response) {
           );
           if (!res.rowCount) throw httpError('Bank account not found or already reviewed.', 404);
         }
+
+        // Dispatch bank_approved_redeem notification (WhatsApp & Email)
+        try {
+          const bankDetails = await db.query(
+            `SELECT b.bank_name, b.account_number, b.ifsc_code, u.name, u.username, u.email, u.phone_ciphertext
+             FROM user_bank_accounts b
+             JOIN users u ON u.id = b.user_id
+             WHERE b.id = $1`,
+            [bankId]
+          );
+          if (bankDetails.rowCount > 0) {
+            const b = bankDetails.rows[0];
+            let uMobile = '';
+            if (b.phone_ciphertext && typeof decryptMobile === 'function') {
+              try { uMobile = decryptMobile(b.phone_ciphertext); } catch (_) {}
+            }
+            sendNotificationEvent({
+              db,
+              decryptServiceConfig,
+              eventKey: 'bank_approved_redeem',
+              params: {
+                name: b.name || b.username,
+                bank_name: b.bank_name,
+                account_number: b.account_number,
+                ifsc: b.ifsc_code,
+                status: action === 'approve' ? 'APPROVED' : 'REJECTED',
+                remark: note || (action === 'approve' ? 'Approved by Admin' : 'Rejected by Admin'),
+              },
+              recipientMobile: uMobile || undefined,
+              recipientEmail: b.email || undefined,
+            }).catch(() => {});
+          }
+        } catch (_) {}
 
         sendJson(response, 200, {
           ok: true,
@@ -5886,6 +6238,37 @@ async function handleRequest(request, response) {
           }
 
           await client.query('COMMIT');
+
+          // Send redeem_approved_rejected_user notification (WhatsApp & Email)
+          try {
+            const uRes = await db.query(
+              'SELECT name, username, email, phone_ciphertext FROM users WHERE id = $1',
+              [payout.user_id]
+            );
+            if (uRes.rowCount > 0) {
+              const u = uRes.rows[0];
+              let uMobile = '';
+              if (u.phone_ciphertext && typeof decryptMobile === 'function') {
+                try { uMobile = decryptMobile(u.phone_ciphertext); } catch (_) {}
+              }
+              sendNotificationEvent({
+                db,
+                decryptServiceConfig,
+                eventKey: 'redeem_approved_rejected_user',
+                params: {
+                  name: u.name || u.username,
+                  status: action === 'success' ? 'APPROVED' : 'REJECTED',
+                  amount: (Number(payout.amount_minor) / 100).toFixed(2),
+                  payout_utr: utr || 'N/A',
+                  bank_name: payout.bank_name,
+                  remark: remark || (action === 'success' ? 'Processed successfully' : 'Rejected by Admin'),
+                },
+                recipientMobile: uMobile || undefined,
+                recipientEmail: u.email || undefined,
+              }).catch(() => {});
+            }
+          } catch (_) {}
+
           sendJson(response, 200, {
             ok: true,
             message: action === 'success' ? 'Payout marked as success.' : 'Payout rejected and amount refunded to user wallet.',

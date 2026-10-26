@@ -10,9 +10,9 @@ const {
 } = require('../lib/notification-service');
 const createAdminNotificationsPage = require('../pages/admin-notifications');
 
-test('Admin Notifications - 17 Templates Specification and Keywords', async (t) => {
-  await t.test('has exactly 17 default notification events', () => {
-    assert.equal(DEFAULT_NOTIFICATION_TEMPLATES.length, 17);
+test('Admin Notifications - 18 Templates Specification and Keywords', async (t) => {
+  await t.test('has exactly 18 default notification events', () => {
+    assert.equal(DEFAULT_NOTIFICATION_TEMPLATES.length, 18);
   });
 
   const expectedKeys = [
@@ -33,9 +33,10 @@ test('Admin Notifications - 17 Templates Specification and Keywords', async (t) 
     'pending_complaint_seller',
     'api_low_balance_user',
     'bank_approved_redeem',
+    'seller_api_auto_disabled',
   ];
 
-  await t.test('contains all 17 required event keys in order', () => {
+  await t.test('contains all 18 required event keys in order', () => {
     const keys = DEFAULT_NOTIFICATION_TEMPLATES.map(t => t.event_key);
     assert.deepEqual(keys, expectedKeys);
   });
@@ -46,7 +47,7 @@ test('Admin Notifications - 17 Templates Specification and Keywords', async (t) 
     assert.deepEqual(adminKeys, ['add_wallet_request_admin', 'redeem_wallet_request_admin']);
 
     const userEvents = DEFAULT_NOTIFICATION_TEMPLATES.filter(t => t.recipient_type === 'user');
-    assert.equal(userEvents.length, 15);
+    assert.equal(userEvents.length, 16);
   });
 
   await t.test('each event has scoped keywords relevant to its purpose', () => {
@@ -68,6 +69,11 @@ test('Admin Notifications - 17 Templates Specification and Keywords', async (t) 
     // Low balance
     assert.ok(byKey.api_low_balance_user.allowed_keywords.includes('threshold_amount'));
     assert.ok(byKey.api_low_balance_user.allowed_keywords.includes('topup_url'));
+
+    // Seller API Auto Disabled
+    assert.ok(byKey.seller_api_auto_disabled.allowed_keywords.includes('seller_name'));
+    assert.ok(byKey.seller_api_auto_disabled.allowed_keywords.includes('api_name'));
+    assert.ok(byKey.seller_api_auto_disabled.allowed_keywords.includes('reason'));
   });
 
   await t.test('only whatsapp and email channels are enabled by default', () => {
@@ -113,9 +119,10 @@ test('Admin Notifications - Database Seeding', async () => {
   };
 
   await seedNotificationTemplates(mockDb);
-  assert.equal(insertedRows.length, 17);
+  assert.equal(insertedRows.length, 18);
   assert.equal(insertedRows[0][0], 'signup_otp');
   assert.equal(insertedRows[16][0], 'bank_approved_redeem');
+  assert.equal(insertedRows[17][0], 'seller_api_auto_disabled');
 });
 
 test('Admin Notifications - Page Component Rendering', async () => {
@@ -226,5 +233,96 @@ test('Admin Notifications - High-level Event Dispatcher', async (t) => {
     assert.equal(res.ok, true);
     assert.equal(res.whatsapp.disabled, true);
     assert.equal(res.email.disabled, true);
+  });
+
+  await t.test('dispatches seller_api_auto_disabled event with reason and api_name', async () => {
+    let capturedMobile = null;
+    let capturedEmail = null;
+    let capturedMsg = null;
+
+    const mockDb = {
+      query: async (sql, params) => {
+        if (sql.includes('FROM admin_notification_templates WHERE event_key = $1')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              event_key: 'seller_api_auto_disabled',
+              title: 'Seller API Auto-Disabled Alert',
+              recipient_type: 'user',
+              whatsapp_enabled: true,
+              email_enabled: true,
+              whatsapp_template: 'Alert to Seller {{seller_name}}: Your Seller API "{{api_name}}" has been marked INACTIVE. Reason: {{reason}}.',
+              email_subject: 'Alert: Seller API Inactive - {{api_name}}',
+              email_template: 'Dear {{seller_name}},\n\nYour API "{{api_name}}" is disabled: {{reason}}',
+            }],
+          };
+        }
+        if (sql.includes("WHERE service_key = 'whatsapp'")) {
+          return {
+            rowCount: 1,
+            rows: [{
+              is_enabled: true,
+              config_ciphertext: Buffer.from('dummy'),
+            }],
+          };
+        }
+        if (sql.includes("WHERE service_key = 'email'")) {
+          return {
+            rowCount: 1,
+            rows: [{
+              is_enabled: true,
+              config_ciphertext: Buffer.from('dummy'),
+            }],
+          };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+
+    const res = await sendNotificationEvent({
+      db: mockDb,
+      decryptServiceConfig: () => ({
+        apiUrl: 'https://wa.gateway/send?to=[MOBILE]&msg=[MESSAGE]',
+      }),
+      eventKey: 'seller_api_auto_disabled',
+      params: {
+        seller_name: 'FastPay',
+        api_name: 'Ivan Route',
+        reason: '5 consecutive failed transactions reached',
+        date_time: '26-Oct-2026 08:00 PM',
+      },
+      recipientMobile: '9876543210',
+      recipientEmail: 'seller@example.com',
+    });
+
+    assert.equal(res.ok, true);
+    assert.equal(res.eventKey, 'seller_api_auto_disabled');
+    assert.ok(res.whatsapp !== null);
+  });
+
+  await t.test('strict channel isolation: WhatsApp OTP never sent to email, Email OTP never sent to WhatsApp', async () => {
+    // WhatsApp OTP dispatch: recipientMobile provided, recipientEmail omitted
+    const waOnlyRes = await sendNotificationEvent({
+      db: { query: async () => ({ rowCount: 0, rows: [] }) },
+      decryptServiceConfig: () => ({ apiUrl: 'https://wa.gateway/send?to=[MOBILE]&msg=[MESSAGE]' }),
+      eventKey: 'signup_otp',
+      params: { name: 'Ramesh', otp: '123456', expiry_minutes: 5 },
+      recipientMobile: '9876543210',
+    });
+    assert.equal(waOnlyRes.ok, true);
+    assert.equal(waOnlyRes.email.sent, false);
+    assert.equal(waOnlyRes.email.error, 'No recipient email address provided');
+
+    // Email OTP dispatch: recipientEmail provided, recipientMobile omitted
+    const emailOnlyRes = await sendNotificationEvent({
+      db: { query: async () => ({ rowCount: 0, rows: [] }) },
+      decryptServiceConfig: () => ({}),
+      eventKey: 'signup_otp',
+      params: { name: 'Ramesh', otp: '654321', expiry_minutes: 5 },
+      recipientEmail: 'ramesh@example.com',
+    });
+    assert.equal(emailOnlyRes.ok, true);
+    assert.equal(emailOnlyRes.whatsapp.sent, false);
+    assert.equal(emailOnlyRes.whatsapp.error, 'No recipient mobile number provided');
   });
 });
