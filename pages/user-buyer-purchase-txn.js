@@ -145,12 +145,25 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       // Dispute Action or Status Badge
       let disputeCell = '';
       const dStatus = (row.dispute_status || 'none').toLowerCase();
-      if (dStatus === 'pending') {
+      if (dStatus === 'accepted' || row.status === 'refunded') {
+        disputeCell = `<span class="badge badge-success" style="background:#10b981;font-size:11px;" title="Refunded"><i class="fa fa-check-circle"></i> Refunded</span>`;
+      } else if (dStatus === 'pending') {
         disputeCell = `<span class="badge badge-warning" style="background:#f59e0b;color:#fff;font-size:11px;" title="Dispute Reason: ${escapeHtml(row.dispute_reason || '')}"><i class="fa fa-clock-o"></i> Dispute: Pending</span>`;
-      } else if (dStatus === 'accepted') {
-        disputeCell = `<span class="badge badge-success" style="background:#10b981;font-size:11px;" title="Refunded"><i class="fa fa-check-circle"></i> Dispute: Accepted</span>`;
       } else if (dStatus === 'rejected') {
-        disputeCell = `<span class="badge badge-danger" style="background:#ef4444;font-size:11px;" title="Note: ${escapeHtml(row.dispute_resolution_note || 'Rejected by seller')}"><i class="fa fa-times-circle"></i> Dispute: Rejected</span>`;
+        disputeCell = `
+          <div class="d-flex flex-column align-items-center">
+            <span class="badge badge-danger mb-1" style="background:#ef4444;font-size:11px;" title="Note: ${escapeHtml(row.dispute_resolution_note || 'Rejected by seller')}"><i class="fa fa-times-circle"></i> Rejected</span>
+            <button type="button" class="btn btn-xs btn-outline-warning btn-raise-dispute"
+              data-id="${escapeHtml(row.id)}"
+              data-ref="${escapeHtml(row.idempotency_key || row.id)}"
+              data-mobile="${escapeHtml(mobile)}"
+              data-operator="${escapeHtml(row.operator_name || row.operator_code || '')}"
+              data-amount="${escapeHtml(formattedAmount)}"
+              data-redispute="true">
+              <i class="fa fa-refresh mr-1"></i> Re-Dispute
+            </button>
+          </div>
+        `;
       } else if (row.status === 'successful') {
         // Can dispute if recharge was successful and not already disputed
         disputeCell = `

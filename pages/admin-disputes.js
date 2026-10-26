@@ -131,7 +131,7 @@ module.exports = function createAdminDisputesPage({ db, formatMinorUnits, decryp
       if (dStatus === 'pending') {
         disputeBadge = '<span class="badge badge-warning" style="background:#f59e0b;color:#fff;font-size:11px;"><i class="fa fa-clock-o"></i> Pending Review</span>';
       } else if (dStatus === 'accepted') {
-        disputeBadge = '<span class="badge badge-success" style="background:#10b981;font-size:11px;"><i class="fa fa-check-circle"></i> Accepted (Refunded)</span>';
+        disputeBadge = '<span class="badge badge-success" style="background:#10b981;font-size:11px;"><i class="fa fa-check-circle"></i> Refunded</span>';
       } else if (dStatus === 'rejected') {
         disputeBadge = '<span class="badge badge-danger" style="background:#ef4444;font-size:11px;"><i class="fa fa-times-circle"></i> Rejected</span>';
       }

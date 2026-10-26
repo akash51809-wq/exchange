@@ -535,13 +535,63 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-calendar-times-o text-secondary"></i> Do not Accept Complain After
                           </h6>
                           <p class="general-item-desc">
-                            Disputes will only be accepted for recharges within the specified number of days. Transactions older than this limit cannot be disputed.
+                            Refund requests and complaints will only be accepted for recharges within the specified number of days (both via API and Panel). Transactions older than this limit cannot be disputed.
                           </p>
                         </div>
                       </div>
                       <div class="general-item-controls">
                         <div class="input-group input-group-sm" style="max-width: 175px;">
-                          <input type="number" id="complainMaxAgeDays" class="form-control font-weight-bold text-center" value="7" min="1" max="90">
+                          <input type="number" id="complainMaxAgeDays" class="form-control font-weight-bold text-center" value="7" min="1" max="365">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Days</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4b. Seller Dispute Lien Multiplier -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <span class="badge badge-warning px-2 py-1 font-weight-bold" style="background:#f59e0b;color:#fff;"><i class="fa fa-shield"></i></span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-lock text-warning"></i> Seller Dispute Lien Multiplier
+                          </h6>
+                          <p class="general-item-desc">
+                            Multiplier of the recharge amount frozen (held on lien) on the seller's wallet when a dispute is raised. (e.g. if set to 3 and recharge is Rs 100, Rs 300 will be held on lien). If the dispute is rejected, the entire frozen amount is released.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="disputeLienMultiplier" class="form-control font-weight-bold text-center" value="1.0" min="1.0" max="20.0" step="0.5">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">X Times</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4c. Dispute Refund Lien Retention Days -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <span class="badge badge-info px-2 py-1 font-weight-bold" style="background:#0ea5e9;color:#fff;"><i class="fa fa-clock-o"></i></span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-history text-info"></i> Dispute Refund Lien Retention Days
+                          </h6>
+                          <p class="general-item-desc">
+                            When a disputed recharge is accepted and refunded, hold the lien amount on the seller's wallet for this many days before it is automatically released.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="disputeRefundLienDays" class="form-control font-weight-bold text-center" value="7" min="0" max="365">
                           <div class="input-group-append">
                             <span class="input-group-text font-weight-bold">Days</span>
                           </div>
@@ -1484,6 +1534,8 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('complainAcceptUnit', g.complainAcceptUnit || 'seconds');
           setSwitch('complainMaxAgeEnabled', g.complainMaxAgeEnabled !== false);
           setVal('complainMaxAgeDays', g.complainMaxAgeDays ?? 7);
+          setVal('disputeLienMultiplier', g.disputeLienMultiplier ?? 1.0);
+          setVal('disputeRefundLienDays', g.disputeRefundLienDays ?? 7);
           setSwitch('notifyPendingTxnEnabled', g.notifyPendingTxnEnabled !== false);
           setVal('notifyPendingTxnMinutes', g.notifyPendingTxnMinutes ?? 15);
           setSwitch('stopRehitAfterEnabled', g.stopRehitAfterEnabled !== false);
@@ -2057,7 +2109,9 @@ module.exports = function createAdminServiceSettingsPage({
           complainAcceptValue: Number(document.getElementById('complainAcceptValue').value) || 60,
           complainAcceptUnit: document.getElementById('complainAcceptUnit').value,
           complainMaxAgeEnabled: document.getElementById('complainMaxAgeEnabled').checked,
-          complainMaxAgeDays: Number(document.getElementById('complainMaxAgeDays').value) || 7,
+          complainMaxAgeDays: Math.max(1, parseInt(document.getElementById('complainMaxAgeDays').value, 10) || 7),
+          disputeLienMultiplier: Math.max(1, parseFloat(document.getElementById('disputeLienMultiplier').value) || 1.0),
+          disputeRefundLienDays: Math.max(0, parseInt(document.getElementById('disputeRefundLienDays').value, 10) || 7),
           notifyPendingTxnEnabled: document.getElementById('notifyPendingTxnEnabled').checked,
           notifyPendingTxnMinutes: Number(document.getElementById('notifyPendingTxnMinutes').value) || 15,
           stopRehitAfterEnabled: document.getElementById('stopRehitAfterEnabled').checked,
@@ -2138,6 +2192,9 @@ module.exports = function createAdminServiceSettingsPage({
         complainAcceptUnit: 'seconds',
         complainMaxAgeEnabled: true,
         complainMaxAgeDays: 7,
+        disputeLienMultiplier: 1.0,
+        disputeRefundLienMultiplier: 1.0,
+        disputeRefundLienDays: 7,
         notifyPendingTxnEnabled: true,
         notifyPendingTxnMinutes: 15,
         stopRehitAfterEnabled: true,
@@ -2191,6 +2248,9 @@ module.exports = function createAdminServiceSettingsPage({
       complainAcceptUnit: input.complainAcceptUnit === 'minutes' ? 'minutes' : 'seconds',
       complainMaxAgeEnabled: Boolean(input.complainMaxAgeEnabled),
       complainMaxAgeDays: Math.max(1, parseInt(input.complainMaxAgeDays, 10) || 7),
+      disputeLienMultiplier: Math.max(1, parseFloat(input.disputeLienMultiplier) || 1.0),
+      disputeRefundLienMultiplier: Math.max(1, parseFloat(input.disputeLienMultiplier) || 1.0),
+      disputeRefundLienDays: Math.max(0, parseInt(input.disputeRefundLienDays, 10) || 7),
       notifyPendingTxnEnabled: Boolean(input.notifyPendingTxnEnabled),
       notifyPendingTxnMinutes: Math.max(1, parseInt(input.notifyPendingTxnMinutes, 10) || 15),
       stopRehitAfterEnabled: Boolean(input.stopRehitAfterEnabled),
@@ -2212,6 +2272,16 @@ module.exports = function createAdminServiceSettingsPage({
        SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
       [ciphertext],
     );
+
+    await db.query(
+      `UPDATE website_settings
+       SET dispute_lien_multiplier = $1,
+           dispute_refund_lien_multiplier = $1,
+           dispute_refund_lien_days = $2,
+           updated_at = now()
+       WHERE id = 1`,
+      [config.disputeLienMultiplier, config.disputeRefundLienDays]
+    ).catch(err => console.warn('[General Settings] website_settings update warning:', err.message));
 
     sendJson(response, 200, { ok: true, message: 'General settings saved successfully.', general: config });
   }

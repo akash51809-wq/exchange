@@ -5128,8 +5128,11 @@ async function handleRequest(request, response) {
         if (!orderRes.rowCount) throw httpError('Transaction not found to dispute.', 404);
         const order = orderRes.rows[0];
 
-        if (order.dispute_status === 'accepted') {
+        if (order.dispute_status === 'accepted' || order.status === 'refunded') {
           throw httpError('This transaction has already been refunded.', 400);
+        }
+        if (order.dispute_status === 'pending') {
+          throw httpError('A dispute is already pending review for this transaction.', 400);
         }
 
         // Validate Dispute General Settings (complainMaxAge & complainAcceptAfter)
@@ -5158,7 +5161,9 @@ async function handleRequest(request, response) {
         const dispCode = 'DSP-' + order.id.slice(0, 8).toUpperCase();
         await db.query(
           `UPDATE recharge_orders
-           SET dispute_status = 'pending', dispute_reason = $1, dispute_created_at = now(), updated_at = now()
+           SET dispute_status = 'pending', dispute_reason = $1, dispute_created_at = now(),
+               dispute_resolution_note = NULL, dispute_resolved_at = NULL, dispute_resolved_by = NULL,
+               updated_at = now()
            WHERE id = $2`,
           [reason, order.id],
         );

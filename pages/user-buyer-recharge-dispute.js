@@ -89,12 +89,25 @@ module.exports = function createUserBuyerRechargeDisputePage({ db, formatMinorUn
       }
 
       let statusBadge = '';
-      if (dStatus === 'pending') {
-        statusBadge = '<span class="badge badge-warning" style="background:#f59e0b;color:#fff;"><i class="fa fa-clock-o"></i> Pending with Seller</span>';
-      } else if (dStatus === 'accepted') {
-        statusBadge = '<span class="badge badge-success" style="background:#22c55e;"><i class="fa fa-check-circle"></i> Refunded / Accepted</span>';
+      if (dStatus === 'accepted' || row.status === 'refunded') {
+        statusBadge = '<span class="badge badge-success" style="background:#10b981;font-size:11px;" title="Refunded"><i class="fa fa-check-circle"></i> Refunded</span>';
+      } else if (dStatus === 'pending') {
+        statusBadge = '<span class="badge badge-warning" style="background:#f59e0b;color:#fff;font-size:11px;"><i class="fa fa-clock-o"></i> Pending with Seller</span>';
       } else if (dStatus === 'rejected') {
-        statusBadge = '<span class="badge badge-danger" style="background:#ef4444;"><i class="fa fa-times-circle"></i> Rejected by Seller</span>';
+        statusBadge = `
+          <div class="d-flex flex-column align-items-center">
+            <span class="badge badge-danger mb-1" style="background:#ef4444;font-size:11px;" title="Note: ${escapeHtml(row.dispute_resolution_note || 'Rejected by seller')}"><i class="fa fa-times-circle"></i> Rejected</span>
+            <button type="button" class="btn btn-xs btn-outline-warning btn-raise-dispute"
+              data-id="${escapeHtml(row.id)}"
+              data-ref="${escapeHtml(row.idempotency_key || row.id)}"
+              data-mobile="${escapeHtml(mobile)}"
+              data-operator="${escapeHtml(row.operator_name || 'Operator')}"
+              data-amount="₹${formatMinorUnits(row.amount_minor)}"
+              data-redispute="true">
+              <i class="fa fa-refresh mr-1"></i> Re-Dispute
+            </button>
+          </div>
+        `;
       }
 
       return `
@@ -214,10 +227,126 @@ module.exports = function createUserBuyerRechargeDisputePage({ db, formatMinorUn
     </div>
   </div>
 
+  <!-- Re-Dispute Modal -->
+  <div class="modal fade" id="disputeModal" tabindex="-1" role="dialog" aria-labelledby="disputeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+      <div class="modal-content border-0 shadow-lg">
+        <div class="modal-header bg-warning text-dark">
+          <h5 class="modal-title font-weight-bold" id="disputeModalLabel"><i class="fa fa-refresh mr-1"></i> Raise Re-Dispute / Complaint</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <form id="disputeForm">
+          <input type="hidden" id="disputeOrderId" name="orderId">
+          <input type="hidden" id="disputeRefId" name="refId">
+          <div class="modal-body p-4">
+            <div id="modalDisputeError" class="alert alert-danger" style="display:none;"></div>
+            <div class="p-3 bg-light border rounded mb-3">
+              <div class="row">
+                <div class="col-6 mb-1 text-muted small">Mobile: <strong class="text-dark" id="disputeModalMobile">-</strong></div>
+                <div class="col-6 mb-1 text-muted small">Operator: <strong class="text-dark" id="disputeModalOperator">-</strong></div>
+                <div class="col-6 text-muted small">Amount: <strong class="text-success font-monospace" id="disputeModalAmount">-</strong></div>
+                <div class="col-6 text-muted small">Ref ID: <span class="text-primary font-monospace" id="disputeModalRef">-</span></div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="disputeReasonSelect" class="font-weight-bold">Re-Dispute Reason *</label>
+              <select id="disputeReasonSelect" class="form-control" required>
+                <option value="Customer confirms recharge not received">Customer confirms recharge not received</option>
+                <option value="Operator statement shows no credit">Operator statement shows no credit</option>
+                <option value="Wrong amount or wrong plan processed">Wrong amount or wrong plan processed</option>
+                <option value="other">Other (Provide custom explanation)</option>
+              </select>
+            </div>
+            <div class="form-group" id="disputeCustomReasonGroup" style="display:none;">
+              <label for="disputeCustomReason" class="font-weight-bold">Custom Reason / Notes *</label>
+              <textarea id="disputeCustomReason" class="form-control" rows="2" placeholder="Describe the dispute in detail..."></textarea>
+            </div>
+          </div>
+          <div class="modal-footer bg-light">
+            <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
+            <button type="submit" id="btnSubmitDispute" class="btn btn-warning btn-sm font-weight-bold"><i class="fa fa-refresh mr-1"></i> Submit Re-Dispute</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <script src="/assets/js/jquery-3.5.1.min.js"></script>
   <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
   <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
+  <script>
+  (function() {
+    const disputeReasonSelect = document.getElementById('disputeReasonSelect');
+    const customReasonGroup = document.getElementById('disputeCustomReasonGroup');
+    const disputeForm = document.getElementById('disputeForm');
+
+    if (disputeReasonSelect) {
+      disputeReasonSelect.addEventListener('change', () => {
+        customReasonGroup.style.display = disputeReasonSelect.value === 'other' ? 'block' : 'none';
+      });
+    }
+
+    document.querySelectorAll('.btn-raise-dispute').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('disputeOrderId').value = btn.dataset.id;
+        document.getElementById('disputeRefId').value = btn.dataset.ref;
+        document.getElementById('disputeModalMobile').textContent = btn.dataset.mobile;
+        document.getElementById('disputeModalOperator').textContent = btn.dataset.operator;
+        document.getElementById('disputeModalAmount').textContent = btn.dataset.amount;
+        document.getElementById('disputeModalRef').textContent = btn.dataset.ref;
+        document.getElementById('modalDisputeError').style.display = 'none';
+        $('#disputeModal').modal('show');
+      });
+    });
+
+    if (disputeForm) {
+      disputeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = document.getElementById('btnSubmitDispute');
+        const modalError = document.getElementById('modalDisputeError');
+        let reason = disputeReasonSelect.value;
+        if (reason === 'other') {
+          reason = document.getElementById('disputeCustomReason').value.trim();
+          if (!reason) {
+            modalError.textContent = 'Please provide details for the dispute.';
+            modalError.style.display = 'block';
+            return;
+          }
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Submitting...';
+        modalError.style.display = 'none';
+
+        const orderId = document.getElementById('disputeOrderId').value;
+        const refId = document.getElementById('disputeRefId').value;
+
+        try {
+          const res = await fetch('/api/buyer/disputes', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ orderId, refId, reason })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || data.message || 'Failed to submit re-dispute.');
+
+          $('#disputeModal').modal('hide');
+          window.location.reload();
+        } catch (err) {
+          modalError.textContent = err.message;
+          modalError.style.display = 'block';
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<i class="fa fa-refresh mr-1"></i> Submit Re-Dispute';
+        }
+      });
+    }
+  })();
+  </script>
 </body>
 </html>`;
 
