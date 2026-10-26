@@ -359,7 +359,11 @@ const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile })
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 const { sendUserIntegrationRequestPage } = createUserIntegrationRequestPage({ db });
 const { sendSystemChartPage } = createSystemChartPage();
-const { checkAndSuspendSellerApiOnDailyRefund } = require('./lib/seller-api-rules');
+const {
+  checkAndSuspendSellerApiOnDailyRefund,
+  handleSellerApiSuccess,
+  handleSellerApiFailure,
+} = require('./lib/seller-api-rules');
 
 // Initial PostgreSQL portal schema. Passwords stored exclusively as password hash.
 // Monetary amounts stored in minor currency units as BIGINT (never floating point).
@@ -1892,6 +1896,12 @@ async function getGeneralSettings() {
     maxSellerRetryCount: 3,
     stopSameNumberAmountEnabled: true,
     stopSameNumberAmountMinutes: 3,
+    apiDisableFailTxnEnabled: true,
+    apiDisableFailTxnCount: 5,
+    apiDisablePendingTxnEnabled: true,
+    apiDisablePendingTxnCount: 5,
+    apiSuspendRefundPercentEnabled: true,
+    apiSuspendRefundPercent: 25,
   };
 }
 
@@ -3233,9 +3243,14 @@ async function handleRequest(request, response) {
             [newDbStatus, operatorTxnId || supplierTxnId, JSON.stringify(incomingPayload), order.id],
           );
           orderUpdated = true;
-          if (newDbStatus === 'failed') {
-            const apiToTest = order.seller_api_id || apiId;
+          const apiToTest = order.seller_api_id || apiId;
+          if (newDbStatus === 'successful') {
             if (apiToTest) {
+              handleSellerApiSuccess(db, apiToTest).catch(() => {});
+            }
+          } else if (newDbStatus === 'failed') {
+            if (apiToTest) {
+              handleSellerApiFailure(db, apiToTest).catch(() => {});
               checkAndSuspendSellerApiOnDailyRefund(db, apiToTest).catch(() => {});
             }
           }

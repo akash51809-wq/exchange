@@ -730,7 +730,7 @@ module.exports = function createAdminServiceSettingsPage({
                             <i class="fa fa-power-off text-danger"></i> API Disable After Number of Fail Txn
                           </h6>
                           <p class="general-item-desc">
-                            Automatically disables a seller API if it experiences consecutive failures reaching this threshold, preventing further routing to that seller.
+                            Automatically disables a seller API if it experiences consecutive (continuous) failures reaching this threshold. If even 1 transaction succeeds in between, the failure counter resets to 0.
                           </p>
                         </div>
                       </div>
@@ -739,6 +739,35 @@ module.exports = function createAdminServiceSettingsPage({
                           <input type="number" id="apiDisableFailTxnCount" class="form-control font-weight-bold text-center" value="5" min="1" max="500">
                           <div class="input-group-append">
                             <span class="input-group-text font-weight-bold">Fail Txn</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 8b. API Disable After Number of Pending Txn -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle API Disable After Number of Pending Txn">
+                            <input type="checkbox" id="apiDisablePendingTxnEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="apiDisablePendingTxnEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-pause-circle text-warning"></i> API Disable After Number of Pending Txn
+                          </h6>
+                          <p class="general-item-desc">
+                            Agar kisi seller ke paas active pending transactions ki sankhya is limit tak ya usse zyada pahunchti hai, to seller ki API automatically inactive ho jayegi taaki us seller par mazeed orders hold na hon.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="apiDisablePendingTxnCount" class="form-control font-weight-bold text-center" value="5" min="1" max="500">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Pending Txn</span>
                           </div>
                         </div>
                       </div>
@@ -1575,6 +1604,8 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('stopSameNumberAmountMinutes', g.stopSameNumberAmountMinutes ?? 3);
           setSwitch('apiDisableFailTxnEnabled', g.apiDisableFailTxnEnabled !== false);
           setVal('apiDisableFailTxnCount', g.apiDisableFailTxnCount ?? 5);
+          setSwitch('apiDisablePendingTxnEnabled', g.apiDisablePendingTxnEnabled !== false);
+          setVal('apiDisablePendingTxnCount', g.apiDisablePendingTxnCount ?? 5);
           setSwitch('apiSuspendRefundPercentEnabled', g.apiSuspendRefundPercentEnabled !== false);
           setVal('apiSuspendRefundPercent', g.apiSuspendRefundPercent ?? 25);
           updateComplainDelayVisibility();
@@ -2087,6 +2118,7 @@ module.exports = function createAdminServiceSettingsPage({
       'maxSellerRetryEnabled',
       'stopSameNumberAmountEnabled',
       'apiDisableFailTxnEnabled',
+      'apiDisablePendingTxnEnabled',
       'apiSuspendRefundPercentEnabled'
     ];
 
@@ -2154,6 +2186,8 @@ module.exports = function createAdminServiceSettingsPage({
           stopSameNumberAmountMinutes: Number(document.getElementById('stopSameNumberAmountMinutes').value) || 3,
           apiDisableFailTxnEnabled: document.getElementById('apiDisableFailTxnEnabled').checked,
           apiDisableFailTxnCount: Math.max(1, parseInt(document.getElementById('apiDisableFailTxnCount').value, 10) || 5),
+          apiDisablePendingTxnEnabled: document.getElementById('apiDisablePendingTxnEnabled').checked,
+          apiDisablePendingTxnCount: Math.max(1, parseInt(document.getElementById('apiDisablePendingTxnCount').value, 10) || 5),
           apiSuspendRefundPercentEnabled: document.getElementById('apiSuspendRefundPercentEnabled').checked,
           apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(document.getElementById('apiSuspendRefundPercent').value) || 25)),
         };
@@ -2239,6 +2273,8 @@ module.exports = function createAdminServiceSettingsPage({
         stopSameNumberAmountMinutes: 3,
         apiDisableFailTxnEnabled: true,
         apiDisableFailTxnCount: 5,
+        apiDisablePendingTxnEnabled: true,
+        apiDisablePendingTxnCount: 5,
         apiSuspendRefundPercentEnabled: true,
         apiSuspendRefundPercent: 25,
       };
@@ -2297,6 +2333,8 @@ module.exports = function createAdminServiceSettingsPage({
       stopSameNumberAmountMinutes: Math.max(1, parseInt(input.stopSameNumberAmountMinutes, 10) || 3),
       apiDisableFailTxnEnabled: Boolean(input.apiDisableFailTxnEnabled),
       apiDisableFailTxnCount: Math.max(1, parseInt(input.apiDisableFailTxnCount, 10) || 5),
+      apiDisablePendingTxnEnabled: Boolean(input.apiDisablePendingTxnEnabled),
+      apiDisablePendingTxnCount: Math.max(1, parseInt(input.apiDisablePendingTxnCount, 10) || 5),
       apiSuspendRefundPercentEnabled: Boolean(input.apiSuspendRefundPercentEnabled),
       apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(input.apiSuspendRefundPercent) || 25)),
     };
