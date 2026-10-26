@@ -1888,6 +1888,8 @@ async function getGeneralSettings() {
     notifyPendingTxnMinutes: 15,
     stopRehitAfterEnabled: true,
     stopRehitAfterMinutes: 2,
+    maxSellerRetryEnabled: true,
+    maxSellerRetryCount: 3,
     stopSameNumberAmountEnabled: true,
     stopSameNumberAmountMinutes: 3,
   };

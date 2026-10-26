@@ -657,6 +657,35 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
                     </div>
 
+                    <!-- 6b. Fallback Sellers Count on 1st Seller Failure -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Fallback Sellers Count">
+                            <input type="checkbox" id="maxSellerRetryEnabled" checked>
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="maxSellerRetryEnabledStatus" class="compact-switch-badge badge-on">ON</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-random text-primary"></i> Max Fallback Sellers After 1st Fail
+                          </h6>
+                          <p class="general-item-desc">
+                            1st maximum margin wale seller se recharge fail hone ke baad recharge kitne additional sellers ke paas jayega (sirf unhi sellers ke paas jinka margin buyer margin ke barabar ya usse zyada hai).
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="maxSellerRetryCount" class="form-control font-weight-bold text-center" value="3" min="0" max="50">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Sellers</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                     <!-- 7. Stop Same Number/Amount for -->
                     <div class="general-list-item">
                       <div class="general-item-left">
@@ -1540,6 +1569,8 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('notifyPendingTxnMinutes', g.notifyPendingTxnMinutes ?? 15);
           setSwitch('stopRehitAfterEnabled', g.stopRehitAfterEnabled !== false);
           setVal('stopRehitAfterMinutes', g.stopRehitAfterMinutes ?? 2);
+          setSwitch('maxSellerRetryEnabled', g.maxSellerRetryEnabled !== false);
+          setVal('maxSellerRetryCount', g.maxSellerRetryCount ?? 3);
           setSwitch('stopSameNumberAmountEnabled', g.stopSameNumberAmountEnabled !== false);
           setVal('stopSameNumberAmountMinutes', g.stopSameNumberAmountMinutes ?? 3);
           setSwitch('apiDisableFailTxnEnabled', g.apiDisableFailTxnEnabled !== false);
@@ -2053,6 +2084,7 @@ module.exports = function createAdminServiceSettingsPage({
       'complainMaxAgeEnabled',
       'notifyPendingTxnEnabled',
       'stopRehitAfterEnabled',
+      'maxSellerRetryEnabled',
       'stopSameNumberAmountEnabled',
       'apiDisableFailTxnEnabled',
       'apiSuspendRefundPercentEnabled'
@@ -2116,6 +2148,8 @@ module.exports = function createAdminServiceSettingsPage({
           notifyPendingTxnMinutes: Number(document.getElementById('notifyPendingTxnMinutes').value) || 15,
           stopRehitAfterEnabled: document.getElementById('stopRehitAfterEnabled').checked,
           stopRehitAfterMinutes: Number(document.getElementById('stopRehitAfterMinutes').value) || 2,
+          maxSellerRetryEnabled: document.getElementById('maxSellerRetryEnabled').checked,
+          maxSellerRetryCount: Math.max(0, parseInt(document.getElementById('maxSellerRetryCount').value, 10) || 0),
           stopSameNumberAmountEnabled: document.getElementById('stopSameNumberAmountEnabled').checked,
           stopSameNumberAmountMinutes: Number(document.getElementById('stopSameNumberAmountMinutes').value) || 3,
           apiDisableFailTxnEnabled: document.getElementById('apiDisableFailTxnEnabled').checked,
@@ -2199,6 +2233,8 @@ module.exports = function createAdminServiceSettingsPage({
         notifyPendingTxnMinutes: 15,
         stopRehitAfterEnabled: true,
         stopRehitAfterMinutes: 2,
+        maxSellerRetryEnabled: true,
+        maxSellerRetryCount: 3,
         stopSameNumberAmountEnabled: true,
         stopSameNumberAmountMinutes: 3,
         apiDisableFailTxnEnabled: true,
@@ -2255,6 +2291,8 @@ module.exports = function createAdminServiceSettingsPage({
       notifyPendingTxnMinutes: Math.max(1, parseInt(input.notifyPendingTxnMinutes, 10) || 15),
       stopRehitAfterEnabled: Boolean(input.stopRehitAfterEnabled),
       stopRehitAfterMinutes: Math.max(1, parseInt(input.stopRehitAfterMinutes, 10) || 2),
+      maxSellerRetryEnabled: Boolean(input.maxSellerRetryEnabled),
+      maxSellerRetryCount: Math.max(0, parseInt(input.maxSellerRetryCount, 10) || 0),
       stopSameNumberAmountEnabled: Boolean(input.stopSameNumberAmountEnabled),
       stopSameNumberAmountMinutes: Math.max(1, parseInt(input.stopSameNumberAmountMinutes, 10) || 3),
       apiDisableFailTxnEnabled: Boolean(input.apiDisableFailTxnEnabled),
