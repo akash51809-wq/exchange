@@ -3260,7 +3260,7 @@ async function handleRequest(request, response) {
       await handleBuyerRecharge(request, response, url);
       return;
     }
-    if (url.pathname === '/webservices/api/status') {
+    if (url.pathname === '/webservices/api/status' || url.pathname === '/webservices/api/statusByRefId') {
       await handleBuyerStatus(request, response, url);
       return;
     }
@@ -3268,7 +3268,7 @@ async function handleRequest(request, response) {
       await handleBuyerBalance(request, response, url);
       return;
     }
-    if (url.pathname === '/webservices/api/dispute') {
+    if (url.pathname === '/webservices/api/dispute' || url.pathname === '/webservices/api/complain') {
       await handleBuyerDispute(request, response, url);
       return;
     }

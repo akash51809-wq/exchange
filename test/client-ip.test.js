@@ -53,6 +53,19 @@ describe('Client IP Extraction & Spoof Prevention Tests', () => {
     }
   });
 
+  it('automatically trusts loopback reverse proxy on Render and extracts client IP from X-Forwarded-For or CF-Connecting-IP', () => {
+    const req = {
+      socket: { remoteAddress: '127.0.0.1' },
+      headers: {
+        'cf-connecting-ip': '116.202.172.205',
+        'x-forwarded-for': '116.202.172.205, 10.10.10.10',
+      },
+    };
+
+    const resolvedIp = getClientIp(req);
+    assert.strictEqual(resolvedIp, '116.202.172.205');
+  });
+
   it('normalizes IPv6-mapped IPv4 addresses', () => {
     assert.strictEqual(isIpEqual('::ffff:192.168.1.1', '192.168.1.1'), true);
   });
