@@ -717,6 +717,229 @@ test('Developer API Presets - Roundpay Live Response Parsing & Engine Integratio
   assert.equal(extractValueByPath(webhookPayload, roundpay.config.callback.operatorTxnIdKey), 'UE012345666');
 });
 
+
+test('Developer API Presets - Rambhiya Template Specification', () => {
+  const rambhiya = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Rambhiya');
+  assert.ok(rambhiya, 'Rambhiya template must exist in default presets');
+  assert.equal(rambhiya.developer_name, 'Easy Recharge Solution');
+  assert.equal(rambhiya.service_type, 'Mobile Recharge');
+  assert.equal(rambhiya.is_active, true);
+
+  // Check required parameters
+  const reqKeys = rambhiya.required_parameters.map(p => p.key);
+  assert.ok(reqKeys.includes('domain'), 'Must require domain parameter for custom provider hosts');
+  assert.ok(reqKeys.includes('username'), 'Must require username parameter');
+  assert.ok(reqKeys.includes('api_token'), 'Must require api_token parameter');
+  assert.equal(rambhiya.required_parameters.length, 3, 'Must have exactly 3 required parameters');
+
+  // Check Balance endpoint
+  const bal = rambhiya.config.balance;
+  assert.equal(bal.url, 'https://{domain}/webservices/api/balance');
+  assert.equal(bal.balanceKey, 'rechargeBalance');
+  assert.equal(bal.requestType, 'GET');
+  assert.equal(bal.responseType, 'JSON');
+
+  // Check Recharge endpoint
+  const rech = rambhiya.config.recharge;
+  assert.equal(rech.url, 'https://{domain}/webservices/api/recharge');
+  assert.equal(rech.requestType, 'GET');
+  assert.equal(rech.responseType, 'JSON');
+  assert.equal(rech.statusKey, 'status');
+  assert.ok(rech.successCodes.includes('Success'));
+  assert.ok(rech.pendingCodes.includes('Accepted'));
+  assert.ok(rech.pendingCodes.includes('Pending'));
+  assert.ok(rech.failedCodes.includes('Failure'));
+  assert.ok(rech.failedCodes.includes('Refunded'));
+  assert.ok(rech.failedCodes.includes('Error'));
+  assert.equal(rech.supplierIdKey, 'txn_id');
+  assert.equal(rech.operatorIdKey, 'opt_id');
+  assert.equal(rech.memberReqIdKey, 'ref_id');
+  assert.equal(rech.messageKey, 'message');
+
+  // Check Status check endpoint
+  const status = rambhiya.config.statusCheck;
+  assert.equal(status.url, 'https://{domain}/webservices/api/statusByRefId');
+  assert.equal(status.responseType, 'JSON');
+  assert.equal(status.statusKey, 'status');
+  assert.equal(status.supplierIdKey, 'txn_id');
+  assert.equal(status.operatorIdKey, 'opt_id');
+
+  // Check Dispute endpoint
+  const disp = rambhiya.config.dispute;
+  assert.equal(disp.url, 'https://{domain}/webservices/api/complain');
+  assert.equal(disp.responseType, 'JSON');
+  assert.ok(disp.successCodes.includes('Accepted'));
+
+  // Check Callback endpoint
+  const cb = rambhiya.config.callback;
+  assert.equal(cb.ourTxnIdKey, 'refId');
+  assert.equal(cb.supplierTxnIdKey, 'txnId');
+  assert.equal(cb.operatorTxnIdKey, 'operatorId');
+  assert.equal(cb.statusKey, 'status');
+
+  // Check Operator codes
+  const opCodes = rambhiya.config.operatorCodes;
+  assert.equal(opCodes.AIRTEL, 'AT');
+  assert.equal(opCodes.BSNL, 'BT');
+  assert.equal(opCodes.VODAFONE, 'VI');
+  assert.equal(opCodes.JIO, 'JIO');
+  assert.equal(opCodes.DISHTV, 'DISHTV');
+  assert.equal(opCodes.TATASKY, 'TATASKY');
+  assert.equal(opCodes['AIRTEL DTH'], 'ATDTH');
+  assert.equal(opCodes.VIDEOCON, 'VDDTH');
+  assert.equal(opCodes.SUNDIRECT, 'SUNDTH');
+});
+
+test('Developer API Presets - Rambhiya Credential Substitution & Dynamic Domain Engine', () => {
+  const rambhiya = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Rambhiya');
+  const userCredentials = {
+    domain: 'https://www.easyrechargesolution.com/',
+    username: '9876543210',
+    api_token: 'secret-token-xyz-123'
+  };
+
+  const configured = applyTemplateCredentials(rambhiya, userCredentials, 'Easy Recharge Rambhiya');
+  assert.equal(configured.name, 'Easy Recharge Rambhiya');
+  assert.equal(configured.balanceKey, 'rechargeBalance');
+  assert.equal(configured.responseType, 'JSON');
+
+  // Verify domain was cleaned and properly substituted without double https://
+  assert.equal(
+    configured.url,
+    'https://www.easyrechargesolution.com/webservices/api/balance?username=9876543210&api_token=secret-token-xyz-123'
+  );
+  assert.equal(configured.recharge.url, 'https://www.easyrechargesolution.com/webservices/api/recharge');
+  assert.equal(configured.statusCheck.url, 'https://www.easyrechargesolution.com/webservices/api/statusByRefId');
+  assert.equal(configured.dispute.url, 'https://www.easyrechargesolution.com/webservices/api/complain');
+
+  // Verify recharge parameters
+  const rechParams = configured.recharge.parameters;
+  assert.equal(rechParams.find(p => p.key === 'username').value, '9876543210');
+  assert.equal(rechParams.find(p => p.key === 'api_token').value, 'secret-token-xyz-123');
+  assert.equal(rechParams.find(p => p.key === 'number').value, '{NUMBER}');
+  assert.equal(rechParams.find(p => p.key === 'amount').value, '{AMOUNT}');
+  assert.equal(rechParams.find(p => p.key === 'operator').value, '{OPCODE}');
+  assert.equal(rechParams.find(p => p.key === 'ref_id').value, '{TXNID}');
+
+  // Verify status check parameters
+  const stParams = configured.statusCheck.parameters;
+  assert.equal(stParams.find(p => p.key === 'username').value, '9876543210');
+  assert.equal(stParams.find(p => p.key === 'api_token').value, 'secret-token-xyz-123');
+  assert.equal(stParams.find(p => p.key === 'ref_id').value, '{TXNID}');
+  assert.equal(stParams.find(p => p.key === 'recharge_date').value, '{DATE}');
+
+  // Verify dispute parameters
+  const dispParams = configured.dispute.parameters;
+  assert.equal(dispParams.find(p => p.key === 'username').value, '9876543210');
+  assert.equal(dispParams.find(p => p.key === 'api_token').value, 'secret-token-xyz-123');
+  assert.equal(dispParams.find(p => p.key === 'txn_id').value, '{ORDERID}');
+  assert.equal(dispParams.find(p => p.key === 'reason').value, '{REASON}');
+
+  // Check callback preservation
+  assert.ok(configured.callback);
+  assert.equal(configured.callback.ourTxnIdKey, 'refId');
+  assert.equal(configured.callback.supplierTxnIdKey, 'txnId');
+
+  // Also test case-insensitive and camelCase credentials (e.g. UserName and apiToken)
+  const configuredAlt = applyTemplateCredentials(rambhiya, {
+    domain: 'portal.rambhiya.com',
+    UserName: '8877665544',
+    apiToken: 'tok-alt-777'
+  });
+  assert.equal(
+    configuredAlt.url,
+    'https://portal.rambhiya.com/webservices/api/balance?username=8877665544&api_token=tok-alt-777'
+  );
+  assert.equal(configuredAlt.recharge.parameters.find(p => p.key === 'username').value, '8877665544');
+  assert.equal(configuredAlt.recharge.parameters.find(p => p.key === 'api_token').value, 'tok-alt-777');
+});
+
+test('Developer API Presets - Rambhiya Live Response Parsing & Engine Integration', () => {
+  const { extractValueByPath } = require('../lib/stock-api-helper');
+  const rambhiya = DEFAULT_DEVELOPER_APIS.find(a => a.name === 'Rambhiya');
+  const rechConf = rambhiya.config.recharge;
+
+  // 1. Test Recharge Pending/Accepted Response
+  const sampleAccepted = {
+    status: 'Accepted',
+    number: '9999999999',
+    amount: '10',
+    operator: 'VF',
+    ref_id: 'ABC1',
+    txn_id: '123456',
+    opt_id: 'ABCDEFGH12345',
+    balance: '100.00',
+    message: 'Recharge request accepted.'
+  };
+
+  const status = extractValueByPath(sampleAccepted, rechConf.statusKey);
+  const operatorTxnId = extractValueByPath(sampleAccepted, rechConf.operatorIdKey);
+  const supplierTxnId = extractValueByPath(sampleAccepted, rechConf.supplierIdKey);
+  const memberReqId = extractValueByPath(sampleAccepted, rechConf.memberReqIdKey);
+  const message = extractValueByPath(sampleAccepted, rechConf.messageKey);
+
+  assert.equal(status, 'Accepted');
+  assert.ok(rechConf.pendingCodes.split(',').includes(status));
+  assert.equal(operatorTxnId, 'ABCDEFGH12345');
+  assert.equal(supplierTxnId, '123456');
+  assert.equal(memberReqId, 'ABC1');
+  assert.equal(message, 'Recharge request accepted.');
+
+  // 2. Test Recharge Success Response
+  const sampleSuccess = {
+    status: 'Success',
+    number: '9999999999',
+    amount: '10',
+    operator: 'VF',
+    ref_id: 'ABC1',
+    txn_id: '123456',
+    opt_id: 'ABCDEFGH12345',
+    balance: '100.00',
+    message: 'Recharge is successfull.'
+  };
+
+  const successStatus = extractValueByPath(sampleSuccess, rechConf.statusKey);
+  assert.equal(successStatus, 'Success');
+  assert.ok(rechConf.successCodes.split(',').includes(successStatus));
+
+  // 3. Test Recharge Failure Response
+  const sampleFailed = {
+    status: 'Failure',
+    message: 'Operator system down'
+  };
+  const failedStatus = extractValueByPath(sampleFailed, rechConf.statusKey);
+  assert.equal(failedStatus, 'Failure');
+  assert.ok(rechConf.failedCodes.split(',').includes(failedStatus));
+
+  // 4. Test Balance Check Response
+  const sampleBalance = {
+    status: 'Ok',
+    totalBalance: '150.00',
+    rechargeBalance: '120.50',
+    utilityBalance: '20.00',
+    aepsBalance: '9.50',
+    message: 'Balance fetched successfully.'
+  };
+  const balValue = extractValueByPath(sampleBalance, rambhiya.config.balance.balanceKey);
+  assert.equal(balValue, '120.50');
+
+  // 5. Test Webhook callback payload parsing
+  const webhookPayload = {
+    number: '9999999999',
+    amount: '10',
+    txnId: 'TXN889977',
+    refId: 'MYORDER123',
+    status: 'Success',
+    operatorId: 'OPR445566',
+    operatorCode: 'AT',
+    balance: '90.00'
+  };
+  assert.equal(extractValueByPath(webhookPayload, rambhiya.config.callback.statusKey), 'Success');
+  assert.equal(extractValueByPath(webhookPayload, rambhiya.config.callback.ourTxnIdKey), 'MYORDER123');
+  assert.equal(extractValueByPath(webhookPayload, rambhiya.config.callback.supplierTxnIdKey), 'TXN889977');
+  assert.equal(extractValueByPath(webhookPayload, rambhiya.config.callback.operatorTxnIdKey), 'OPR445566');
+});
+
 test('Admin Navigation - API Setting Menu in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
   assert.ok(settingsMenu, 'Settings menu must exist in Admin Panel');
