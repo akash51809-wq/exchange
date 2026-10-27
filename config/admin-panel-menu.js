@@ -6,6 +6,7 @@ const ADMIN_PANEL_MENU = [
   { label: 'Dashboard', path: '/admin/' },
   { label: 'User', path: '#', items: [
     { label: 'List User', path: '/admin/users/list' },
+    { label: 'Pending KYC', path: '/admin/users/pending-kyc' },
     { label: 'User Log History', path: '/admin/users/login-history' },
   ] },
   { label: 'Payment', path: '#', items: [

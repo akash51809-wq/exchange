@@ -66,6 +66,15 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
     const banks = banksRes.rows;
     const approvedBanks = banks.filter((b) => b.status === 'approved');
 
+    // 2b. Fetch user KYC status (Required for Seller Payouts)
+    const kycRes = await db.query(
+      `SELECT status, rejection_reason FROM user_kyc WHERE user_id = $1`,
+      [user.id],
+    ).catch(() => ({ rowCount: 0, rows: [] }));
+    const kycStatus = kycRes.rowCount > 0 ? kycRes.rows[0].status : 'not_submitted';
+    const kycRejectionReason = kycRes.rowCount > 0 ? (kycRes.rows[0].rejection_reason || '') : '';
+    const isKycApproved = kycStatus === 'approved';
+
     // 3. Fetch payout requests
     const conditions = ['p.user_id = $1'];
     const values = [user.id];
@@ -205,6 +214,34 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
                 <h5 class="card-title mb-0" style="font-size:15px;"><i class="fa fa-paper-plane mr-1"></i> Request Payout / Redeem</h5>
               </div>
               <div class="card-body">
+                ${!isKycApproved ? `
+                  <div class="alert alert-warning py-2 mb-3">
+                    <div class="d-flex align-items-center mb-1">
+                      <i class="fa fa-shield text-warning mr-2" style="font-size:18px;"></i>
+                      <div>
+                        <strong class="text-dark small">KYC Verification Required:</strong>
+                        <span class="small text-muted d-block">Seller payout requests can only be submitted after your KYC is approved by Admin.</span>
+                      </div>
+                    </div>
+                    <div class="p-2 bg-white rounded border small mt-1">
+                      <strong>Current KYC Status:</strong>
+                      <span class="badge ${kycStatus === 'pending' ? 'badge-warning' : (kycStatus === 'rejected' ? 'badge-danger' : 'badge-secondary')} text-uppercase font-weight-bold ml-1">
+                        ${kycStatus === 'pending' ? 'Pending for Approval' : (kycStatus === 'rejected' ? 'Rejected' : 'Not Submitted')}
+                      </span>
+                      ${kycStatus === 'rejected' && kycRejectionReason ? `
+                        <div class="mt-1 text-danger">
+                          <strong>Admin Rejection Reason:</strong> ${escapeHtml(kycRejectionReason)}
+                        </div>
+                      ` : ''}
+                    </div>
+                    <div class="mt-2">
+                      <a href="/kyc" class="btn btn-xs btn-primary font-weight-bold">
+                        <i class="fa fa-id-card-o mr-1"></i> ${kycStatus === 'rejected' ? 'Re-Submit KYC' : 'Complete KYC Verification'}
+                      </a>
+                    </div>
+                  </div>
+                ` : ''}
+
                 ${approvedBanks.length === 0 ? `
                   <div class="alert alert-info py-2 small">
                     <i class="fa fa-info-circle mr-1"></i> <strong>No Approved Bank Account:</strong> Please add your bank details first using the <strong>"Add Bank Account"</strong> button. Once approved by Admin, you can request payout here.
@@ -231,8 +268,8 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
                       <small class="text-muted">Max withdrawable: ${formattedBalance}</small>
                     </div>
 
-                    <button type="submit" class="btn btn-primary btn-block font-weight-bold" id="btnSubmitPayout" ${balanceMinor <= 0n ? 'disabled' : ''}>
-                      <i class="fa fa-check-circle mr-1"></i> Submit Payout Request
+                    <button type="submit" class="btn btn-primary btn-block font-weight-bold" id="btnSubmitPayout" ${(!isKycApproved || balanceMinor <= 0n) ? 'disabled' : ''}>
+                      <i class="fa ${!isKycApproved ? 'fa-lock' : 'fa-check-circle'} mr-1"></i> ${!isKycApproved ? 'KYC Approval Required to Payout' : 'Submit Payout Request'}
                     </button>
                   </form>
                 `}

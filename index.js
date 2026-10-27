@@ -100,6 +100,8 @@ const {
   seedDeveloperApiTemplates,
   applyTemplateCredentials,
 } = require('./lib/developer-api-presets');
+const createUserKycPage = require('./pages/user-kyc');
+const createAdminKycListPage = require('./pages/admin-kyc-list');
 const createUserWalletExchangePage = require('./pages/user-wallet-exchange');
 const createUserIntegrationRequestPage = require('./pages/user-integration-request');
 const {
@@ -233,6 +235,8 @@ const {
   handleSaveMarginDifferenceSettings,
 } = createAdminServiceSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
 const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
+const { sendUserKycPage } = createUserKycPage({ db });
+const { sendAdminKycListPage } = createAdminKycListPage({ db, decryptMobile });
 const { sendUserFundRedeemPage } = createUserFundRedeemPage({ db, formatMinorUnits });
 const { sendUserFundStatementPage } = createUserFundStatementPage({ db, formatMinorUnits });
 const { sendAdminBankApprovalPage } = createAdminBankApprovalPage({ db });
@@ -958,6 +962,29 @@ const DATABASE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_sort ON admin_notification_templates(sort_order);
   ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN NOT NULL DEFAULT true;
   ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_template TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_status TEXT NOT NULL DEFAULT 'not_submitted';
+
+  CREATE TABLE IF NOT EXISTS user_kyc (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    gst_number TEXT,
+    aadhar_number TEXT NOT NULL,
+    aadhar_front_data TEXT NOT NULL,
+    aadhar_back_data TEXT NOT NULL,
+    pan_number TEXT NOT NULL,
+    pan_card_data TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    rejection_reason TEXT,
+    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT user_kyc_user_unique UNIQUE (user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_kyc_status ON user_kyc(status, submitted_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_user_kyc_user_id ON user_kyc(user_id);
+
 
   CREATE TABLE IF NOT EXISTS developer_api_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -4014,6 +4041,8 @@ async function handleRequest(request, response) {
           await sendUserWalletExchangePage(session, response);
         } else if (url.pathname === '/help/integration-requests' || url.pathname === '/user/help/integration-requests') {
           await sendUserIntegrationRequestPage(session, response);
+        } else if (url.pathname === '/kyc' || url.pathname === '/setting/kyc' || url.pathname === '/user/kyc') {
+          await sendUserKycPage(session, response);
         } else {
           await sendUserPanelPage(session, userPage, response);
         }
@@ -4039,6 +4068,14 @@ async function handleRequest(request, response) {
         return;
       }
 
+      if (url.pathname === '/admin/users/pending-kyc' || url.pathname === '/admin/users/kyc' || url.pathname === '/admin/kyc') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminKycListPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/admin/disputes' || url.pathname === '/admin/payment/disputes') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -5950,6 +5987,16 @@ async function handleRequest(request, response) {
 
         const amountMinor = BigInt(Math.round(amount * 100));
         if (amountMinor <= 0n) throw httpError('Invalid payout amount.', 400);
+
+        // Enforce Approved KYC for Seller Payout Requests (Buyers unaffected)
+        const kycCheck = await db.query(
+          'SELECT status, rejection_reason FROM user_kyc WHERE user_id = $1',
+          [user.id]
+        );
+        const userKycStatus = kycCheck.rows[0]?.status || 'not_submitted';
+        if (userKycStatus !== 'approved') {
+          throw httpError('KYC verification required. Seller payout request can only be submitted after your KYC is approved. Please complete KYC in KYC Verification section.', 403);
+        }
 
         const bankRes = await db.query(
           `SELECT id, bank_name, account_holder_name, account_number, ifsc_code, status

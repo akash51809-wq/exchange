@@ -40,6 +40,7 @@ const USER_PANEL_MENU = [
     { label: 'Seller Commission Invoice', path: '/invoice/seller-commission-invoice' },
   ] },
   { label: 'Setting', path: '/setting', items: [
+    { label: 'KYC Verification', path: '/kyc' },
     { label: 'IP Setting', path: '/setting/ip-setting' },
     { label: 'Add Callback', path: '/setting/add-callback' },
     { label: 'Error List', path: '/setting/error-list' },
@@ -98,6 +99,7 @@ function getUserPanelMenu(walletMode = 'single') {
       { label: 'Seller Commission Invoice', path: '/invoice/seller-commission-invoice' },
     ] },
     { label: 'Setting', path: '/setting', items: [
+      { label: 'KYC Verification', path: '/kyc' },
       { label: 'IP Setting', path: '/setting/ip-setting' },
       { label: 'Add Callback', path: '/setting/add-callback' },
       { label: 'Error List', path: '/setting/error-list' },
@@ -115,6 +117,8 @@ for (const item of getUserPanelMenu('separate')) {
   if (item.path !== '/dashboard' && item.path !== '#') USER_PANEL_PAGES.set(item.path, { title: item.label, template: templateFor(item.path) });
   for (const child of item.items || []) USER_PANEL_PAGES.set(child.path, { title: child.label, template: templateFor(child.path) });
 }
+USER_PANEL_PAGES.set('/kyc', { title: 'KYC Verification', template: 'kyc.html' });
+USER_PANEL_PAGES.set('/setting/kyc', { title: 'KYC Verification', template: 'kyc.html' });
 USER_PANEL_PAGES.set('/invoice/buyer-invoice', { title: 'Buyer GST Invoice', template: 'invoice-buyer-gst-invoice.html' });
 USER_PANEL_PAGES.set('/invoice/seller-invoice', { title: 'Seller GST Invoice', template: 'invoice-seller-gst-invoice.html' });
 USER_PANEL_PAGES.set('/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html' });
