@@ -8,6 +8,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'List User', path: '/admin/users/list' },
     { label: 'Pending KYC', path: '/admin/users/pending-kyc' },
     { label: 'User Log History', path: '/admin/users/login-history' },
+    { label: 'User Send Msg Log', path: '/admin/reports/user-send-msg-log' },
   ] },
   { label: 'Payment', path: '#', items: [
     { label: 'Fund Request', path: '/admin/payment/fund-request' },
@@ -30,6 +31,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'Seller Refund Ratio', path: '/admin/reports/seller-refund-ratio' },
     { label: 'Fake Complaint Ratio', path: '/admin/reports/fake-complaint-ratio' },
     { label: 'Recharge Log', path: '/admin/reports/recharge-log' },
+    { label: 'User Send Msg Log', path: '/admin/reports/user-send-msg-log' },
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
   { label: 'Settings', path: '#', items: [

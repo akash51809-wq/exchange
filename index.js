@@ -87,6 +87,7 @@ const createAdminEarningPage = require('./pages/admin-earning');
 const createAdminRefundReportPage = require('./pages/admin-refund-report');
 const createAdminSellerRefundRatioReportPage = require('./pages/admin-seller-refund-ratio-report');
 const createAdminFakeComplaintRatioReportPage = require('./pages/admin-fake-complaint-ratio-report');
+const createAdminUserSendMsgLogPage = require('./pages/admin-user-send-msg-log');
 const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
 const createAdminDailySalesReportPage = require('./pages/admin-daily-sales-report');
 const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
@@ -299,6 +300,11 @@ const { sendAdminSellerRefundRatioReportPage } = createAdminSellerRefundRatioRep
 const { sendAdminFakeComplaintRatioReportPage } = createAdminFakeComplaintRatioReportPage({
   db,
   formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminUserSendMsgLogPage } = createAdminUserSendMsgLogPage({
+  db,
   sendJson,
   httpError,
 });
@@ -998,6 +1004,24 @@ const DATABASE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_user_kyc_status ON user_kyc(status, submitted_at DESC);
   CREATE INDEX IF NOT EXISTS idx_user_kyc_user_id ON user_kyc(user_id);
+
+  CREATE TABLE IF NOT EXISTS user_sent_msg_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    user_name TEXT,
+    recipient TEXT NOT NULL,
+    msg_type TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    content TEXT NOT NULL,
+    subject TEXT,
+    status TEXT DEFAULT 'sent',
+    response_payload JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_created_at ON user_sent_msg_logs(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_user_id ON user_sent_msg_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_platform ON user_sent_msg_logs(platform);
+  CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_msg_type ON user_sent_msg_logs(msg_type);
 
 
   CREATE TABLE IF NOT EXISTS developer_api_templates (
@@ -4510,6 +4534,14 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminFakeComplaintRatioReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/user-send-msg-log' || url.pathname === '/admin/users/send-msg-log' || url.pathname === '/admin/reports/send-msg-log') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminUserSendMsgLogPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
