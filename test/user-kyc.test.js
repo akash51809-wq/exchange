@@ -204,6 +204,8 @@ test('Admin Pending KYC Page - List & Action Elements', async (t) => {
     assert.ok(renderedHtml.includes('btn-reject-kyc'));
     assert.ok(renderedHtml.includes('id="rejectKycModal"'));
     assert.ok(renderedHtml.includes('id="adminDocModal"'));
+    assert.ok(renderedHtml.includes('horizontalMenu-list'), 'Must render top menu bar');
+    assert.ok(renderedHtml.includes('Pending KYC'), 'Must include Pending KYC menu link');
   });
 });
 

@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const { escapeHtml } = require('../lib/page-utils');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { fetchOperatorLookup } = require('../lib/plan-api-service');
+const { clearPolicyCache } = require('../lib/wallet-helper');
 
 module.exports = function createAdminServiceSettingsPage({
   db,
@@ -594,6 +595,68 @@ module.exports = function createAdminServiceSettingsPage({
                           <input type="number" id="disputeRefundLienDays" class="form-control font-weight-bold text-center" value="7" min="0" max="365">
                           <div class="input-group-append">
                             <span class="input-group-text font-weight-bold">Days</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4d. Seller Wallet Redeem Request Timing -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <span class="badge badge-primary px-2 py-1 font-weight-bold" style="background:#2563eb;color:#fff;"><i class="fa fa-money"></i></span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-clock-o text-primary"></i> Seller Wallet Redeem Request Timing
+                          </h6>
+                          <p class="general-item-desc">
+                            Seller ke wallet ka balance stock sale (recharge success) hone ke utne minute baad hi redeem request (payout) lagega. Iska count per recharge hoga (Instant ya 0 min = bina delay ke turant).
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 230px;">
+                          <div class="input-group-prepend">
+                            <select id="sellerWalletRedeemMode" class="custom-select custom-select-sm font-weight-bold" style="border-top-right-radius:0;border-bottom-right-radius:0;">
+                              <option value="instant">Instant</option>
+                              <option value="delay">After Delay</option>
+                            </select>
+                          </div>
+                          <input type="number" id="sellerWalletRedeemMinutes" class="form-control font-weight-bold text-center" value="0" min="0" max="10080" placeholder="0">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Min</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 4e. Seller Wallet Exchange Timing -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <span class="badge badge-success px-2 py-1 font-weight-bold" style="background:#16a34a;color:#fff;"><i class="fa fa-exchange"></i></span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-arrows-h text-success"></i> Seller Wallet Exchange Timing
+                          </h6>
+                          <p class="general-item-desc">
+                            Seller ke wallet ka balance stock sale (recharge success) hone ke utne minute baad hi seller to buyer wallet exchange hoga. Iska count per recharge hoga (Instant ya 0 min = bina delay ke turant).
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 230px;">
+                          <div class="input-group-prepend">
+                            <select id="sellerWalletExchangeMode" class="custom-select custom-select-sm font-weight-bold" style="border-top-right-radius:0;border-bottom-right-radius:0;">
+                              <option value="instant">Instant</option>
+                              <option value="delay">After Delay</option>
+                            </select>
+                          </div>
+                          <input type="number" id="sellerWalletExchangeMinutes" class="form-control font-weight-bold text-center" value="0" min="0" max="10080" placeholder="0">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Min</span>
                           </div>
                         </div>
                       </div>
@@ -1708,6 +1771,28 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('complainMaxAgeDays', g.complainMaxAgeDays ?? 7);
           setVal('disputeLienMultiplier', g.disputeLienMultiplier ?? 1.0);
           setVal('disputeRefundLienDays', g.disputeRefundLienDays ?? 7);
+
+          const redeemMin = parseInt(g.sellerWalletRedeemDelayMinutes, 10) || 0;
+          setVal('sellerWalletRedeemMinutes', redeemMin);
+          const redeemModeSelect = document.getElementById('sellerWalletRedeemMode');
+          const redeemMinInput = document.getElementById('sellerWalletRedeemMinutes');
+          if (redeemModeSelect) {
+            redeemModeSelect.value = redeemMin > 0 ? 'delay' : 'instant';
+          }
+          if (redeemMinInput) {
+            redeemMinInput.disabled = (redeemMin <= 0);
+          }
+
+          const exchangeMin = parseInt(g.sellerWalletExchangeDelayMinutes, 10) || 0;
+          setVal('sellerWalletExchangeMinutes', exchangeMin);
+          const exchangeModeSelect = document.getElementById('sellerWalletExchangeMode');
+          const exchangeMinInput = document.getElementById('sellerWalletExchangeMinutes');
+          if (exchangeModeSelect) {
+            exchangeModeSelect.value = exchangeMin > 0 ? 'delay' : 'instant';
+          }
+          if (exchangeMinInput) {
+            exchangeMinInput.disabled = (exchangeMin <= 0);
+          }
           setSwitch('notifyPendingTxnEnabled', g.notifyPendingTxnEnabled !== false);
           setVal('notifyPendingTxnMinutes', g.notifyPendingTxnMinutes ?? 15);
           setSwitch('stopRehitAfterEnabled', g.stopRehitAfterEnabled !== false);
@@ -2392,6 +2477,36 @@ module.exports = function createAdminServiceSettingsPage({
       complainAcceptModeSelect.addEventListener('change', updateComplainDelayVisibility);
     }
 
+    const redeemModeSelect = document.getElementById('sellerWalletRedeemMode');
+    const redeemMinInput = document.getElementById('sellerWalletRedeemMinutes');
+    if (redeemModeSelect && redeemMinInput) {
+      redeemModeSelect.addEventListener('change', () => {
+        if (redeemModeSelect.value === 'instant') {
+          redeemMinInput.value = '0';
+          redeemMinInput.disabled = true;
+        } else {
+          if (parseInt(redeemMinInput.value, 10) <= 0) redeemMinInput.value = '5';
+          redeemMinInput.disabled = false;
+          redeemMinInput.focus();
+        }
+      });
+    }
+
+    const exchangeModeSelect = document.getElementById('sellerWalletExchangeMode');
+    const exchangeMinInput = document.getElementById('sellerWalletExchangeMinutes');
+    if (exchangeModeSelect && exchangeMinInput) {
+      exchangeModeSelect.addEventListener('change', () => {
+        if (exchangeModeSelect.value === 'instant') {
+          exchangeMinInput.value = '0';
+          exchangeMinInput.disabled = true;
+        } else {
+          if (parseInt(exchangeMinInput.value, 10) <= 0) exchangeMinInput.value = '5';
+          exchangeMinInput.disabled = false;
+          exchangeMinInput.focus();
+        }
+      });
+    }
+
     // Save General Settings
     const btnSaveGeneral = document.getElementById('btnSaveGeneralSettings');
     const generalSaveStatus = document.getElementById('generalSettingsSaveStatus');
@@ -2414,6 +2529,12 @@ module.exports = function createAdminServiceSettingsPage({
           complainMaxAgeDays: Math.max(1, parseInt(document.getElementById('complainMaxAgeDays').value, 10) || 7),
           disputeLienMultiplier: Math.max(1, parseFloat(document.getElementById('disputeLienMultiplier').value) || 1.0),
           disputeRefundLienDays: Math.max(0, parseInt(document.getElementById('disputeRefundLienDays').value, 10) || 7),
+          sellerWalletRedeemDelayMinutes: document.getElementById('sellerWalletRedeemMode')?.value === 'instant'
+            ? 0
+            : Math.max(0, parseInt(document.getElementById('sellerWalletRedeemMinutes')?.value, 10) || 0),
+          sellerWalletExchangeDelayMinutes: document.getElementById('sellerWalletExchangeMode')?.value === 'instant'
+            ? 0
+            : Math.max(0, parseInt(document.getElementById('sellerWalletExchangeMinutes')?.value, 10) || 0),
           notifyPendingTxnEnabled: document.getElementById('notifyPendingTxnEnabled').checked,
           notifyPendingTxnMinutes: Number(document.getElementById('notifyPendingTxnMinutes').value) || 15,
           stopRehitAfterEnabled: document.getElementById('stopRehitAfterEnabled').checked,
@@ -2515,8 +2636,24 @@ module.exports = function createAdminServiceSettingsPage({
         apiDisablePendingTxnCount: 5,
         apiSuspendRefundPercentEnabled: true,
         apiSuspendRefundPercent: 25,
+        sellerWalletRedeemDelayMinutes: 0,
+        sellerWalletExchangeDelayMinutes: 0,
       };
     }
+    try {
+      const wsRes = await db.query(
+        'SELECT seller_sale_redeem_hold_minutes, seller_sale_exchange_hold_minutes, dispute_lien_multiplier, dispute_refund_lien_days FROM website_settings WHERE id = 1'
+      );
+      if (wsRes.rowCount > 0 && result.general) {
+        const ws = wsRes.rows[0];
+        if (ws.seller_sale_redeem_hold_minutes !== null && ws.seller_sale_redeem_hold_minutes !== undefined) {
+          result.general.sellerWalletRedeemDelayMinutes = parseInt(ws.seller_sale_redeem_hold_minutes, 10);
+        }
+        if (ws.seller_sale_exchange_hold_minutes !== null && ws.seller_sale_exchange_hold_minutes !== undefined) {
+          result.general.sellerWalletExchangeDelayMinutes = parseInt(ws.seller_sale_exchange_hold_minutes, 10);
+        }
+      }
+    } catch (_) {}
     if (!result.sms) {
       result.sms = {
         isEnabled: false,
@@ -2585,6 +2722,8 @@ module.exports = function createAdminServiceSettingsPage({
       apiDisablePendingTxnCount: Math.max(1, parseInt(input.apiDisablePendingTxnCount, 10) || 5),
       apiSuspendRefundPercentEnabled: Boolean(input.apiSuspendRefundPercentEnabled),
       apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(input.apiSuspendRefundPercent) || 25)),
+      sellerWalletRedeemDelayMinutes: Math.max(0, parseInt(input.sellerWalletRedeemDelayMinutes, 10) || 0),
+      sellerWalletExchangeDelayMinutes: Math.max(0, parseInt(input.sellerWalletExchangeDelayMinutes, 10) || 0),
     };
 
     const ciphertext = encryptServiceConfig(config);
@@ -2602,10 +2741,14 @@ module.exports = function createAdminServiceSettingsPage({
        SET dispute_lien_multiplier = $1,
            dispute_refund_lien_multiplier = $1,
            dispute_refund_lien_days = $2,
+           seller_sale_redeem_hold_minutes = $3,
+           seller_sale_exchange_hold_minutes = $4,
            updated_at = now()
        WHERE id = 1`,
-      [config.disputeLienMultiplier, config.disputeRefundLienDays]
+      [config.disputeLienMultiplier, config.disputeRefundLienDays, config.sellerWalletRedeemDelayMinutes, config.sellerWalletExchangeDelayMinutes]
     ).catch(err => console.warn('[General Settings] website_settings update warning:', err.message));
+
+    clearPolicyCache();
 
     sendJson(response, 200, { ok: true, message: 'General settings saved successfully.', general: config });
   }

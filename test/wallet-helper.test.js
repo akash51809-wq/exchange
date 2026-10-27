@@ -188,4 +188,114 @@ describe('Wallet Helper Tests', () => {
     assert.strictEqual(formRes.statusCode, 303);
     assert.strictEqual(formRes.headers.Location, '/admin/settings/wallet-settings?saved=true');
   });
+
+  it('getSellerAvailableBalances holds sales based on per-recharge timing', async () => {
+    const { getSellerAvailableBalances } = require('../lib/wallet-helper');
+    clearPolicyCache();
+
+    // Mock DB where policy has 5 minute hold on redeem and 10 minute hold on exchange
+    const mockDb = {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT wallet_mode')) {
+          return {
+            rows: [{
+              wallet_mode: 'separate',
+              seller_sale_redeem_hold_minutes: 5,
+              seller_sale_exchange_hold_minutes: 10,
+              dispute_lien_multiplier: 1.0,
+              dispute_refund_lien_multiplier: 1.0,
+              dispute_refund_lien_days: 7,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('SELECT id, balance_minor')) {
+          return {
+            rows: [{
+              id: 'w1',
+              balance_minor: 100000n,
+              buyer_balance_minor: 0n,
+              seller_balance_minor: 100000n, // ₹1,000.00
+              lien_balance_minor: 0n,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('seller_wallet_liens')) {
+          return { rows: [{ total_lien: 0 }], rowCount: 1 };
+        }
+        if (sql.includes('recharge_orders')) {
+          const holdMinutes = params[1];
+          if (holdMinutes === 5) {
+            return { rows: [{ held_minor: 20000n }], rowCount: 1 };
+          }
+          if (holdMinutes === 10) {
+            return { rows: [{ held_minor: 35000n }], rowCount: 1 };
+          }
+          return { rows: [{ held_minor: 0n }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    const res = await getSellerAvailableBalances(mockDb, 'seller-1');
+    assert.strictEqual(res.sellerBalanceMinor, 100000n);
+    assert.strictEqual(res.heldForRedeemMinor, 20000n);
+    assert.strictEqual(res.availableForRedeemMinor, 80000n); // 1000 - 200 = ₹800
+    assert.strictEqual(res.heldForExchangeMinor, 35000n);
+    assert.strictEqual(res.availableForExchangeMinor, 65000n); // 1000 - 350 = ₹650
+    assert.strictEqual(res.formatted.availableForRedeem, '800.00');
+    assert.strictEqual(res.formatted.availableForExchange, '650.00');
+  });
+
+  it('handleSaveGeneralSettings correctly updates sellerWalletRedeemDelayMinutes & sellerWalletExchangeDelayMinutes in website_settings', async () => {
+    const createAdminServiceSettingsPage = require('../pages/admin-service-settings');
+    const executedQueries = [];
+    const mockDb = {
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('SELECT seller_sale_redeem_hold_minutes')) {
+          return {
+            rows: [{
+              seller_sale_redeem_hold_minutes: 5,
+              seller_sale_exchange_hold_minutes: 10,
+              dispute_lien_multiplier: 1.0,
+              dispute_refund_lien_days: 7,
+            }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+
+    const { handleSaveGeneralSettings } = createAdminServiceSettingsPage({
+      db: mockDb,
+      encryptServiceConfig: (c) => JSON.stringify(c),
+      decryptServiceConfig: (c) => JSON.parse(c),
+      sendJson: (res, code, body) => {
+        res.statusCode = code;
+        res.body = body;
+      },
+      httpError: (msg, code) => Object.assign(new Error(msg), { statusCode: code }),
+    });
+
+    const res = {};
+    await handleSaveGeneralSettings({}, res, {
+      sellerWalletRedeemDelayMinutes: 5,
+      sellerWalletExchangeDelayMinutes: 10,
+      disputeLienMultiplier: 1.0,
+      disputeRefundLienDays: 7,
+    });
+
+    assert.strictEqual(res.statusCode, 200);
+    assert.strictEqual(res.body.ok, true);
+    assert.strictEqual(res.body.general.sellerWalletRedeemDelayMinutes, 5);
+    assert.strictEqual(res.body.general.sellerWalletExchangeDelayMinutes, 10);
+
+    const updateQuery = executedQueries.find(q => q.sql && q.sql.includes('UPDATE website_settings'));
+    assert.ok(updateQuery, 'Must update website_settings');
+    assert.strictEqual(updateQuery.params[2], 5, 'Must set seller_sale_redeem_hold_minutes to 5');
+    assert.strictEqual(updateQuery.params[3], 10, 'Must set seller_sale_exchange_hold_minutes to 10');
+  });
 });

@@ -2,6 +2,7 @@
 
 const { escapeHtml } = require('../lib/page-utils');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const { renderAdminNavigation } = require('../config/admin-panel-menu');
 
 module.exports = function createAdminKycListPage({ db, decryptMobile }) {
   function formatDateTime(isoString) {
@@ -213,6 +214,7 @@ module.exports = function createAdminKycListPage({ db, decryptMobile }) {
 <body>
   <div class="page">
     <div class="page-main">
+      ${renderAdminNavigation('/admin/users/pending-kyc')}
       <main class="main-content">
         <div class="container-fluid px-3 pt-3">
 
@@ -549,7 +551,7 @@ module.exports = function createAdminKycListPage({ db, decryptMobile }) {
 </html>`;
 
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(await addPanelChrome(html, { role: 'admin', currentPath: '/admin/users/pending-kyc' }));
+    response.end(await addPanelChrome(html, { role: 'admin', userId: admin.id, db, currentPath: '/admin/users/pending-kyc' }));
   }
 
   return { sendAdminKycListPage };
