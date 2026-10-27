@@ -85,6 +85,8 @@ const createAdminInvoicePage = require('./pages/admin-invoice');
 const createAdminRechargeReportPage = require('./pages/admin-recharge-report');
 const createAdminEarningPage = require('./pages/admin-earning');
 const createAdminRefundReportPage = require('./pages/admin-refund-report');
+const createAdminSellerRefundRatioReportPage = require('./pages/admin-seller-refund-ratio-report');
+const createAdminFakeComplaintRatioReportPage = require('./pages/admin-fake-complaint-ratio-report');
 const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
 const createAdminDailySalesReportPage = require('./pages/admin-daily-sales-report');
 const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
@@ -285,6 +287,18 @@ const { sendAdminRechargeLogPage } = createAdminRechargeLogPage({
   db,
   formatMinorUnits,
   decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminSellerRefundRatioReportPage } = createAdminSellerRefundRatioReportPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminFakeComplaintRatioReportPage } = createAdminFakeComplaintRatioReportPage({
+  db,
+  formatMinorUnits,
   sendJson,
   httpError,
 });
@@ -4480,6 +4494,22 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminRechargeLogPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/seller-refund-ratio' || url.pathname === '/admin/seller-refund-ratio') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminSellerRefundRatioReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/fake-complaint-ratio' || url.pathname === '/admin/fake-complaint-ratio') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminFakeComplaintRatioReportPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }

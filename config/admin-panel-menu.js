@@ -27,6 +27,8 @@ const ADMIN_PANEL_MENU = [
     { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },
     { label: 'Admin Earning', path: '/admin/reports/admin-earning' },
     { label: 'Refund Report', path: '/admin/reports/refund-report' },
+    { label: 'Seller Refund Ratio', path: '/admin/reports/seller-refund-ratio' },
+    { label: 'Fake Complaint Ratio', path: '/admin/reports/fake-complaint-ratio' },
     { label: 'Recharge Log', path: '/admin/reports/recharge-log' },
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
