@@ -2831,6 +2831,242 @@ async function getManagedUserMargins(request, response, userId) {
   sendJson(response, 200, { buyer: await load('buyer_margin_settings'), seller: await load('seller_margin_settings') });
 }
 
+async function getManagedUserConfigure(request, response, userId) {
+  const admin = await requireAdminAndUser(request, userId);
+  const userRes = await db.query(
+    `SELECT id, username, name, email, callback_url, api_token
+     FROM users WHERE id = $1 AND role = 'user' AND deleted_at IS NULL`,
+    [userId],
+  );
+  if (!userRes.rowCount) throw httpError('User not found.', 404);
+  const user = userRes.rows[0];
+
+  const ipRes = await db.query(
+    `SELECT id, ip_address, status, created_at FROM user_whitelisted_ips
+     WHERE user_id = $1 ORDER BY created_at ASC`,
+    [userId],
+  );
+
+  const sellerApisRes = await db.query(
+    `SELECT id, name, short_name, services, mode, config_ciphertext, balance_value, balance_key,
+            is_active, is_admin_approved, approval_status, callback_ip, created_at
+     FROM seller_api_settings
+     WHERE user_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC`,
+    [userId],
+  );
+
+  const sellerApis = sellerApisRes.rows.map((row) => {
+    let config = {};
+    try {
+      config = decryptSellerApiConfig(row.config_ciphertext);
+    } catch {}
+    return {
+      id: row.id,
+      name: row.name,
+      balance: row.balance_value || '0.00',
+      balanceKey: row.balance_key || '',
+      balanceUrl: config.url || '',
+      rechargeUrl: config.recharge?.url || '',
+      statusUrl: config.statusCheck?.url || '',
+      method: config.requestType || config.recharge?.method || 'GET',
+      isActive: row.is_active,
+      approvalStatus: row.approval_status || 'approved',
+      isAdminApproved: row.is_admin_approved,
+      createdAt: row.created_at,
+    };
+  });
+
+  sendJson(response, 200, {
+    ok: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      email: user.email || '',
+      callbackUrl: user.callback_url || '',
+      apiToken: user.api_token || '',
+    },
+    ips: ipRes.rows.map((r) => r.ip_address),
+    sellerApis,
+  });
+}
+
+async function updateManagedUserConfigure(request, response, userId) {
+  const admin = await requireAdminAndUser(request, userId);
+  const input = await readJson(request);
+
+  const callbackUrl = String(input.callbackUrl || '').trim();
+  if (callbackUrl) {
+    if (callbackUrl.length > 2000) throw httpError('Callback URL cannot exceed 2000 characters.', 400);
+    try {
+      const u = new URL(callbackUrl);
+      if (!['http:', 'https:'].includes(u.protocol)) throw new Error();
+    } catch {
+      throw httpError('Please enter a valid HTTP/HTTPS Callback URL.', 400);
+    }
+  }
+
+  let apiToken = String(input.apiToken || '').trim();
+  if (apiToken) {
+    if (apiToken.length < 8 || apiToken.length > 128) throw httpError('API Token must be between 8 and 128 characters.', 400);
+    if (!/^[a-zA-Z0-9_\-]+$/.test(apiToken)) throw httpError('API Token contains invalid characters.', 400);
+    const existingToken = await db.query(
+      'SELECT id FROM users WHERE api_token = $1 AND id != $2 AND deleted_at IS NULL',
+      [apiToken, userId],
+    );
+    if (existingToken.rowCount) throw httpError('This API Token is already in use by another user.', 400);
+  } else {
+    apiToken = 'tok_' + crypto.randomUUID().replace(/-/g, '');
+  }
+
+  let rawIps = [];
+  if (Array.isArray(input.ips)) {
+    rawIps = input.ips;
+  } else if (typeof input.ips === 'string') {
+    rawIps = input.ips.split(/[\r\n,]+/).map((s) => s.trim()).filter(Boolean);
+  }
+  const cleanIps = [...new Set(rawIps.map((s) => String(s).trim()).filter(Boolean))];
+  for (const ip of cleanIps) {
+    if (!net.isIP(ip)) throw httpError(`Invalid IP address: ${ip}`, 400);
+  }
+
+  const client = await db.connect();
+  try {
+    await client.query('BEGIN');
+
+    const updated = await client.query(
+      `UPDATE users SET callback_url = $1, api_token = $2, updated_at = now()
+       WHERE id = $3 AND role = 'user' AND deleted_at IS NULL RETURNING id`,
+      [callbackUrl || null, apiToken, userId],
+    );
+    if (!updated.rowCount) throw httpError('User not found.', 404);
+
+    await client.query('DELETE FROM user_whitelisted_ips WHERE user_id = $1', [userId]);
+    for (const ip of cleanIps) {
+      await client.query(
+        `INSERT INTO user_whitelisted_ips (user_id, ip_address, status)
+         VALUES ($1, $2, 'approved')
+         ON CONFLICT (user_id, ip_address) DO UPDATE SET status = 'approved'`,
+        [userId, ip],
+      );
+    }
+
+    await client.query(
+      'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
+      [admin.id, 'user_configure_updated', 'user', userId, { callbackUrl, apiToken, ipsCount: cleanIps.length }],
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  sendJson(response, 200, {
+    ok: true,
+    message: 'User API & Webhook configuration saved successfully.',
+    callbackUrl,
+    apiToken,
+    ips: cleanIps,
+  });
+}
+
+async function addManagedUserSellerApi(request, response, userId) {
+  const admin = await requireAdminAndUser(request, userId);
+  const input = await readJson(request);
+
+  const name = String(input.name || '').trim();
+  const balanceUrl = String(input.balanceUrl || input.url || '').trim();
+  const balanceKey = String(input.balanceKey || '').trim();
+  const rechargeUrl = String(input.rechargeUrl || '').trim();
+  const statusUrl = String(input.statusUrl || '').trim();
+  const method = String(input.method || 'GET').trim().toUpperCase();
+  const isActive = input.isActive !== false;
+
+  if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
+  if (!rechargeUrl && !balanceUrl) throw httpError('At least Recharge URL or Balance URL is required.', 400);
+
+  const configToStore = {
+    url: balanceUrl || rechargeUrl,
+    urlType: 'Balance URL',
+    requestType: method,
+    responseType: 'JSON',
+    balanceKey: balanceKey,
+    parameters: [],
+    recharge: {
+      url: rechargeUrl,
+      method: method,
+      requestType: method,
+      responseType: 'JSON',
+      parameters: [],
+    },
+    statusCheck: statusUrl ? {
+      url: statusUrl,
+      method: 'GET',
+      parameters: [],
+    } : null,
+  };
+
+  const saved = await db.query(
+    `INSERT INTO seller_api_settings
+     (user_id, name, short_name, services, mode, config_ciphertext, balance_value, balance_key, is_active, is_admin_approved, approval_status, approved_at, reviewed_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, 'approved', now(), $10)
+     RETURNING id`,
+    [
+      userId,
+      name,
+      name.slice(0, 20),
+      'Mobile',
+      'manual',
+      encryptSellerApiConfig(configToStore),
+      '0.00',
+      balanceKey,
+      isActive,
+      admin.id,
+    ],
+  );
+
+  await db.query(
+    'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1,$2,$3,$4,$5)',
+    [admin.id, 'admin_configured_seller_api', 'seller_api', saved.rows[0].id, { userId, name }],
+  ).catch(() => {});
+
+  sendJson(response, 201, {
+    ok: true,
+    id: saved.rows[0].id,
+    name,
+    message: 'Seller API configured successfully for user.',
+  });
+}
+
+async function toggleManagedUserSellerApi(request, response, userId, apiId) {
+  const admin = await requireAdminAndUser(request, userId);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(apiId)) throw httpError('Invalid API ID.', 400);
+  const res = await db.query(
+    `UPDATE seller_api_settings SET is_active = NOT is_active, updated_at = now()
+     WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+     RETURNING is_active`,
+    [apiId, userId],
+  );
+  if (!res.rowCount) throw httpError('Seller API not found.', 404);
+  sendJson(response, 200, { ok: true, isActive: res.rows[0].is_active });
+}
+
+async function deleteManagedUserSellerApi(request, response, userId, apiId) {
+  const admin = await requireAdminAndUser(request, userId);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(apiId)) throw httpError('Invalid API ID.', 400);
+  const res = await db.query(
+    `UPDATE seller_api_settings SET deleted_at = now(), updated_at = now()
+     WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL
+     RETURNING id`,
+    [apiId, userId],
+  );
+  if (!res.rowCount) throw httpError('Seller API not found.', 404);
+  sendJson(response, 200, { ok: true, message: 'Seller API deleted successfully.' });
+}
+
 async function sendFundRequestProof(request, response, requestId) {
   const admin = await getSession(request);
   if (!admin || admin.role !== 'admin') throw httpError('Only admin can view this file.', admin ? 403 : 401);
@@ -4484,6 +4720,12 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      const userConfigureMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/configure$/i);
+      if (userConfigureMatch) {
+        await getManagedUserConfigure(request, response, userConfigureMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       const userMarginsMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/margins$/i);
       if (userMarginsMatch) {
         await getManagedUserMargins(request, response, userMarginsMatch[1]);
@@ -5019,6 +5261,25 @@ async function handleRequest(request, response) {
           statusCode = 200;
           return;
         }
+      }
+      const userConfigurePostMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/configure$/i);
+      if (userConfigurePostMatch) {
+        await updateManagedUserConfigure(request, response, userConfigurePostMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      const userSellerApiMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/seller-api(?:\/([0-9a-f-]{36})\/(toggle|delete))?$/i);
+      if (userSellerApiMatch) {
+        const [, userId, apiId, action] = userSellerApiMatch;
+        if (!apiId) {
+          await addManagedUserSellerApi(request, response, userId);
+        } else if (action === 'toggle') {
+          await toggleManagedUserSellerApi(request, response, userId, apiId);
+        } else if (action === 'delete') {
+          await deleteManagedUserSellerApi(request, response, userId, apiId);
+        }
+        statusCode = response.statusCode || 200;
+        return;
       }
       const managedUserAction = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/(update|password|status|delete)$/i);
       if (managedUserAction) {
