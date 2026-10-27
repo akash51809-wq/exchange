@@ -551,6 +551,107 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
     assert.ok(sellerCreditEntry, 'Seller sales credit must be credited on success');
   });
 
+  it('handleBuyerRecharge returns margin strictly in percentage (%) in API response, NOT in rupees', async () => {
+    const executedQueries = [];
+    const mockClient = {
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('FROM wallets') && sql.includes('FOR UPDATE')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 100000n, buyer_balance_minor: 100000n }], rowCount: 1 };
+        }
+        if (sql.includes('UPDATE wallets SET buyer_balance_minor = buyer_balance_minor +') || sql.includes('UPDATE wallets SET balance_minor = balance_minor +')) {
+          return { rows: [{ balance_minor: 101750n, buyer_balance_minor: 101750n }], rowCount: 1 };
+        }
+        if (sql.includes('INSERT INTO recharge_orders')) {
+          return { rows: [{ id: 'order-uuid-percentage', created_at: new Date() }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => {},
+    };
+
+    const mockDb = {
+      connect: async () => mockClient,
+      query: async (sql, params) => {
+        executedQueries.push({ sql, params });
+        if (sql.includes('FROM users') && sql.includes('api_token')) {
+          return {
+            rows: [{ id: 'buyer-uuid', username: 'testbuyer', role: 'user', status: 'active', api_token: 'tok123' }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM user_whitelisted_ips')) {
+          return { rows: [{ ip_address: '127.0.0.1' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{ id: 'op-1', operator_name: 'Airtel', operator_code: 'AIRTEL', service_type: 'Prepaid', is_active: true }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 100000n, buyer_balance_minor: 100000n }], rowCount: 1 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          return { rows: [{ id: 'bmargin-1', commission_percent: '3.50', with_gst: false }], rowCount: 1 };
+        }
+        if (sql.includes('FROM seller_margin_settings')) {
+          return {
+            rows: [{
+              seller_margin_id: 'smargin-1',
+              user_id: 'seller-user-1',
+              commission_percent: '4.00',
+              seller_api_id: 'sapi-1',
+              seller_api_name: 'Mock API',
+              config_ciphertext: Buffer.from('mock'),
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM recharge_orders')) return { rows: [], rowCount: 0 };
+        return { rows: [], rowCount: 1 };
+      },
+    };
+
+    let sentStatusCode = 0;
+    let sentPayload = null;
+    const testService = createBuyerApiService({
+      db: mockDb,
+      formatMinorUnits: () => '0.00',
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => b.toString(),
+      decryptSellerApiConfig: () => ({ recharge: { url: 'http://mock.com' } }),
+      decryptServiceConfig: () => ({}),
+      fetchOperatorLookup: async () => null,
+      sendJson: (_res, code, payload) => {
+        sentStatusCode = code;
+        sentPayload = payload;
+      },
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      forwardRechargeToSeller: async () => ({
+        ok: true,
+        status: 'SUCCESS',
+        supplierTxnId: 'TXN_PERC_123',
+        operatorTxnId: 'OP_PERC_123',
+        latencyMs: 100,
+        targetUrl: 'http://mock.com',
+        parsedData: { status: 'SUCCESS' },
+        message: 'Success',
+      }),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const testUrl = new URL('http://localhost/webservices/api/recharge?api_token=tok123&number=9876543210&amount=500&operator=AIRTEL&ref_id=REF_PERCENTAGE_TEST');
+
+    await testService.handleBuyerRecharge(mockReq, mockRes, testUrl);
+
+    assert.strictEqual(sentStatusCode, 200);
+    assert.strictEqual(sentPayload.status, 'SUCCESS');
+    assert.strictEqual(sentPayload.amount, '500.00');
+    assert.strictEqual(sentPayload.margin, '3.50', 'Margin must strictly be returned in percentage, NOT rupees');
+  });
+
   it('handleBuyerRecharge rolls back and throws error if seller wallet is missing on SUCCESS', async () => {
     const executedQueries = [];
     const mockClient = {
