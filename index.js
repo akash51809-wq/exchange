@@ -6833,6 +6833,160 @@ async function handleRequest(request, response) {
         return;
       }
 
+      if (url.pathname === '/api/user/kyc/submit' || url.pathname === '/api/user/kyc') {
+        checkSameOrigin(request);
+        const session = await getSession(request);
+        if (!session) throw httpError('login required', 401);
+
+        const input = await readJson(request, 25_000_000);
+        const aadharNumber = String(input.aadharNumber || input.aadhar_number || '').replace(/\s+/g, '').trim();
+        const panNumber = String(input.panNumber || input.pan_number || '').replace(/\s+/g, '').trim().toUpperCase();
+        const gstNumber = String(input.gstNumber || input.gst_number || '').replace(/\s+/g, '').trim().toUpperCase();
+        let aadharFront = String(input.aadharFront || input.aadhar_front || input.aadhar_front_data || '').trim();
+        let aadharBack = String(input.aadharBack || input.aadhar_back || input.aadhar_back_data || '').trim();
+        let panCard = String(input.panCard || input.pan_card || input.pan_card_data || '').trim();
+
+        const existingKyc = await db.query(
+          'SELECT aadhar_front_data, aadhar_back_data, pan_card_data FROM user_kyc WHERE user_id = $1',
+          [session.id]
+        );
+        if (!aadharFront && existingKyc.rows[0]?.aadhar_front_data) {
+          aadharFront = existingKyc.rows[0].aadhar_front_data;
+        }
+        if (!aadharBack && existingKyc.rows[0]?.aadhar_back_data) {
+          aadharBack = existingKyc.rows[0].aadhar_back_data;
+        }
+        if (!panCard && existingKyc.rows[0]?.pan_card_data) {
+          panCard = existingKyc.rows[0].pan_card_data;
+        }
+
+        if (!aadharNumber || aadharNumber.length < 12) {
+          throw httpError('Please enter a valid 12-digit Aadhaar number.', 400);
+        }
+        if (!panNumber || panNumber.length !== 10) {
+          throw httpError('Please enter a valid 10-character PAN number.', 400);
+        }
+        if (!aadharFront) {
+          throw httpError('Aadhaar card front photo is required.', 400);
+        }
+        if (!aadharBack) {
+          throw httpError('Aadhaar card back photo is required.', 400);
+        }
+        if (!panCard) {
+          throw httpError('PAN card photo is required.', 400);
+        }
+
+        await db.query(
+          `INSERT INTO user_kyc (
+             user_id,
+             gst_number,
+             aadhar_number,
+             pan_number,
+             aadhar_front_data,
+             aadhar_back_data,
+             pan_card_data,
+             status,
+             rejection_reason,
+             submitted_at,
+             updated_at
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NULL, now(), now())
+           ON CONFLICT (user_id) DO UPDATE SET
+             gst_number = EXCLUDED.gst_number,
+             aadhar_number = EXCLUDED.aadhar_number,
+             pan_number = EXCLUDED.pan_number,
+             aadhar_front_data = EXCLUDED.aadhar_front_data,
+             aadhar_back_data = EXCLUDED.aadhar_back_data,
+             pan_card_data = EXCLUDED.pan_card_data,
+             status = 'pending',
+             rejection_reason = NULL,
+             submitted_at = now(),
+             updated_at = now()`,
+          [session.id, gstNumber || null, aadharNumber, panNumber, aadharFront, aadharBack, panCard]
+        );
+
+        await db.query(
+          `UPDATE users SET kyc_status = 'pending', updated_at = now() WHERE id = $1`,
+          [session.id]
+        );
+
+        sendJson(response, 200, {
+          ok: true,
+          message: 'KYC submitted successfully. Verification is pending with Admin.',
+        });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/admin/kyc/approve') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const kycId = String(input.kycId || input.id || '').trim();
+        if (!kycId) throw httpError('KYC ID is required.', 400);
+
+        const res = await db.query(
+          `UPDATE user_kyc
+           SET status = 'approved',
+               rejection_reason = NULL,
+               reviewed_by = $1,
+               reviewed_at = now(),
+               updated_at = now()
+           WHERE id = $2
+           RETURNING user_id`,
+          [admin.id, kycId]
+        );
+        if (!res.rowCount) throw httpError('KYC record not found.', 404);
+
+        const userId = res.rows[0].user_id;
+        await db.query(
+          `UPDATE users SET kyc_status = 'approved', updated_at = now() WHERE id = $1`,
+          [userId]
+        );
+
+        sendJson(response, 200, { ok: true, message: 'KYC approved successfully.' });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/admin/kyc/reject') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const kycId = String(input.kycId || input.id || '').trim();
+        const reason = String(input.reason || input.rejection_reason || '').trim();
+        if (!kycId) throw httpError('KYC ID is required.', 400);
+        if (!reason) throw httpError('Rejection reason is required.', 400);
+
+        const res = await db.query(
+          `UPDATE user_kyc
+           SET status = 'rejected',
+               rejection_reason = $1,
+               reviewed_by = $2,
+               reviewed_at = now(),
+               updated_at = now()
+           WHERE id = $3
+           RETURNING user_id`,
+          [reason, admin.id, kycId]
+        );
+        if (!res.rowCount) throw httpError('KYC record not found.', 404);
+
+        const userId = res.rows[0].user_id;
+        await db.query(
+          `UPDATE users SET kyc_status = 'rejected', updated_at = now() WHERE id = $1`,
+          [userId]
+        );
+
+        sendJson(response, 200, { ok: true, message: 'KYC rejected with reason.' });
+        statusCode = 200;
+        return;
+      }
+
       if (url.pathname === '/api/recharge/operator-lookup' || url.pathname === '/api/operator/lookup') {
         const input = await readJson(request).catch(() => ({}));
         const mobile = String(input.mobile || input.number || url.searchParams.get('mobile') || '').trim();

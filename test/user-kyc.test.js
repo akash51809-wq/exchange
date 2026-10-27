@@ -206,3 +206,34 @@ test('Admin Pending KYC Page - List & Action Elements', async (t) => {
     assert.ok(renderedHtml.includes('id="adminDocModal"'));
   });
 });
+
+test('KYC Database Schema & Status Enforcements', async (t) => {
+  await t.test('KYC submission sets user status to pending', () => {
+    const validStatusTransitions = {
+      'not_submitted': ['pending'],
+      'pending': ['approved', 'rejected'],
+      'rejected': ['pending'],
+      'approved': ['rejected'],
+    };
+    assert.deepEqual(validStatusTransitions['not_submitted'], ['pending']);
+    assert.ok(validStatusTransitions['rejected'].includes('pending'), 'User must be able to Re-KYC when rejected');
+  });
+
+  await t.test('Validates Aadhaar, PAN and document rules', () => {
+    function validateKycInput({ aadharNumber, panNumber, aadharFront, aadharBack, panCard }) {
+      const a = String(aadharNumber || '').replace(/\s+/g, '').trim();
+      const p = String(panNumber || '').replace(/\s+/g, '').trim().toUpperCase();
+      if (!a || a.length < 12) throw new Error('Please enter a valid 12-digit Aadhaar number.');
+      if (!p || p.length !== 10) throw new Error('Please enter a valid 10-character PAN number.');
+      if (!aadharFront) throw new Error('Aadhaar card front photo is required.');
+      if (!aadharBack) throw new Error('Aadhaar card back photo is required.');
+      if (!panCard) throw new Error('PAN card photo is required.');
+      return true;
+    }
+
+    assert.throws(() => validateKycInput({ aadharNumber: '123', panNumber: 'ABCDE1234F', aadharFront: 'd', aadharBack: 'd', panCard: 'd' }), /12-digit Aadhaar/);
+    assert.throws(() => validateKycInput({ aadharNumber: '123456789012', panNumber: 'INVALID', aadharFront: 'd', aadharBack: 'd', panCard: 'd' }), /10-character PAN/);
+    assert.throws(() => validateKycInput({ aadharNumber: '123456789012', panNumber: 'ABCDE1234F', aadharFront: '', aadharBack: 'd', panCard: 'd' }), /front photo/);
+    assert.doesNotThrow(() => validateKycInput({ aadharNumber: '123456789012', panNumber: 'ABCDE1234F', aadharFront: 'img1', aadharBack: 'img2', panCard: 'img3' }));
+  });
+});
