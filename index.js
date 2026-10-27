@@ -1023,6 +1023,7 @@ async function initializeDatabase() {
     client.release();
   }
   await bootstrapAdmin();
+  await seedPlanApiConfig();
 }
 
 function deriveKey(purpose) {
@@ -2030,6 +2031,54 @@ function decryptServiceConfig(data) {
   const decipher = crypto.createDecipheriv('aes-256-gcm', deriveKey('admin-service-settings'), bytes.subarray(0, 12));
   decipher.setAuthTag(bytes.subarray(12, 28));
   return JSON.parse(Buffer.concat([decipher.update(bytes.subarray(28)), decipher.final()]).toString('utf8'));
+}
+
+async function seedPlanApiConfig() {
+  try {
+    const row = await db.query("SELECT id, is_enabled, config_ciphertext FROM admin_service_settings WHERE service_key = 'plan_api'");
+    let shouldUpdate = false;
+    let isEnabled = true;
+
+    if (row.rowCount === 0) {
+      shouldUpdate = true;
+    } else {
+      try {
+        const decrypted = decryptServiceConfig(row.rows[0].config_ciphertext);
+        isEnabled = row.rows[0].is_enabled !== false;
+        const brand = String(decrypted.brandName || decrypted.activeBrand || '').toUpperCase();
+        const url = String(decrypted.apiUrl || '').toLowerCase();
+        // If old ERS API is present or brand is not ezytm plan API, replace it completely
+        if (brand.includes('ERS') || brand.includes('EASYRECHARGE') || url.includes('easyrechargesolution.com') || decrypted.brandName !== 'ezytm plan API') {
+          shouldUpdate = true;
+        }
+      } catch (_) {
+        shouldUpdate = true;
+      }
+    }
+
+    if (shouldUpdate) {
+      const ezytmConfig = {
+        brandName: 'ezytm plan API',
+        activeBrand: 'ezytm plan API',
+        requestType: 'GET',
+        apiUrl: 'https://planapi.in/api/Mobile/OperatorFetchNew',
+        apiUserId: '5100',
+        apiPassword: 'amart@74',
+        isEnabled,
+      };
+      const ciphertext = encryptServiceConfig(ezytmConfig);
+      await db.query(
+        `INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext, updated_at)
+         VALUES ('plan_api', $1, $2, now())
+         ON CONFLICT (service_key) DO UPDATE
+         SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
+        [isEnabled, ciphertext],
+      );
+      console.log('[Plan API Migration]: ERS Plan API completely removed from database and replaced with ezytm plan API.');
+    }
+  } catch (err) {
+    console.warn('[Plan API Seed Warning]:', err.message);
+  }
 }
 
 async function getGeneralSettings() {

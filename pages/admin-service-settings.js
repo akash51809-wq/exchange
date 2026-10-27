@@ -395,7 +395,7 @@ module.exports = function createAdminServiceSettingsPage({
                   <i class="fa fa-whatsapp"></i> WhatsApp Gateway
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabPlanApi">
-                  <i class="fa fa-search"></i> Plan API (planapi.in / HLR Lookup)
+                  <i class="fa fa-search"></i> Plan API (ezytm plan API)
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabMarginDiff">
                   <i class="fa fa-percent"></i> Margin Difference
@@ -1138,14 +1138,14 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 3. PLAN API (PLANAPI.IN / HLR LOOKUP) TAB -->
+            <!-- 3. PLAN API (ezytm plan API) TAB           -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabPlanApi">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
                   <div>
                     <h5 class="mb-1"><i class="fa fa-search text-info"></i> Plan API (Operator &amp; Circle Fetch Engine)</h5>
-                    <small class="text-muted">Multi-Brand live HLR operator and circle lookup service</small>
+                    <small class="text-muted">Live HLR operator and circle lookup service (Brand: ezytm plan API)</small>
                   </div>
                   <div class="custom-control custom-switch custom-switch-lg">
                     <input type="checkbox" class="custom-control-input" id="planApiEnabled" checked>
@@ -1154,125 +1154,117 @@ module.exports = function createAdminServiceSettingsPage({
                 </div>
                 <div class="settings-panel-body">
 
-                  <!-- Multi-Brand Selector Ribbon -->
+                  <!-- Active Brand & Protocol Ribbon -->
                   <div class="d-flex align-items-center justify-content-between p-2 mb-3 bg-light rounded border">
                     <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
-                      <span class="small font-weight-bold text-dark mr-2"><i class="fa fa-tags text-primary"></i> Available Brands:</span>
-                      <button type="button" class="btn btn-sm btn-primary active brand-select-btn" data-brand="ERS" id="btnBrandErs">
-                        <i class="fa fa-bolt mr-1"></i> ERS (Easy Recharge Solution) <span class="badge badge-light ml-1">Active</span>
-                      </button>
-                      <button type="button" class="btn btn-sm btn-outline-secondary brand-select-btn" data-brand="PLANAPI" id="btnBrandPlanApi">
-                        <i class="fa fa-spider mr-1"></i> PlanAPI.in
-                      </button>
-                      <button type="button" class="btn btn-sm btn-outline-info" data-toggle="collapse" data-target="#collapseAddBrand">
-                        <i class="fa fa-plus-circle mr-1"></i> + Add Brand
-                      </button>
+                      <span class="small font-weight-bold text-dark mr-2"><i class="fa fa-tags text-primary"></i> Active Provider:</span>
+                      <span class="badge badge-success px-3 py-2 font-weight-bold" style="font-size: 0.95rem;">
+                        <i class="fa fa-bolt mr-1"></i> ezytm plan API
+                      </span>
+                      <span class="badge badge-primary px-2 py-2">
+                        <i class="fa fa-exchange mr-1"></i> Type: GET
+                      </span>
                     </div>
                     <div>
-                      <span class="badge badge-success px-2 py-1" id="activeBrandIndicator"><i class="fa fa-check-circle mr-1"></i> Active: ERS</span>
+                      <span class="badge badge-info px-2 py-1"><i class="fa fa-check-circle mr-1"></i> Pre-Routing Auto Fetch</span>
                     </div>
                   </div>
 
-                  <!-- Collapsible: Add Custom Brand Information -->
-                  <div class="collapse mb-3" id="collapseAddBrand">
-                    <div class="card card-body bg-light border p-3">
-                      <h6 class="font-weight-bold mb-1"><i class="fa fa-cube text-info mr-1"></i> Multi-Brand Architecture: Add Custom Plan Provider</h6>
-                      <p class="small text-muted mb-2">
-                        System supports multiple Plan &amp; Operator fetch brands simultaneously. You can configure credentials for each brand and switch active brand at any time.
-                      </p>
-                      <div class="small text-muted">
-                        Currently pre-configured brands: <strong>ERS (Easy Recharge Solution)</strong> and <strong>PlanAPI.in</strong>. Contact developer to bind additional custom brand URLs to backend engine.
+                  <!-- Specification Callout -->
+                  <div class="alert alert-info py-2 px-3 mb-3 border">
+                    <div class="d-flex align-items-start">
+                      <i class="fa fa-info-circle text-primary fa-lg mr-2 mt-1"></i>
+                      <div class="w-100">
+                        <strong>ezytm plan API Configuration &amp; Parameter Specifications:</strong>
+                        <div class="mt-1 font-monospace small bg-white p-2 rounded border text-dark">
+                          <strong>Request:</strong> <code>https://planapi.in/api/Mobile/OperatorFetchNew?ApiUserID=[ApiUserID]&amp;ApiPassword=[ApiPassword]&amp;Mobileno=[Mobileno]</code>
+                        </div>
+
+                        <!-- Parameter Table -->
+                        <div class="table-responsive mt-2 bg-white rounded border">
+                          <table class="table table-sm table-bordered mb-0 small">
+                            <thead class="thead-light">
+                              <tr>
+                                <th>Parameter</th>
+                                <th>Type</th>
+                                <th>Position</th>
+                                <th>#</th>
+                                <th>Description</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td class="font-weight-bold font-monospace text-primary">ApiUserID</td>
+                                <td>string</td>
+                                <td>URL Query / Body</td>
+                                <td><span class="badge badge-danger">Required</span></td>
+                                <td>Enter Your 4 digit MemberID credentials (Default: <code>5100</code>)</td>
+                              </tr>
+                              <tr>
+                                <td class="font-weight-bold font-monospace text-primary">ApiPassword</td>
+                                <td>string</td>
+                                <td>URL Query / Body</td>
+                                <td><span class="badge badge-danger">Required</span></td>
+                                <td>Enter Your given ApiPassword credentials</td>
+                              </tr>
+                              <tr>
+                                <td class="font-weight-bold font-monospace text-primary">Mobileno</td>
+                                <td>string</td>
+                                <td>URL Query / Body</td>
+                                <td><span class="badge badge-danger">Required</span></td>
+                                <td>Enter Customer Mobile no (auto-populated dynamically per incoming recharge request)</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div class="mt-2 text-dark small">
+                          <i class="fa fa-arrow-circle-right text-success mr-1"></i>
+                          <strong>Workflow Note:</strong> Ye URL se jab bhi koi buyer koi recharge send karega to sabse pehle us number ka <strong>Operator aur Circle</strong> live fetch hoga aur phir usi operator aur circle ke hisab se <strong>maximum available seller margin</strong> check hoke recharge seller API pe route hoga.
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   <form id="planApiForm">
-                    <input type="hidden" id="planApiActiveBrand" value="ERS">
-
-                    <!-- ============================================== -->
-                    <!-- 1. BRAND ERS: Easy Recharge Solution (PRIMARY) -->
-                    <!-- ============================================== -->
-                    <div id="brandSectionErs">
-                      <div class="alert alert-info py-2 px-3 mb-3 border d-flex align-items-start">
-                        <i class="fa fa-server text-primary fa-lg mr-2 mt-1"></i>
-                        <div>
-                          <strong>ERS Brand API Configuration (Pre-configured in Backend):</strong>
-                          <div class="mt-1 font-monospace small bg-white p-1 rounded border text-dark">
-                            <strong>API URL:</strong> <code>https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew?ApiUserID=[USER_ID]&amp;token=[TOKEN]&amp;Mobileno=[MOBILE_NO]</code>
-                          </div>
-                          <p class="small text-muted mb-0 mt-1">
-                            <i class="fa fa-check-circle text-success mr-1"></i>
-                            This URL is pre-configured in the backend. You only need to enter your <strong>User ID</strong> (<code>ApiUserID</code>) and <strong>Token</strong> (<code>token</code>).
-                            Upon incoming recharge requests, the <code>Mobileno</code> parameter will be auto-populated from the user's mobile number, and recharge will be routed to the best seller margin according to fetched operator and circle.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div class="row">
-                        <div class="col-md-6 form-group">
-                          <label for="ersApiUserId" class="font-weight-bold">
-                            ERS User ID (ApiUserID) <span class="text-danger">*</span>
-                          </label>
-                          <input type="text" id="ersApiUserId" class="form-control font-monospace font-weight-bold" placeholder="e.g. 9335819686" value="9335819686" required>
-                          <small class="form-text text-muted">Your registered ERS ApiUserID (Mobile No / Account ID)</small>
-                        </div>
-
-                        <div class="col-md-6 form-group">
-                          <label for="ersToken" class="font-weight-bold">
-                            ERS API Token (token) <span class="text-danger">*</span>
-                          </label>
-                          <div class="input-group">
-                            <input type="password" id="ersToken" class="form-control font-monospace font-weight-bold" placeholder="e.g. tok_c7f65f27e096035786e9c851" value="tok_c7f65f27e096035786e9c851" required>
-                            <div class="input-group-append">
-                              <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#ersToken">
-                                <i class="fa fa-eye"></i>
-                              </button>
-                            </div>
-                          </div>
-                          <small class="form-text text-muted">Secret API security token provided by ERS portal</small>
-                        </div>
+                    <div class="row">
+                      <div class="col-md-12 form-group">
+                        <label for="ezytmApiUrl" class="font-weight-bold">
+                          API Endpoint URL <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="ezytmApiUrl" class="form-control font-monospace" value="https://planapi.in/api/Mobile/OperatorFetchNew" required>
+                        <small class="form-text text-muted">Base URL endpoint for ezytm plan API (Type: GET)</small>
                       </div>
                     </div>
 
-                    <!-- ============================================== -->
-                    <!-- 2. BRAND PLANAPI: PlanAPI.in Web Scraper (OPTIONAL) -->
-                    <!-- ============================================== -->
-                    <div id="brandSectionPlanApi" style="display: none;">
-                      <div class="help-callout mb-3">
-                        <strong><i class="fa fa-spider"></i> PlanAPI.in Automated Web Scraper &amp; Login Engine:</strong>
-                        <p class="small mb-1">
-                          Automated web session login on <code>https://planapi.in</code> using User ID and Password, with live data lookup via <code>OperatorLook.aspx</code>.
-                        </p>
+                    <div class="row">
+                      <div class="col-md-6 form-group">
+                        <label for="ezytmApiUserId" class="font-weight-bold">
+                          ApiUserID (MemberID) <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" id="ezytmApiUserId" class="form-control font-monospace font-weight-bold" placeholder="e.g. 5100" value="5100" required>
+                        <small class="form-text text-muted">Your registered 4-digit MemberID credentials (e.g. 5100)</small>
                       </div>
 
-                      <div class="row">
-                        <div class="col-md-6 form-group">
-                          <label for="planApiMemberId" class="font-weight-bold">PlanAPI.in Mobile / Member ID</label>
-                          <input type="text" id="planApiMemberId" class="form-control font-monospace" placeholder="e.g. 9876543210">
-                        </div>
-
-                        <div class="col-md-6 form-group">
-                          <label for="planApiPassword" class="font-weight-bold">PlanAPI.in Login Password</label>
-                          <div class="input-group">
-                            <input type="password" id="planApiPassword" class="form-control font-monospace" placeholder="••••••••••••">
-                            <div class="input-group-append">
-                              <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#planApiPassword">
-                                <i class="fa fa-eye"></i>
-                              </button>
-                            </div>
+                      <div class="col-md-6 form-group">
+                        <label for="ezytmApiPassword" class="font-weight-bold">
+                          ApiPassword <span class="text-danger">*</span>
+                        </label>
+                        <div class="input-group">
+                          <input type="password" id="ezytmApiPassword" class="form-control font-monospace font-weight-bold" placeholder="Enter ApiPassword" value="amart@74" required>
+                          <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary btn-toggle-pw" data-for="#ezytmApiPassword">
+                              <i class="fa fa-eye"></i>
+                            </button>
                           </div>
                         </div>
-                      </div>
-
-                      <div class="form-group">
-                        <label for="planApiUrl" class="small font-weight-bold text-muted">PlanAPI URL (Optional)</label>
-                        <input type="text" id="planApiUrl" class="form-control font-monospace form-control-sm" value="https://planapi.in/OperatorLook.aspx">
+                        <small class="form-text text-muted">Your registered ezytm plan API security password credentials</small>
                       </div>
                     </div>
 
                     <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
                       <button type="submit" class="btn btn-primary" id="btnSavePlanApi">
-                        <i class="fa fa-save mr-1"></i> Save Plan API Settings
+                        <i class="fa fa-save mr-1"></i> Save ezytm Plan API Settings
                       </button>
                       <span class="text-muted small" id="planApiSaveStatus"></span>
                     </div>
@@ -1286,17 +1278,10 @@ module.exports = function createAdminServiceSettingsPage({
                       <i class="fa fa-bolt text-warning mr-1"></i> Live Mobile Operator &amp; Circle Fetch Test
                     </h6>
                     <p class="text-muted small mb-3">
-                      Enter any 10-digit Indian mobile number to fetch live Operator and Circle directly from the active brand (<strong>ERS</strong>).
+                      Enter any 10-digit Indian mobile number to fetch live Operator and Circle directly using <strong>ezytm plan API</strong>.
                     </p>
                     <div class="row align-items-end">
-                      <div class="col-md-3 form-group mb-md-0">
-                        <label for="testPlanApiBrand" class="small font-weight-bold">Select Brand</label>
-                        <select id="testPlanApiBrand" class="form-control font-weight-bold">
-                          <option value="ERS" selected>ERS (Easy Recharge Solution)</option>
-                          <option value="PLANAPI">PlanAPI.in</option>
-                        </select>
-                      </div>
-                      <div class="col-md-5 form-group mb-md-0">
+                      <div class="col-md-8 form-group mb-md-0">
                         <label for="testPlanApiMobile" class="small font-weight-bold">10-Digit Mobile Number</label>
                         <input type="tel" id="testPlanApiMobile" class="form-control font-weight-bold font-monospace" placeholder="e.g. 9335819686" value="9335819686" maxlength="10">
                       </div>
@@ -1315,7 +1300,7 @@ module.exports = function createAdminServiceSettingsPage({
                         <div class="d-flex justify-content-between align-items-center mb-3">
                           <h6 class="font-weight-bold text-dark mb-0">
                             <i class="fa fa-check-circle text-success mr-1"></i> Lookup Result
-                            <span class="badge badge-primary ml-2 py-1 px-2" id="resBrandBadge">Brand: ERS</span>
+                            <span class="badge badge-primary ml-2 py-1 px-2" id="resBrandBadge">Brand: ezytm plan API</span>
                           </h6>
                           <span id="planApiLatency" class="badge badge-secondary py-1 px-2"></span>
                         </div>
@@ -1863,24 +1848,22 @@ module.exports = function createAdminServiceSettingsPage({
           const postRow = document.getElementById('smsPostOptionsRow');
           if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
         }
-        // Populate Plan API (Multi-Brand: ERS / PlanAPI)
+        // Populate Plan API (ezytm plan API)
         if (data.plan_api || data.planApi) {
           const p = data.plan_api || data.planApi;
           planApiSwitch.checked = Boolean(p.isEnabled);
           planApiLabel.textContent = planApiSwitch.checked ? 'Plan API Enabled' : 'Plan API Disabled';
           planApiLabel.style.color = planApiSwitch.checked ? '#16a34a' : '#64748b';
 
-          const activeBrand = (p.activeBrand || 'ERS').toUpperCase();
-          const ersUserId = p.apiUserId || (p.brands && p.brands.ERS && p.brands.ERS.apiUserId) || '9335819686';
-          const ersToken = p.token || (p.brands && p.brands.ERS && p.brands.ERS.token) || 'tok_c7f65f27e096035786e9c851';
-
-          if (document.getElementById('ersApiUserId')) document.getElementById('ersApiUserId').value = ersUserId;
-          if (document.getElementById('ersToken')) document.getElementById('ersToken').value = ersToken;
-          if (document.getElementById('planApiMemberId')) document.getElementById('planApiMemberId').value = p.memberId || '';
-          if (document.getElementById('planApiPassword')) document.getElementById('planApiPassword').value = p.password || '';
-          if (document.getElementById('planApiUrl')) document.getElementById('planApiUrl').value = p.planApiUrl || p.apiUrl || 'https://planapi.in/OperatorLook.aspx';
-
-          selectPlanBrand(activeBrand);
+          if (document.getElementById('ezytmApiUserId')) {
+            document.getElementById('ezytmApiUserId').value = p.apiUserId || '5100';
+          }
+          if (document.getElementById('ezytmApiPassword')) {
+            document.getElementById('ezytmApiPassword').value = p.apiPassword || 'amart@74';
+          }
+          if (document.getElementById('ezytmApiUrl')) {
+            document.getElementById('ezytmApiUrl').value = p.apiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew';
+          }
         }
 
         // Populate Margin Difference
@@ -2235,90 +2218,49 @@ module.exports = function createAdminServiceSettingsPage({
       }
     });
 
-    // Save Plan API Form
-    // Multi-Brand Selection Logic for Plan API
-    function selectPlanBrand(brand) {
-      const activeBrand = String(brand || 'ERS').toUpperCase();
-      const activeBrandInput = document.getElementById('planApiActiveBrand');
-      if (activeBrandInput) activeBrandInput.value = activeBrand;
-      const testBrandSelect = document.getElementById('testPlanApiBrand');
-      if (testBrandSelect) testBrandSelect.value = activeBrand;
-
-      const activeBrandIndicator = document.getElementById('activeBrandIndicator');
-      if (activeBrandIndicator) {
-        activeBrandIndicator.innerHTML = '<i class="fa fa-check-circle mr-1"></i> Active: ' + escapeHtml(activeBrand);
-      }
-
-      document.querySelectorAll('.brand-select-btn').forEach(btn => {
-        if (btn.dataset.brand === activeBrand) {
-          btn.className = 'btn btn-sm btn-primary active brand-select-btn';
-          if (!btn.querySelector('.badge')) {
-            const span = document.createElement('span');
-            span.className = 'badge badge-light ml-1';
-            span.textContent = 'Active';
-            btn.appendChild(span);
-          }
-        } else {
-          btn.className = 'btn btn-sm btn-outline-secondary brand-select-btn';
-          const b = btn.querySelector('.badge');
-          if (b) b.remove();
-        }
-      });
-
-      const ersSec = document.getElementById('brandSectionErs');
-      const planSec = document.getElementById('brandSectionPlanApi');
-      if (ersSec) ersSec.style.display = activeBrand === 'ERS' ? 'block' : 'none';
-      if (planSec) planSec.style.display = activeBrand === 'PLANAPI' ? 'block' : 'none';
-    }
-
-    document.querySelectorAll('.brand-select-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        selectPlanBrand(btn.dataset.brand);
-      });
-    });
-
-    // Save Plan API Form
+    // Save Plan API Form (ezytm plan API)
     const planApiForm = document.getElementById('planApiForm');
     const planApiSaveBtn = document.getElementById('btnSavePlanApi');
     const planApiSaveStatus = document.getElementById('planApiSaveStatus');
 
-    planApiForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      planApiSaveBtn.disabled = true;
-      planApiSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
-      planApiSaveStatus.textContent = '';
+    if (planApiForm) {
+      planApiForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        planApiSaveBtn.disabled = true;
+        planApiSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
+        planApiSaveStatus.textContent = '';
 
-      const activeBrand = document.getElementById('planApiActiveBrand') ? document.getElementById('planApiActiveBrand').value : 'ERS';
-      const payload = {
-        isEnabled: planApiSwitch.checked,
-        activeBrand,
-        apiUserId: document.getElementById('ersApiUserId') ? document.getElementById('ersApiUserId').value.trim() : '9335819686',
-        token: document.getElementById('ersToken') ? document.getElementById('ersToken').value.trim() : 'tok_c7f65f27e096035786e9c851',
-        memberId: document.getElementById('planApiMemberId') ? document.getElementById('planApiMemberId').value.trim() : '',
-        password: document.getElementById('planApiPassword') ? document.getElementById('planApiPassword').value.trim() : '',
-        planApiUrl: document.getElementById('planApiUrl') ? document.getElementById('planApiUrl').value.trim() : '',
-      };
+        const payload = {
+          isEnabled: planApiSwitch.checked,
+          brandName: 'ezytm plan API',
+          activeBrand: 'ezytm plan API',
+          requestType: 'GET',
+          apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
+          apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
+          apiUrl: document.getElementById('ezytmApiUrl') ? document.getElementById('ezytmApiUrl').value.trim() : 'https://planapi.in/api/Mobile/OperatorFetchNew',
+        };
 
-      try {
-        const res = await fetch('/api/admin/settings/services/plan-api', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save Plan API settings.');
-        planApiSaveStatus.textContent = '✓ Saved successfully!';
-        planApiSaveStatus.className = 'text-success font-weight-bold ml-2';
-        setTimeout(() => planApiSaveStatus.textContent = '', 3000);
-      } catch (err) {
-        planApiSaveStatus.textContent = '✗ ' + err.message;
-        planApiSaveStatus.className = 'text-danger font-weight-bold ml-2';
-      } finally {
-        planApiSaveBtn.disabled = false;
-        planApiSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save Plan API Settings';
-      }
-    });
+        try {
+          const res = await fetch('/api/admin/settings/services/plan-api', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save Plan API settings.');
+          planApiSaveStatus.textContent = '✓ Saved successfully!';
+          planApiSaveStatus.className = 'text-success font-weight-bold ml-2';
+          setTimeout(() => planApiSaveStatus.textContent = '', 3000);
+        } catch (err) {
+          planApiSaveStatus.textContent = '✗ ' + err.message;
+          planApiSaveStatus.className = 'text-danger font-weight-bold ml-2';
+        } finally {
+          planApiSaveBtn.disabled = false;
+          planApiSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save ezytm Plan API Settings';
+        }
+      });
+    }
 
     // Save Margin Difference Form
     const marginDiffForm = document.getElementById('marginDiffForm');
@@ -2379,15 +2321,12 @@ module.exports = function createAdminServiceSettingsPage({
       testPlanApiAlert.style.display = 'none';
       planApiResultContainer.style.display = 'none';
 
-      const selectedBrand = document.getElementById('testPlanApiBrand') ? document.getElementById('testPlanApiBrand').value : 'ERS';
       const payload = {
         mobile,
-        brand: selectedBrand,
-        apiUserId: document.getElementById('ersApiUserId') ? document.getElementById('ersApiUserId').value.trim() : '',
-        token: document.getElementById('ersToken') ? document.getElementById('ersToken').value.trim() : '',
-        memberId: document.getElementById('planApiMemberId') ? document.getElementById('planApiMemberId').value.trim() : '',
-        password: document.getElementById('planApiPassword') ? document.getElementById('planApiPassword').value.trim() : '',
-        apiUrl: document.getElementById('planApiUrl') ? document.getElementById('planApiUrl').value.trim() : '',
+        brand: 'ezytm plan API',
+        apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
+        apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
+        apiUrl: document.getElementById('ezytmApiUrl') ? document.getElementById('ezytmApiUrl').value.trim() : 'https://planapi.in/api/Mobile/OperatorFetchNew',
       };
 
       try {
@@ -2405,7 +2344,7 @@ module.exports = function createAdminServiceSettingsPage({
         document.getElementById('resCircleName').textContent = data.circle || 'All Circle';
         document.getElementById('planApiLatency').textContent = (data.latencyMs || 0) + ' ms';
         const brandBadge = document.getElementById('resBrandBadge');
-        if (brandBadge) brandBadge.textContent = 'Brand: ' + (data.brand || selectedBrand);
+        if (brandBadge) brandBadge.textContent = 'Brand: ezytm plan API';
 
         let matchHtml = '';
         if (data.matchedOperator) {
@@ -2418,7 +2357,7 @@ module.exports = function createAdminServiceSettingsPage({
 
         planApiResultContainer.style.display = 'block';
         testPlanApiAlert.className = 'alert alert-success mt-3';
-        testPlanApiAlert.innerHTML = '<strong>✓ Live Operator &amp; Circle Details Fetched Successfully!</strong> Brand: ' + escapeHtml(data.brand || selectedBrand) + ' | Mobile: ' + escapeHtml(data.mobile);
+        testPlanApiAlert.innerHTML = '<strong>✓ Live Operator &amp; Circle Details Fetched Successfully!</strong> Brand: ezytm plan API | Mobile: ' + escapeHtml(data.mobile);
         testPlanApiAlert.style.display = 'block';
       } catch (err) {
         testPlanApiAlert.className = 'alert alert-danger mt-3';
@@ -2667,26 +2606,26 @@ module.exports = function createAdminServiceSettingsPage({
     if (!result.plan_api) {
       result.plan_api = {
         isEnabled: true,
-        activeBrand: 'ERS',
-        apiUserId: '9335819686',
-        token: 'tok_c7f65f27e096035786e9c851',
-        apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
-        brands: {
-          ERS: {
-            name: 'ERS',
-            label: 'Easy Recharge Solution (ERS)',
-            apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
-            apiUserId: '9335819686',
-            token: 'tok_c7f65f27e096035786e9c851',
-            isEnabled: true,
-          },
-        },
+        brandName: 'ezytm plan API',
+        activeBrand: 'ezytm plan API',
+        apiUserId: '5100',
+        apiPassword: 'amart@74',
+        apiUrl: 'https://planapi.in/api/Mobile/OperatorFetchNew',
+        requestType: 'GET',
       };
     } else {
-      if (!result.plan_api.activeBrand) result.plan_api.activeBrand = 'ERS';
-      if (!result.plan_api.apiUserId && !result.plan_api.ersApiUserId) result.plan_api.apiUserId = '9335819686';
-      if (!result.plan_api.token && !result.plan_api.ersToken) result.plan_api.token = 'tok_c7f65f27e096035786e9c851';
-      if (!result.plan_api.apiUrl) result.plan_api.apiUrl = 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew';
+      result.plan_api.brandName = 'ezytm plan API';
+      result.plan_api.activeBrand = 'ezytm plan API';
+      result.plan_api.requestType = 'GET';
+      if (!result.plan_api.apiUserId || result.plan_api.apiUserId === '9335819686') {
+        result.plan_api.apiUserId = '5100';
+      }
+      if (!result.plan_api.apiPassword) {
+        result.plan_api.apiPassword = 'amart@74';
+      }
+      if (!result.plan_api.apiUrl || result.plan_api.apiUrl.includes('easyrechargesolution')) {
+        result.plan_api.apiUrl = 'https://planapi.in/api/Mobile/OperatorFetchNew';
+      }
     }
     sendJson(response, 200, result);
   }
@@ -3318,74 +3257,29 @@ module.exports = function createAdminServiceSettingsPage({
   }
 
   /**
-   * POST /api/admin/settings/services/plan-api - Save Plan API / Operator Look configuration
+   * POST /api/admin/settings/services/plan-api - Save Plan API (ezytm plan API) configuration
    */
   async function handleSavePlanApiSettings(request, response, input) {
     const isEnabled = input.isEnabled !== false;
-    const activeBrand = String(input.activeBrand || input.brand || 'ERS').trim().toUpperCase();
+    const brandName = 'ezytm plan API';
+    const activeBrand = 'ezytm plan API';
+    const requestType = 'GET';
+    const apiUrl = String(input.apiUrl || input.ezytmApiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew').trim();
+    const apiUserId = String(input.apiUserId || input.ezytmApiUserId || '5100').trim();
+    const apiPassword = String(input.apiPassword || input.ezytmApiPassword || 'amart@74').trim();
 
-    // ERS Brand configuration (Pre-configured URL)
-    const ersApiUserId = String(input.apiUserId || input.ersApiUserId || input.userId || '9335819686').trim();
-    const ersToken = String(input.token || input.ersToken || input.apiKey || 'tok_c7f65f27e096035786e9c851').trim();
-    const ersApiUrl = 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew';
-
-    if (isEnabled && activeBrand === 'ERS') {
-      if (!ersApiUserId || !ersToken) {
-        throw httpError('ERS User ID (ApiUserID) and Token are required when ERS Plan API is active.', 400);
-      }
+    if (isEnabled && (!apiUserId || !apiPassword)) {
+      throw httpError('ezytm plan API credentials (ApiUserID and ApiPassword) are required.', 400);
     }
-
-    // Secondary / PlanAPI fields
-    const memberId = String(input.memberId || '').trim();
-    const password = String(input.password || '').trim();
-    const planApiUrl = String(input.apiUrl || input.planApiUrl || 'https://planapi.in/OperatorLook.aspx').trim();
-    const requestType = String(input.requestType || 'GET').trim().toUpperCase();
-    const paramMemberId = String(input.paramMemberId || 'memberid').trim();
-    const paramPassword = String(input.paramPassword || 'password').trim();
-    const paramMobile = String(input.paramMobile || 'mobile').trim();
-    const customUrlTemplate = String(input.customUrlTemplate || '').trim();
-
-    const brands = {
-      ERS: {
-        name: 'ERS',
-        label: 'Easy Recharge Solution (ERS)',
-        apiUrl: ersApiUrl,
-        apiUserId: ersApiUserId,
-        token: ersToken,
-        isEnabled: activeBrand === 'ERS',
-      },
-      PLANAPI: {
-        name: 'PlanAPI',
-        label: 'PlanAPI.in (Web Scraper)',
-        apiUrl: planApiUrl,
-        memberId,
-        password,
-        requestType,
-        paramMemberId,
-        paramPassword,
-        paramMobile,
-        customUrlTemplate,
-        isEnabled: activeBrand === 'PLANAPI',
-      },
-    };
 
     const config = {
       isEnabled,
+      brandName,
       activeBrand,
-      // Default / active credentials at top level
-      apiUserId: ersApiUserId,
-      token: ersToken,
-      apiUrl: ersApiUrl,
-      brands,
-      // Legacy compatibility
-      memberId,
-      password,
-      planApiUrl,
       requestType,
-      paramMemberId,
-      paramPassword,
-      paramMobile,
-      customUrlTemplate,
+      apiUrl,
+      apiUserId,
+      apiPassword,
     };
 
     const ciphertext = encryptServiceConfig(config);
@@ -3398,11 +3292,11 @@ module.exports = function createAdminServiceSettingsPage({
       [isEnabled, ciphertext],
     );
 
-    sendJson(response, 200, { ok: true, message: 'Plan API settings saved successfully.', planApi: config });
+    sendJson(response, 200, { ok: true, message: 'ezytm plan API settings saved successfully.', planApi: config });
   }
 
   /**
-   * POST /api/admin/settings/services/plan-api/test - Test live lookup
+   * POST /api/admin/settings/services/plan-api/test - Test live operator lookup with ezytm plan API
    */
   async function handleTestPlanApi(request, response, input) {
     const mobile = String(input.mobile || '').trim().replace(/\D/g, '');
@@ -3410,31 +3304,18 @@ module.exports = function createAdminServiceSettingsPage({
       throw httpError('Valid 10-digit mobile number is required for Operator Look.', 400);
     }
 
-    const brand = String(input.brand || input.activeBrand || 'ERS').trim().toUpperCase();
-    let overrideConfig = null;
+    const apiUserId = String(input.apiUserId || input.ezytmApiUserId || '5100').trim();
+    const apiPassword = String(input.apiPassword || input.ezytmApiPassword || 'amart@74').trim();
+    const apiUrl = String(input.apiUrl || input.ezytmApiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew').trim();
 
-    if (brand === 'ERS') {
-      const apiUserId = String(input.apiUserId || input.ersApiUserId || '9335819686').trim();
-      const token = String(input.token || input.ersToken || 'tok_c7f65f27e096035786e9c851').trim();
-      overrideConfig = {
-        activeBrand: 'ERS',
-        apiUserId,
-        token,
-        apiUrl: 'https://plan.easyrechargesolution.com/api/Mobile/OperatorFetchNew',
-      };
-    } else if (brand === 'PLANAPI' && input.memberId && input.password) {
-      overrideConfig = {
-        activeBrand: 'PLANAPI',
-        apiUrl: String(input.apiUrl || 'https://planapi.in/OperatorLook.aspx').trim(),
-        requestType: String(input.requestType || 'GET').trim().toUpperCase(),
-        memberId: String(input.memberId).trim(),
-        password: String(input.password).trim(),
-        paramMemberId: String(input.paramMemberId || 'memberid').trim(),
-        paramPassword: String(input.paramPassword || 'password').trim(),
-        paramMobile: String(input.paramMobile || 'mobile').trim(),
-        customUrlTemplate: String(input.customUrlTemplate || '').trim(),
-      };
-    }
+    const overrideConfig = {
+      brandName: 'ezytm plan API',
+      activeBrand: 'ezytm plan API',
+      requestType: 'GET',
+      apiUserId,
+      apiPassword,
+      apiUrl,
+    };
 
     try {
       const result = await fetchOperatorLookup({
@@ -3444,9 +3325,22 @@ module.exports = function createAdminServiceSettingsPage({
         overrideConfig,
       });
 
-      sendJson(response, 200, result);
+      sendJson(response, 200, {
+        ok: result.ok,
+        brand: 'ezytm plan API',
+        mobile: result.mobile,
+        operator: result.operator,
+        circle: result.circle,
+        operatorCode: result.operatorCode,
+        circleCode: result.circleCode,
+        message: result.message,
+        status: result.status,
+        latencyMs: result.latencyMs,
+        matchedOperator: result.matchedOperator,
+        rawResponse: result.rawResponse,
+      });
     } catch (err) {
-      console.error('[Plan API Test Error]:', err);
+      console.error('[ezytm Plan API Test Error]:', err);
       throw httpError(err.message || 'Operator Lookup request failed.', 400);
     }
   }
