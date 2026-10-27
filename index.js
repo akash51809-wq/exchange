@@ -224,6 +224,8 @@ const {
   handleSaveGeneralSettings,
   handleSaveEmailSettings,
   handleTestEmail,
+  handleSaveSmsSettings,
+  handleTestSms,
   handleSaveWhatsappSettings,
   handleTestWhatsapp,
   handleSavePlanApiSettings,
@@ -942,7 +944,9 @@ const DATABASE_SCHEMA = `
     recipient_type TEXT NOT NULL DEFAULT 'user' CHECK (recipient_type IN ('user', 'admin')),
     whatsapp_enabled BOOLEAN NOT NULL DEFAULT true,
     email_enabled BOOLEAN NOT NULL DEFAULT true,
+    sms_enabled BOOLEAN NOT NULL DEFAULT true,
     whatsapp_template TEXT NOT NULL DEFAULT '',
+    sms_template TEXT NOT NULL DEFAULT '',
     email_subject TEXT NOT NULL DEFAULT '',
     email_template TEXT NOT NULL DEFAULT '',
     allowed_keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -952,6 +956,8 @@ const DATABASE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_key ON admin_notification_templates(event_key);
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_sort ON admin_notification_templates(sort_order);
+  ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN NOT NULL DEFAULT true;
+  ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_template TEXT NOT NULL DEFAULT '';
 
   CREATE TABLE IF NOT EXISTS developer_api_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -5237,6 +5243,26 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
+      if (url.pathname === '/api/admin/settings/services/sms') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleSaveSmsSettings(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/services/sms/test') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleTestSms(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services/whatsapp') {
         checkSameOrigin(request);
         const admin = await getSession(request);
@@ -5312,15 +5338,15 @@ async function handleRequest(request, response) {
         const channel = String(input.channel || '').trim().toLowerCase();
         const enabled = Boolean(input.enabled);
         if (!eventKey) throw httpError('Event key is required', 400);
-        if (channel !== 'whatsapp' && channel !== 'email') {
-          throw httpError('Channel must be whatsapp or email', 400);
+        if (channel !== 'whatsapp' && channel !== 'email' && channel !== 'sms') {
+          throw httpError('Channel must be whatsapp, email or sms', 400);
         }
-        const col = channel === 'whatsapp' ? 'whatsapp_enabled' : 'email_enabled';
+        const col = channel === 'whatsapp' ? 'whatsapp_enabled' : (channel === 'email' ? 'email_enabled' : 'sms_enabled');
         const res = await db.query(
           `UPDATE admin_notification_templates
            SET ${col} = $1, updated_at = now()
            WHERE event_key = $2
-           RETURNING id, event_key, title, whatsapp_enabled, email_enabled, updated_at`,
+           RETURNING id, event_key, title, whatsapp_enabled, email_enabled, sms_enabled, updated_at`,
           [enabled, eventKey]
         );
         if (!res.rowCount) throw httpError('Notification event not found', 404);
@@ -5338,20 +5364,24 @@ async function handleRequest(request, response) {
         const input = await readJson(request);
         const whatsapp_enabled = Boolean(input.whatsapp_enabled);
         const email_enabled = Boolean(input.email_enabled);
+        const sms_enabled = Boolean(input.sms_enabled);
         const whatsapp_template = String(input.whatsapp_template ?? '').trim();
         const email_subject = String(input.email_subject ?? '').trim();
         const email_template = String(input.email_template ?? '').trim();
+        const sms_template = String(input.sms_template ?? '').trim().slice(0, 160);
         const res = await db.query(
           `UPDATE admin_notification_templates
            SET whatsapp_enabled = $1,
                email_enabled = $2,
-               whatsapp_template = $3,
-               email_subject = $4,
-               email_template = $5,
+               sms_enabled = $3,
+               whatsapp_template = $4,
+               email_subject = $5,
+               email_template = $6,
+               sms_template = $7,
                updated_at = now()
-           WHERE event_key = $6
+           WHERE event_key = $8
            RETURNING *`,
-          [whatsapp_enabled, email_enabled, whatsapp_template, email_subject, email_template, eventKey]
+          [whatsapp_enabled, email_enabled, sms_enabled, whatsapp_template, email_subject, email_template, sms_template, eventKey]
         );
         if (!res.rowCount) throw httpError('Notification event not found', 404);
         sendJson(response, 200, { ok: true, message: 'Notification template saved successfully.', template: res.rows[0] });

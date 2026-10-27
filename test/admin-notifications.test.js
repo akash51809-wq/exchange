@@ -76,13 +76,16 @@ test('Admin Notifications - 18 Templates Specification and Keywords', async (t) 
     assert.ok(byKey.seller_api_auto_disabled.allowed_keywords.includes('reason'));
   });
 
-  await t.test('only whatsapp and email channels are enabled by default', () => {
+  await t.test('whatsapp, email, and sms channels are enabled by default with max 160-char SMS lock', () => {
     for (const t of DEFAULT_NOTIFICATION_TEMPLATES) {
       assert.equal(t.whatsapp_enabled, true);
       assert.equal(t.email_enabled, true);
+      assert.equal(t.sms_enabled, true);
       assert.ok(t.whatsapp_template.length > 0);
       assert.ok(t.email_subject.length > 0);
       assert.ok(t.email_template.length > 0);
+      assert.ok(t.sms_template.length > 0);
+      assert.ok(t.sms_template.length <= 160, `SMS template for ${t.event_key} exceeds 160 characters (${t.sms_template.length})`);
     }
   });
 });
@@ -151,6 +154,7 @@ test('Admin Notifications - Page Component Rendering', async () => {
   assert.ok(responseBody.includes('Notification List'));
   assert.ok(responseBody.includes('SEND WHATSAPP'));
   assert.ok(responseBody.includes('SEND EMAIL'));
+  assert.ok(responseBody.includes('SEND SMS'));
   assert.ok(responseBody.includes('CONTENT'));
   assert.ok(responseBody.includes('notificationsTable'));
   assert.ok(responseBody.includes('signup_otp'));
@@ -202,6 +206,7 @@ test('Admin Notifications - High-level Event Dispatcher', async (t) => {
     assert.equal(res.eventKey, 'signup_otp');
     assert.ok(res.whatsapp);
     assert.ok(res.email);
+    assert.ok(res.sms);
   });
 
   await t.test('returns disabled status when channels are toggled off', async () => {
@@ -325,4 +330,129 @@ test('Admin Notifications - High-level Event Dispatcher', async (t) => {
     assert.equal(emailOnlyRes.whatsapp.sent, false);
     assert.equal(emailOnlyRes.whatsapp.error, 'No recipient mobile number provided');
   });
+});
+
+test('Admin Notifications - SMS Gateway Integration and 160-char Limit Lock', async (t) => {
+  const { sendSmsNotification } = require('../lib/notification-service');
+
+  await t.test('sendSmsNotification performs keyword replacements and truncates at 160 chars', async () => {
+    let calledUrl = '';
+    const originalFetch = global.fetch;
+    global.fetch = async (url) => {
+      calledUrl = url;
+      return {
+        status: 200,
+        text: async () => '{"status":"SUCCESS","message":"SMS sent"}',
+      };
+    };
+
+    try {
+      const mockDb = {
+        query: async () => ({
+          rowCount: 1,
+          rows: [{
+            is_enabled: true,
+            config_ciphertext: Buffer.from('dummy'),
+          }],
+        }),
+      };
+
+      const longMessage = 'A'.repeat(200); // 200 chars
+
+      const result = await sendSmsNotification({
+        db: mockDb,
+        decryptServiceConfig: () => ({
+          apiUrl: 'https://services.easyrechargesolution.com/api/sms/send?token=TEST_TOKEN&recipient=[RECIPIENT]&message=[MESSAGE]&simSlot=[SIM_SLOT]',
+          simSlot: '0',
+        }),
+        toNumber: '9876543210',
+        message: longMessage,
+      });
+
+      assert.equal(result.sent, true);
+      assert.equal(result.status, 200);
+      assert.ok(calledUrl.includes('recipient=9876543210'));
+      assert.ok(calledUrl.includes('simSlot=0'));
+      // The message query param should be exactly 160 A's
+      const expectedMessageParam = 'message=' + 'A'.repeat(160);
+      assert.ok(calledUrl.includes(expectedMessageParam));
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  await t.test('createAdminServiceSettingsPage handles save and test for SMS Gateway', async () => {
+    const createAdminServiceSettingsPage = require('../pages/admin-service-settings');
+    let savedRow = null;
+    let sentJson = null;
+
+    const mockDb = {
+      query: async (sql, params) => {
+        if (sql.includes("INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext")) {
+          savedRow = { sql, params };
+          return { rowCount: 1 };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+
+    const mockSendJson = (res, status, payload) => {
+      sentJson = { status, payload };
+    };
+
+    const { handleSaveSmsSettings, handleTestSms, sendAdminServiceSettingsPage } = createAdminServiceSettingsPage({
+      db: mockDb,
+      encryptServiceConfig: (cfg) => Buffer.from(JSON.stringify(cfg)),
+      decryptServiceConfig: (buf) => JSON.parse(buf.toString()),
+      sendJson: mockSendJson,
+      httpError: (msg, code) => Object.assign(new Error(msg), { statusCode: code }),
+    });
+
+    // 1. Test save SMS settings
+    await handleSaveSmsSettings({}, {}, {
+      isEnabled: true,
+      requestType: 'GET',
+      apiUrl: 'https://services.easyrechargesolution.com/api/sms/send?token=TEST_TOKEN&recipient=[RECIPIENT]&message=[MESSAGE]&simSlot=0',
+      simSlot: '0',
+    });
+
+    assert.equal(sentJson.status, 200);
+    assert.equal(sentJson.payload.ok, true);
+    assert.equal(savedRow.params[0], true);
+
+    // 2. Test send test SMS
+    let calledUrl = '';
+    const originalFetch = global.fetch;
+    global.fetch = async (url) => {
+      calledUrl = url;
+      return { status: 200, text: async () => '{"status":"SUCCESS"}' };
+    };
+
+    try {
+      await handleTestSms({}, {}, {
+        toNumber: '9876543210',
+        message: 'Test SMS'.repeat(25), // > 160 chars
+        requestType: 'GET',
+        apiUrl: 'https://services.easyrechargesolution.com/api/sms/send?token=TEST_TOKEN&recipient=[RECIPIENT]&message=[MESSAGE]&simSlot=0',
+        simSlot: '0',
+      });
+      assert.equal(sentJson.status, 200);
+      assert.equal(sentJson.payload.ok, true);
+      assert.ok(calledUrl.includes('recipient=9876543210'));
+    } finally {
+      global.fetch = originalFetch;
+    }
+
+    // 3. Test sendAdminServiceSettingsPage HTML renders SMS Gateway tab
+    let htmlOutput = '';
+    await sendAdminServiceSettingsPage({ id: 'admin-1', role: 'admin' }, {
+      writeHead: () => {},
+      end: (h) => { htmlOutput = h; },
+    });
+    assert.ok(htmlOutput.includes('SMS Gateway Integration'));
+    assert.ok(htmlOutput.includes('smsEnabled'));
+    assert.ok(htmlOutput.includes('smsApiUrl'));
+    assert.ok(htmlOutput.includes('testSmsRecipient'));
+  });
+
 });

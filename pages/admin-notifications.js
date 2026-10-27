@@ -33,6 +33,7 @@ module.exports = function createAdminNotificationsPage({ db }) {
       const isAdmin = t.recipient_type === 'admin';
       const waChecked = Boolean(t.whatsapp_enabled);
       const emailChecked = Boolean(t.email_enabled);
+      const smsChecked = Boolean(t.sms_enabled);
 
       const recBadge = isAdmin 
         ? '<span class="badge badge-warning text-dark px-1 ml-1" style="font-size:10px;"><i class="fa fa-shield-halved mr-1"></i>Admin Alert</span>' 
@@ -64,6 +65,15 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 <span class="slider-track"></span>
               </label>
               <span class="switch-status-label ${emailChecked ? 'status-yes' : 'status-no'}">${emailChecked ? 'Yes' : 'No'}</span>
+            </div>
+          </td>
+          <td class="text-center">
+            <div class="switch-wrapper" data-channel="sms" data-key="${escapeHtml(t.event_key)}">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" class="toggle-channel-sms" data-key="${escapeHtml(t.event_key)}" ${smsChecked ? 'checked' : ''}>
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label ${smsChecked ? 'status-yes' : 'status-no'}">${smsChecked ? 'Yes' : 'No'}</span>
             </div>
           </td>
           <td class="text-center">
@@ -277,6 +287,20 @@ module.exports = function createAdminNotificationsPage({ db }) {
       line-height: 1.45;
       white-space: pre-wrap;
     }
+
+    .preview-sms-bubble {
+      background-color: #e0f2fe;
+      border: 1px solid #bae6fd;
+      border-radius: 8px 8px 8px 0px;
+      padding: 10px 14px;
+      max-width: 90%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      position: relative;
+      font-size: 13px;
+      color: #0369a1;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
     .preview-email-box {
       border: 1px solid #e2e8f0;
       border-radius: 8px;
@@ -385,15 +409,16 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 <tr>
                   <th class="col-sr text-center">SR NO</th>
                   <th class="col-type">TYPE</th>
-                  <th class="text-center" style="width: 170px;">SEND WHATSAPP</th>
-                  <th class="text-center" style="width: 170px;">SEND EMAIL</th>
-                  <th class="text-center" style="width: 140px;">CONTENT</th>
+                  <th class="text-center" style="width: 150px;">SEND WHATSAPP</th>
+                  <th class="text-center" style="width: 150px;">SEND EMAIL</th>
+                  <th class="text-center" style="width: 150px;">SEND SMS</th>
+                  <th class="text-center" style="width: 120px;">CONTENT</th>
                 </tr>
               </thead>
               <tbody id="notifTableBody">
                 ${rowsHtml}
                 <tr id="notifEmptyRow" style="display:none;">
-                  <td colspan="5" class="text-center py-4 text-muted">
+                  <td colspan="6" class="text-center py-4 text-muted">
                     <i class="fa fa-search mb-1 d-block" style="font-size:18px;"></i>
                     No notification events found matching your search.
                   </td>
@@ -427,14 +452,14 @@ module.exports = function createAdminNotificationsPage({ db }) {
       </div>
 
       <div class="modal-body p-4">
-        <!-- Channel switches inside modal -->
+        <!-- Channel switches inside modal (WhatsApp, Email, SMS) -->
         <div class="row mb-3 bg-light p-2 rounded mx-0 border">
-          <div class="col-sm-6 d-flex align-items-center justify-content-between py-1">
+          <div class="col-md-4 d-flex align-items-center justify-content-between py-1">
             <div class="d-flex align-items-center">
-              <i class="fa-brands fa-whatsapp text-success fa-lg mr-2"></i>
+              <i class="fa fa-whatsapp text-success fa-lg mr-2"></i>
               <div>
                 <span class="font-weight-bold text-dark small d-block">Send WhatsApp</span>
-                <small class="text-muted">Deliver WhatsApp message</small>
+                <small class="text-muted">WhatsApp delivery</small>
               </div>
             </div>
             <div class="switch-wrapper">
@@ -445,12 +470,12 @@ module.exports = function createAdminNotificationsPage({ db }) {
               <span class="switch-status-label status-yes" id="modalWaStatusLabel">Yes</span>
             </div>
           </div>
-          <div class="col-sm-6 d-flex align-items-center justify-content-between py-1 border-left">
+          <div class="col-md-4 d-flex align-items-center justify-content-between py-1 border-left">
             <div class="d-flex align-items-center">
               <i class="fa fa-envelope text-primary fa-lg mr-2"></i>
               <div>
                 <span class="font-weight-bold text-dark small d-block">Send Email</span>
-                <small class="text-muted">Deliver email message</small>
+                <small class="text-muted">Email delivery</small>
               </div>
             </div>
             <div class="switch-wrapper">
@@ -459,6 +484,22 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 <span class="slider-track"></span>
               </label>
               <span class="switch-status-label status-yes" id="modalEmailStatusLabel">Yes</span>
+            </div>
+          </div>
+          <div class="col-md-4 d-flex align-items-center justify-content-between py-1 border-left">
+            <div class="d-flex align-items-center">
+              <i class="fa fa-commenting-o text-info fa-lg mr-2"></i>
+              <div>
+                <span class="font-weight-bold text-dark small d-block">Send SMS</span>
+                <small class="text-muted">SMS delivery</small>
+              </div>
+            </div>
+            <div class="switch-wrapper">
+              <label class="custom-switch-slider mb-0">
+                <input type="checkbox" id="modalSwitchSms">
+                <span class="slider-track"></span>
+              </label>
+              <span class="switch-status-label status-yes" id="modalSmsStatusLabel">Yes</span>
             </div>
           </div>
         </div>
@@ -476,33 +517,75 @@ module.exports = function createAdminNotificationsPage({ db }) {
           </div>
         </div>
 
-        <!-- WhatsApp Message Content -->
-        <div class="form-group mb-3">
+        <!-- Content Type Selector -->
+        <div class="mb-3">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <label class="font-weight-bold text-dark small mb-0">
-              <i class="fa-brands fa-whatsapp text-success mr-1"></i> WhatsApp Message Content <span class="text-danger">*</span>
+              <i class="fa fa-pencil-square-o text-primary mr-1"></i> Content Type:
             </label>
-            <small class="text-muted font-monospace" id="modalWaCharCount">0 characters</small>
+            <small class="text-muted">Select content type to edit template</small>
           </div>
-          <textarea class="form-control font-monospace" id="modalWaTemplateInput" rows="4" placeholder="Type WhatsApp message template with {{keywords}}..." style="font-size: 13px;"></textarea>
+          <div class="btn-group btn-group-toggle w-100" id="contentTypeTabGroup">
+            <button type="button" class="btn btn-outline-success font-weight-bold active btn-content-type" data-tab="paneContentWa">
+              <i class="fa fa-whatsapp mr-1"></i> WhatsApp Template
+            </button>
+            <button type="button" class="btn btn-outline-primary font-weight-bold btn-content-type" data-tab="paneContentEmail">
+              <i class="fa fa-envelope mr-1"></i> Email Template
+            </button>
+            <button type="button" class="btn btn-outline-info font-weight-bold btn-content-type" data-tab="paneContentSms">
+              <i class="fa fa-commenting-o mr-1"></i> SMS Template <span class="badge badge-warning text-dark ml-1"><i class="fa fa-lock mr-1"></i>160 Chars Lock</span>
+            </button>
+          </div>
         </div>
 
-        <!-- Email Subject & Content -->
-        <div class="form-group mb-2">
-          <label class="font-weight-bold text-dark small mb-1">
-            <i class="fa fa-heading text-primary mr-1"></i> Email Subject <span class="text-danger">*</span>
-          </label>
-          <input type="text" class="form-control" id="modalEmailSubjectInput" placeholder="e.g. Your Account Verification OTP - {{app_name}}">
+        <!-- WhatsApp Content Pane -->
+        <div class="content-tab-pane" id="paneContentWa">
+          <div class="form-group mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="font-weight-bold text-dark small mb-0">
+                <i class="fa fa-whatsapp text-success mr-1"></i> WhatsApp Message Content <span class="text-danger">*</span>
+              </label>
+              <small class="text-muted font-monospace" id="modalWaCharCount">0 characters</small>
+            </div>
+            <textarea class="form-control font-monospace" id="modalWaTemplateInput" rows="4" placeholder="Type WhatsApp message template with {{keywords}}..." style="font-size: 13px;"></textarea>
+          </div>
         </div>
 
-        <div class="form-group mb-3">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <label class="font-weight-bold text-dark small mb-0">
-              <i class="fa fa-envelope text-primary mr-1"></i> Email Body Template <span class="text-danger">*</span>
+        <!-- Email Content Pane -->
+        <div class="content-tab-pane" id="paneContentEmail" style="display: none;">
+          <div class="form-group mb-2">
+            <label class="font-weight-bold text-dark small mb-1">
+              <i class="fa fa-heading text-primary mr-1"></i> Email Subject <span class="text-danger">*</span>
             </label>
-            <small class="text-muted font-monospace" id="modalEmailCharCount">0 characters</small>
+            <input type="text" class="form-control" id="modalEmailSubjectInput" placeholder="e.g. Your Account Verification OTP - {{app_name}}">
           </div>
-          <textarea class="form-control font-monospace" id="modalEmailTemplateInput" rows="5" placeholder="Type Email body template with {{keywords}}..." style="font-size: 13px;"></textarea>
+          <div class="form-group mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="font-weight-bold text-dark small mb-0">
+                <i class="fa fa-envelope text-primary mr-1"></i> Email Body Template <span class="text-danger">*</span>
+              </label>
+              <small class="text-muted font-monospace" id="modalEmailCharCount">0 characters</small>
+            </div>
+            <textarea class="form-control font-monospace" id="modalEmailTemplateInput" rows="5" placeholder="Type Email body template with {{keywords}}..." style="font-size: 13px;"></textarea>
+          </div>
+        </div>
+
+        <!-- SMS Content Pane (160 Characters Hard Lock) -->
+        <div class="content-tab-pane" id="paneContentSms" style="display: none;">
+          <div class="form-group mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="font-weight-bold text-dark small mb-0">
+                <i class="fa fa-commenting-o text-info mr-1"></i> SMS Message Content
+                <span class="badge badge-warning text-dark ml-2"><i class="fa fa-lock mr-1"></i>160 Characters Hard Lock</span>
+              </label>
+              <span class="badge badge-light border text-info font-monospace font-weight-bold" id="modalSmsCharCount">0 / 160 characters</span>
+            </div>
+            <textarea class="form-control font-monospace" id="modalSmsTemplateInput" rows="3" maxlength="160" placeholder="Type SMS template with {{keywords}}..." style="font-size: 13px;"></textarea>
+            <div class="d-flex justify-content-between align-items-center mt-1">
+              <small class="text-muted">Standard SMS max length: strictly 160 characters. Input is automatically locked at 160.</small>
+              <small class="text-danger font-weight-bold" id="modalSmsLimitAlert" style="display: none;"><i class="fa fa-exclamation-triangle mr-1"></i>160 character limit reached!</small>
+            </div>
+          </div>
         </div>
 
         <!-- Live Rendered Preview -->
@@ -522,6 +605,13 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 <div class="font-weight-bold border-bottom pb-1 mb-2 text-dark" id="modalPreviewEmailSubject">—</div>
                 <div style="white-space: pre-wrap;" id="modalPreviewEmailBody">—</div>
               </div>
+            </div>
+            <div class="mt-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="badge badge-info px-2 py-1"><i class="fa fa-commenting-o mr-1"></i> SMS Preview</span>
+                <small class="text-muted font-monospace" id="modalPreviewSmsCount">0 / 160 chars</small>
+              </div>
+              <div class="preview-sms-bubble" id="modalPreviewSmsBubble">—</div>
             </div>
           </div>
         </div>
@@ -601,6 +691,14 @@ ${safeJsonPayload}
       });
     });
 
+    document.querySelectorAll('.toggle-channel-sms').forEach(input => {
+      input.addEventListener('change', async () => {
+        const key = input.getAttribute('data-key');
+        const nextState = input.checked;
+        await handleQuickToggle(key, 'sms', nextState, input);
+      });
+    });
+
     // Edit button listeners
     document.querySelectorAll('.btn-content-edit').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -634,6 +732,7 @@ ${safeJsonPayload}
       if (item) {
         if (channel === 'whatsapp') item.whatsapp_enabled = nextState;
         if (channel === 'email') item.email_enabled = nextState;
+        if (channel === 'sms') item.sms_enabled = nextState;
         showToast(item.title + ' ' + channel.toUpperCase() + ' delivery turned ' + (nextState ? 'YES' : 'NO'));
       }
     } catch (err) {
@@ -666,14 +765,26 @@ ${safeJsonPayload}
     // Switches in modal
     const switchWa = document.getElementById('modalSwitchWa');
     const switchEmail = document.getElementById('modalSwitchEmail');
+    const switchSms = document.getElementById('modalSwitchSms');
     switchWa.checked = Boolean(item.whatsapp_enabled);
     switchEmail.checked = Boolean(item.email_enabled);
+    if (switchSms) switchSms.checked = Boolean(item.sms_enabled);
     updateModalSwitchLabels();
+
+    // Reset Content Type Tab to WhatsApp
+    document.querySelectorAll('.btn-content-type').forEach(b => b.classList.remove('active'));
+    const firstTabBtn = document.querySelector('.btn-content-type[data-tab="paneContentWa"]');
+    if (firstTabBtn) firstTabBtn.classList.add('active');
+    document.querySelectorAll('.content-tab-pane').forEach(p => p.style.display = 'none');
+    const firstPane = document.getElementById('paneContentWa');
+    if (firstPane) firstPane.style.display = 'block';
 
     // Inputs
     document.getElementById('modalWaTemplateInput').value = item.whatsapp_template || '';
     document.getElementById('modalEmailSubjectInput').value = item.email_subject || '';
     document.getElementById('modalEmailTemplateInput').value = item.email_template || '';
+    const smsInput = document.getElementById('modalSmsTemplateInput');
+    if (smsInput) smsInput.value = (item.sms_template || '').slice(0, 160);
 
     // Render keyword tags
     const container = document.getElementById('modalKeywordsContainer');
@@ -703,16 +814,31 @@ ${safeJsonPayload}
   function updateModalSwitchLabels() {
     const waChecked = document.getElementById('modalSwitchWa').checked;
     const emailChecked = document.getElementById('modalSwitchEmail').checked;
+    const switchSms = document.getElementById('modalSwitchSms');
+    const smsChecked = switchSms ? switchSms.checked : false;
+
     const waLabel = document.getElementById('modalWaStatusLabel');
     const emailLabel = document.getElementById('modalEmailStatusLabel');
-    waLabel.textContent = waChecked ? 'Yes' : 'No';
-    waLabel.className = 'switch-status-label ' + (waChecked ? 'status-yes' : 'status-no');
-    emailLabel.textContent = emailChecked ? 'Yes' : 'No';
-    emailLabel.className = 'switch-status-label ' + (emailChecked ? 'status-yes' : 'status-no');
+    const smsLabel = document.getElementById('modalSmsStatusLabel');
+
+    if (waLabel) {
+      waLabel.textContent = waChecked ? 'Yes' : 'No';
+      waLabel.className = 'switch-status-label ' + (waChecked ? 'status-yes' : 'status-no');
+    }
+    if (emailLabel) {
+      emailLabel.textContent = emailChecked ? 'Yes' : 'No';
+      emailLabel.className = 'switch-status-label ' + (emailChecked ? 'status-yes' : 'status-no');
+    }
+    if (smsLabel) {
+      smsLabel.textContent = smsChecked ? 'Yes' : 'No';
+      smsLabel.className = 'switch-status-label ' + (smsChecked ? 'status-yes' : 'status-no');
+    }
   }
 
   document.getElementById('modalSwitchWa').addEventListener('change', updateModalSwitchLabels);
   document.getElementById('modalSwitchEmail').addEventListener('change', updateModalSwitchLabels);
+  const modalSwitchSmsEl = document.getElementById('modalSwitchSms');
+  if (modalSwitchSmsEl) modalSwitchSmsEl.addEventListener('change', updateModalSwitchLabels);
 
   function insertTagIntoActiveInput(tag) {
     const target = lastFocusedInput || document.getElementById('modalWaTemplateInput');
@@ -729,12 +855,40 @@ ${safeJsonPayload}
     updateModalPreview();
   }
 
+
+  // Content Type Tab Switching
+  document.querySelectorAll('.btn-content-type').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.btn-content-type').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const targetTab = btn.getAttribute('data-tab');
+      document.querySelectorAll('.content-tab-pane').forEach(p => p.style.display = 'none');
+      const pane = document.getElementById(targetTab);
+      if (pane) {
+        pane.style.display = 'block';
+        const focusInput = pane.querySelector('input, textarea');
+        if (focusInput) focusInput.focus();
+      }
+    });
+  });
+
   function updateModalCounters() {
     const waVal = document.getElementById('modalWaTemplateInput').value;
     const emailVal = document.getElementById('modalEmailTemplateInput').value;
+    const smsInput = document.getElementById('modalSmsTemplateInput');
+    if (smsInput && smsInput.value.length > 160) {
+      smsInput.value = smsInput.value.slice(0, 160);
+    }
+    const smsVal = smsInput ? smsInput.value : '';
+
     document.getElementById('modalWaCharCount').textContent = waVal.length + ' characters';
     document.getElementById('modalEmailCharCount').textContent = emailVal.length + ' characters';
+    const countEl = document.getElementById('modalSmsCharCount');
+    const alertEl = document.getElementById('modalSmsLimitAlert');
+    if (countEl) countEl.textContent = smsVal.length + ' / 160 characters (Locked)';
+    if (alertEl) alertEl.style.display = smsVal.length >= 160 ? 'inline' : 'none';
   }
+
 
   function updateModalPreview() {
     const item = rawTemplates.find(x => x.event_key === activeEditingKey);
@@ -788,12 +942,30 @@ ${safeJsonPayload}
     document.getElementById('modalPreviewWaBubble').textContent = replaceTags(waVal);
     document.getElementById('modalPreviewEmailSubject').textContent = replaceTags(emailSubject);
     document.getElementById('modalPreviewEmailBody').textContent = replaceTags(emailBody);
+
+    const smsInput = document.getElementById('modalSmsTemplateInput');
+    const smsText = smsInput ? smsInput.value.slice(0, 160) : '';
+    const renderedSms = replaceTags(smsText).slice(0, 160);
+    const smsBubble = document.getElementById('modalPreviewSmsBubble');
+    const smsCountBadge = document.getElementById('modalPreviewSmsCount');
+    if (smsBubble) smsBubble.textContent = renderedSms || '—';
+    if (smsCountBadge) smsCountBadge.textContent = renderedSms.length + ' / 160 chars';
   }
 
   // Live preview typing listeners in modal
   document.getElementById('modalWaTemplateInput').addEventListener('input', () => { updateModalCounters(); updateModalPreview(); });
   document.getElementById('modalEmailSubjectInput').addEventListener('input', updateModalPreview);
   document.getElementById('modalEmailTemplateInput').addEventListener('input', () => { updateModalCounters(); updateModalPreview(); });
+  const modalSmsInputEl = document.getElementById('modalSmsTemplateInput');
+  if (modalSmsInputEl) {
+    modalSmsInputEl.addEventListener('input', () => {
+      if (modalSmsInputEl.value.length > 160) {
+        modalSmsInputEl.value = modalSmsInputEl.value.slice(0, 160);
+      }
+      updateModalCounters();
+      updateModalPreview();
+    });
+  }
 
   // Save changes button in modal
   document.getElementById('btnSaveModalTemplate').addEventListener('click', async () => {
@@ -807,9 +979,11 @@ ${safeJsonPayload}
     const payload = {
       whatsapp_enabled: document.getElementById('modalSwitchWa').checked,
       email_enabled: document.getElementById('modalSwitchEmail').checked,
+      sms_enabled: document.getElementById('modalSwitchSms') ? document.getElementById('modalSwitchSms').checked : false,
       whatsapp_template: document.getElementById('modalWaTemplateInput').value.trim(),
       email_subject: document.getElementById('modalEmailSubjectInput').value.trim(),
-      email_template: document.getElementById('modalEmailTemplateInput').value.trim()
+      email_template: document.getElementById('modalEmailTemplateInput').value.trim(),
+      sms_template: document.getElementById('modalSmsTemplateInput') ? document.getElementById('modalSmsTemplateInput').value.trim().slice(0, 160) : ''
     };
 
     try {
@@ -844,6 +1018,15 @@ ${safeJsonPayload}
           if (label) {
             label.textContent = item.email_enabled ? 'Yes' : 'No';
             label.className = 'switch-status-label ' + (item.email_enabled ? 'status-yes' : 'status-no');
+          }
+        }
+        const smsCheckbox = row.querySelector('.toggle-channel-sms');
+        if (smsCheckbox) {
+          smsCheckbox.checked = item.sms_enabled;
+          const label = smsCheckbox.closest('.switch-wrapper').querySelector('.switch-status-label');
+          if (label) {
+            label.textContent = item.sms_enabled ? 'Yes' : 'No';
+            label.className = 'switch-status-label ' + (item.sms_enabled ? 'status-yes' : 'status-no');
           }
         }
       }

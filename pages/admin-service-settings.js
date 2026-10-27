@@ -400,7 +400,7 @@ module.exports = function createAdminServiceSettingsPage({
                   <i class="fa fa-percent"></i> Margin Difference
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabSms">
-                  <i class="fa fa-commenting-o"></i> SMS Gateway <span class="badge-future">Coming Soon</span>
+                  <i class="fa fa-commenting-o"></i> SMS Gateway
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabTelegram">
                   <i class="fa fa-telegram"></i> Telegram Bot <span class="badge-future">Coming Soon</span>
@@ -1345,15 +1345,120 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 5. SMS GATEWAY TAB (COMING SOON) -->
+            <!-- 5. SMS GATEWAY TAB -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabSms">
-              <div class="settings-panel-card text-center py-5">
-                <div class="py-4">
-                  <i class="fa fa-commenting-o text-muted" style="font-size: 48px;"></i>
-                  <h4 class="mt-3 font-weight-bold">SMS Gateway Settings</h4>
-                  <p class="text-muted">SMS gateway integration for DLTI / Fast2SMS / Msg91 is ready to be configured in the next update.</p>
-                  <button type="button" class="btn btn-outline-secondary" disabled>Module Ready</button>
+              <div class="settings-panel-card">
+                <div class="settings-panel-header">
+                  <h5><i class="fa fa-commenting-o text-info"></i> SMS Gateway Integration</h5>
+                  <div class="custom-control custom-switch custom-switch-lg">
+                    <input type="checkbox" class="custom-control-input" id="smsEnabled">
+                    <label class="custom-control-label" for="smsEnabled" id="smsEnabledLabel">SMS Disabled</label>
+                  </div>
+                </div>
+                <div class="settings-panel-body">
+                  
+                  <div class="help-callout">
+                    <strong><i class="fa fa-info-circle"></i> SMS Gateway Instructions:</strong>
+                    <p class="mb-1">You can configure any HTTP GET or POST SMS API provider (e.g., Easy Recharge Solution / DLTI / Fast2SMS / Msg91).</p>
+                    <p class="mb-1">Default Gateway URL format: <code>https://services.easyrechargesolution.com/api/sms/send?token=YOUR_AUTH_BEARER_TOKEN&amp;recipient=[RECIPIENT]&amp;message=[MESSAGE]&amp;simSlot=0</code></p>
+                    <p class="mb-0">Supported dynamic replacement keywords: <code>[RECIPIENT]</code> or <code>[MOBILE_NO]</code> (10-digit mobile), <code>[MESSAGE]</code> or <code>[CONTENT]</code> (SMS text - strictly locked to max 160 characters), and <code>[SIM_SLOT]</code> (default 0).</p>
+                  </div>
+
+                  <form id="smsForm">
+                    
+                    <!-- Keyword Buttons Bar -->
+                    <div class="form-group mb-3">
+                      <label class="font-weight-bold mb-1">Dynamic Keywords:</label>
+                      <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
+                        <button type="button" class="btn btn-sm btn-outline-info font-weight-bold btn-insert-keyword" data-keyword="[RECIPIENT]">
+                          <i class="fa fa-phone mr-1"></i> [RECIPIENT]
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-success font-weight-bold btn-insert-keyword" data-keyword="[MOBILE_NO]">
+                          <i class="fa fa-mobile mr-1"></i> [MOBILE_NO]
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary font-weight-bold btn-insert-keyword" data-keyword="[MESSAGE]">
+                          <i class="fa fa-comment-o mr-1"></i> [MESSAGE]
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary font-weight-bold btn-insert-keyword" data-keyword="[CONTENT]">
+                          <i class="fa fa-align-left mr-1"></i> [CONTENT]
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-warning font-weight-bold btn-insert-keyword" data-keyword="[SIM_SLOT]">
+                          <i class="fa fa-microchip mr-1"></i> [SIM_SLOT]
+                        </button>
+                        <small class="text-muted ml-md-auto font-weight-normal">(Click keyword button to insert into focused field)</small>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="col-md-2 form-group">
+                        <label for="smsRequestType" class="font-weight-bold">Request Type *</label>
+                        <select id="smsRequestType" class="form-control font-weight-bold">
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                        </select>
+                      </div>
+
+                      <div class="col-md-8 form-group">
+                        <label for="smsApiUrl" class="font-weight-bold">API URL *</label>
+                        <input type="text" id="smsApiUrl" class="form-control font-monospace" placeholder="https://services.easyrechargesolution.com/api/sms/send?token=YOUR_AUTH_BEARER_TOKEN&recipient=[RECIPIENT]&message=[MESSAGE]&simSlot=0" required>
+                        <small class="form-text text-muted">Enter full gateway URL including query parameters with <code>[RECIPIENT]</code> and <code>[MESSAGE]</code></small>
+                      </div>
+
+                      <div class="col-md-2 form-group">
+                        <label for="smsSimSlot" class="font-weight-bold">SIM Slot</label>
+                        <input type="text" id="smsSimSlot" class="form-control font-monospace" placeholder="0" value="0">
+                        <small class="form-text text-muted">Default SIM slot (0 or 1)</small>
+                      </div>
+                    </div>
+
+                    <!-- POST Options (Payload and Headers) -->
+                    <div class="row" id="smsPostOptionsRow" style="display: none;">
+                      <div class="col-md-8 form-group">
+                        <label for="smsPostBody" class="font-weight-bold">POST Body / Payload (Optional)</label>
+                        <textarea id="smsPostBody" class="form-control font-monospace" rows="3" placeholder='{"recipient": "[RECIPIENT]", "message": "[MESSAGE]", "simSlot": "[SIM_SLOT]"}'></textarea>
+                        <small class="form-text text-muted">Use <code>[RECIPIENT]</code> and <code>[MESSAGE]</code> inside JSON payload if sending via POST body.</small>
+                      </div>
+                      <div class="col-md-4 form-group">
+                        <label for="smsHeaders" class="font-weight-bold">Custom Headers (Optional)</label>
+                        <textarea id="smsHeaders" class="form-control font-monospace" rows="3" placeholder="Authorization: Bearer YOUR_TOKEN&#10;Content-Type: application/json"></textarea>
+                        <small class="form-text text-muted">One header per line (e.g. <code>Header: Value</code>)</small>
+                      </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                      <button type="submit" class="btn btn-primary" id="btnSaveSms">
+                        <i class="fa fa-save mr-1"></i> Save SMS Settings
+                      </button>
+                      <span class="text-muted small" id="smsSaveStatus"></span>
+                    </div>
+                  </form>
+
+                  <!-- Test SMS Box -->
+                  <div class="test-box-card">
+                    <h6 class="font-weight-bold text-dark mb-2"><i class="fa fa-commenting-o text-info mr-1"></i> Test SMS Gateway Message</h6>
+                    <p class="text-muted small mb-3">Send a test SMS to verify your API URL, method, and keyword replacements live.</p>
+                    <div class="row align-items-end">
+                      <div class="col-md-4 form-group mb-md-0">
+                        <label for="testSmsRecipient" class="small font-weight-bold">Mobile Number</label>
+                        <input type="text" id="testSmsRecipient" class="form-control" placeholder="10-digit mobile (e.g. 9876543210)">
+                      </div>
+                      <div class="col-md-5 form-group mb-md-0">
+                        <div class="d-flex justify-content-between">
+                          <label for="testSmsMessage" class="small font-weight-bold">Test SMS Message</label>
+                          <small class="text-muted font-weight-bold" id="testSmsCounter">0/160</small>
+                        </div>
+                        <input type="text" id="testSmsMessage" class="form-control" maxlength="160" value="Hello! This is a test SMS message from Exchange Portal.">
+                      </div>
+                      <div class="col-md-3">
+                        <button type="button" class="btn btn-info btn-block" id="btnSendTestSms">
+                          <i class="fa fa-paper-plane mr-1"></i> Send Test SMS
+                        </button>
+                      </div>
+                    </div>
+                    <div id="testSmsAlert" class="mt-3" style="display: none;"></div>
+                  </div>
+
                 </div>
               </div>
             </div>
@@ -1481,10 +1586,19 @@ module.exports = function createAdminServiceSettingsPage({
 
     const waSwitch = document.getElementById('whatsappEnabled');
     const waLabel = document.getElementById('whatsappEnabledLabel');
+    const smsSwitch = document.getElementById('smsEnabled');
+    const smsLabel = document.getElementById('smsEnabledLabel');
     waSwitch.addEventListener('change', () => {
       waLabel.textContent = waSwitch.checked ? 'WhatsApp Enabled' : 'WhatsApp Disabled';
       waLabel.style.color = waSwitch.checked ? '#16a34a' : '#64748b';
     });
+
+    if (smsSwitch && smsLabel) {
+      smsSwitch.addEventListener('change', () => {
+        smsLabel.textContent = smsSwitch.checked ? 'SMS Enabled' : 'SMS Disabled';
+        smsLabel.style.color = smsSwitch.checked ? '#16a34a' : '#64748b';
+      });
+    }
 
     const planApiSwitch = document.getElementById('planApiEnabled');
     const planApiLabel = document.getElementById('planApiEnabledLabel');
@@ -1647,6 +1761,23 @@ module.exports = function createAdminServiceSettingsPage({
           if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
         }
 
+
+        // Populate SMS
+        if (data.sms) {
+          if (smsSwitch && smsLabel) {
+            smsSwitch.checked = Boolean(data.sms.isEnabled);
+            smsLabel.textContent = smsSwitch.checked ? 'SMS Enabled' : 'SMS Disabled';
+            smsLabel.style.color = smsSwitch.checked ? '#16a34a' : '#64748b';
+          }
+          const reqType = (data.sms.requestType || 'GET').toUpperCase();
+          if (document.getElementById('smsRequestType')) document.getElementById('smsRequestType').value = reqType;
+          if (document.getElementById('smsApiUrl')) document.getElementById('smsApiUrl').value = data.sms.apiUrl || data.sms.gatewayUrl || '';
+          if (document.getElementById('smsSimSlot')) document.getElementById('smsSimSlot').value = data.sms.simSlot !== undefined ? data.sms.simSlot : '0';
+          if (document.getElementById('smsPostBody')) document.getElementById('smsPostBody').value = data.sms.postBody || '';
+          if (document.getElementById('smsHeaders')) document.getElementById('smsHeaders').value = data.sms.headers || '';
+          const postRow = document.getElementById('smsPostOptionsRow');
+          if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
+        }
         // Populate Plan API (Multi-Brand: ERS / PlanAPI)
         if (data.plan_api || data.planApi) {
           const p = data.plan_api || data.planApi;
@@ -1822,6 +1953,113 @@ module.exports = function createAdminServiceSettingsPage({
         btnSendTestEmail.innerHTML = '<i class="fa fa-paper-plane mr-1"></i> Send Test Email';
       }
     });
+
+
+    // Save SMS Form
+    const smsForm = document.getElementById('smsForm');
+    const smsSaveBtn = document.getElementById('btnSaveSms');
+    const smsSaveStatus = document.getElementById('smsSaveStatus');
+
+    if (smsForm) {
+      smsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        smsSaveBtn.disabled = true;
+        smsSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
+        smsSaveStatus.textContent = '';
+
+        const payload = {
+          isEnabled: smsSwitch ? smsSwitch.checked : false,
+          requestType: document.getElementById('smsRequestType').value,
+          apiUrl: document.getElementById('smsApiUrl').value.trim(),
+          simSlot: document.getElementById('smsSimSlot') ? document.getElementById('smsSimSlot').value.trim() : '0',
+          postBody: document.getElementById('smsPostBody').value.trim(),
+          headers: document.getElementById('smsHeaders').value.trim(),
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/sms', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save SMS settings.');
+          smsSaveStatus.textContent = '✓ Saved successfully!';
+          smsSaveStatus.className = 'text-success font-weight-bold';
+          setTimeout(() => smsSaveStatus.textContent = '', 3000);
+        } catch (err) {
+          smsSaveStatus.textContent = '✗ ' + err.message;
+          smsSaveStatus.className = 'text-danger font-weight-bold';
+        } finally {
+          smsSaveBtn.disabled = false;
+          smsSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save SMS Settings';
+        }
+      });
+    }
+
+    // Send Test SMS
+    const btnSendTestSms = document.getElementById('btnSendTestSms');
+    const testSmsRecipient = document.getElementById('testSmsRecipient');
+    const testSmsMessage = document.getElementById('testSmsMessage');
+    const testSmsAlert = document.getElementById('testSmsAlert');
+    const testSmsCounter = document.getElementById('testSmsCounter');
+
+    if (testSmsMessage && testSmsCounter) {
+      const updateTestCounter = () => {
+        const len = testSmsMessage.value.length;
+        testSmsCounter.textContent = len + '/160';
+        testSmsCounter.className = len >= 160 ? 'text-danger font-weight-bold' : 'text-muted font-weight-bold';
+      };
+      testSmsMessage.addEventListener('input', updateTestCounter);
+      updateTestCounter();
+    }
+
+    if (btnSendTestSms) {
+      btnSendTestSms.addEventListener('click', async () => {
+        const toNumber = testSmsRecipient.value.trim();
+        if (!toNumber || toNumber.length < 10) {
+          alert('Please enter a valid 10-digit mobile number for SMS test.');
+          testSmsRecipient.focus();
+          return;
+        }
+
+        btnSendTestSms.disabled = true;
+        btnSendTestSms.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending SMS...';
+        testSmsAlert.style.display = 'none';
+
+        const payload = {
+          toNumber,
+          message: (testSmsMessage.value || '').slice(0, 160),
+          requestType: document.getElementById('smsRequestType').value,
+          apiUrl: document.getElementById('smsApiUrl').value.trim(),
+          simSlot: document.getElementById('smsSimSlot') ? document.getElementById('smsSimSlot').value.trim() : '0',
+          postBody: document.getElementById('smsPostBody').value.trim(),
+          headers: document.getElementById('smsHeaders').value.trim(),
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/sms/test', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'SMS test failed.');
+          testSmsAlert.className = 'alert alert-success mt-3';
+          testSmsAlert.innerHTML = '<strong>✓ SMS Dispatched Successfully!</strong> Status: ' + data.status + '<br><small class="text-muted font-monospace">' + escapeHtml(data.response || '') + '</small>';
+          testSmsAlert.style.display = 'block';
+        } catch (err) {
+          testSmsAlert.className = 'alert alert-danger mt-3';
+          testSmsAlert.innerHTML = '<strong>✗ SMS Test Failed:</strong> ' + escapeHtml(err.message);
+          testSmsAlert.style.display = 'block';
+        } finally {
+          btnSendTestSms.disabled = false;
+          btnSendTestSms.innerHTML = '<i class="fa fa-paper-plane mr-1"></i> Send Test SMS';
+        }
+      });
+    }
 
     // Save WhatsApp Form
     const whatsappForm = document.getElementById('whatsappForm');
@@ -2279,6 +2517,16 @@ module.exports = function createAdminServiceSettingsPage({
         apiSuspendRefundPercent: 25,
       };
     }
+    if (!result.sms) {
+      result.sms = {
+        isEnabled: false,
+        requestType: 'GET',
+        apiUrl: 'https://services.easyrechargesolution.com/api/sms/send?token=YOUR_AUTH_BEARER_TOKEN&recipient=[RECIPIENT]&message=[MESSAGE]&simSlot=0',
+        simSlot: '0',
+        postBody: '',
+        headers: '',
+      };
+    }
     if (!result.plan_api) {
       result.plan_api = {
         isEnabled: true,
@@ -2629,6 +2877,172 @@ module.exports = function createAdminServiceSettingsPage({
     }
   }
 
+
+  /**
+   * POST /api/admin/settings/services/sms - Save SMS configuration
+   */
+  async function handleSaveSmsSettings(request, response, input) {
+    const isEnabled = Boolean(input.isEnabled);
+    const requestType = String(input.requestType || 'GET').trim().toUpperCase();
+    const apiUrl = String(input.apiUrl || '').trim();
+    const simSlot = String(input.simSlot || '0').trim();
+    const postBody = String(input.postBody || '').trim();
+    const headers = String(input.headers || '').trim();
+
+    if (isEnabled && !apiUrl) {
+      throw httpError('API URL is required when SMS service is enabled.', 400);
+    }
+
+    const config = {
+      requestType,
+      apiUrl,
+      simSlot,
+      postBody,
+      headers,
+    };
+
+    const ciphertext = encryptServiceConfig(config);
+
+    await db.query(
+      `INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext, updated_at)
+       VALUES ('sms', $1, $2, now())
+       ON CONFLICT (service_key) DO UPDATE
+       SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
+      [isEnabled, ciphertext],
+    );
+
+    sendJson(response, 200, { ok: true, message: 'SMS settings saved successfully.' });
+  }
+
+  /**
+   * POST /api/admin/settings/services/sms/test - Send a test SMS message
+   */
+  async function handleTestSms(request, response, input) {
+    const toNumber = String(input.toNumber || '').trim().replace(/\D/g, '');
+    if (!toNumber || toNumber.length < 10) {
+      throw httpError('Valid 10-digit recipient mobile number is required.', 400);
+    }
+
+    const rawMessage = String(input.message || 'Hello! This is a test SMS message from Exchange Portal.').trim();
+    const message = rawMessage.slice(0, 160);
+
+    let requestType = String(input.requestType || '').trim().toUpperCase();
+    let apiUrl = String(input.apiUrl || '').trim();
+    let simSlot = String(input.simSlot || '0').trim();
+    let postBody = String(input.postBody || '').trim();
+    let rawHeaders = String(input.headers || '').trim();
+
+    if (!apiUrl) {
+      const row = await db.query("SELECT config_ciphertext FROM admin_service_settings WHERE service_key = 'sms'");
+      if (row.rowCount > 0) {
+        const saved = decryptServiceConfig(row.rows[0].config_ciphertext);
+        requestType = requestType || saved.requestType || 'GET';
+        apiUrl = apiUrl || saved.apiUrl || saved.gatewayUrl || '';
+        simSlot = simSlot || saved.simSlot || '0';
+        postBody = postBody || saved.postBody || '';
+        rawHeaders = rawHeaders || saved.headers || '';
+      }
+    }
+
+    if (!apiUrl) {
+      throw httpError('Incomplete SMS gateway settings. Please enter API URL.', 400);
+    }
+
+    if (!requestType) requestType = 'GET';
+
+    const mobile10 = toNumber.slice(-10);
+    const mobileWithCc = toNumber.length === 12 && toNumber.startsWith('91') ? toNumber : `91${mobile10}`;
+
+    // Keyword replacements for URL (with URL encoding)
+    let finalUrl = apiUrl
+      .replace(/\[RECIPIENT\]/gi, encodeURIComponent(mobile10))
+      .replace(/\[MOBILE_NO\]/gi, encodeURIComponent(mobile10))
+      .replace(/\[MOBILE\]/gi, encodeURIComponent(mobile10))
+      .replace(/\[PHONE\]/gi, encodeURIComponent(mobile10))
+      .replace(/\[MOBILE_WITH_CC\]/gi, encodeURIComponent(mobileWithCc))
+      .replace(/\[MOBILE_91\]/gi, encodeURIComponent(mobileWithCc))
+      .replace(/\[MESSAGE\]/gi, encodeURIComponent(message))
+      .replace(/\[CONTENT\]/gi, encodeURIComponent(message))
+      .replace(/\[MSG\]/gi, encodeURIComponent(message))
+      .replace(/\[TEXT\]/gi, encodeURIComponent(message))
+      .replace(/\[SIM_SLOT\]/gi, encodeURIComponent(simSlot))
+      .replace(/\[SIM\]/gi, encodeURIComponent(simSlot));
+
+    // Handle literal placeholders if admin pasted sample URL as-is
+    if (!apiUrl.includes('[RECIPIENT]') && !apiUrl.includes('[MOBILE') && finalUrl.includes('recipient=9876543210')) {
+      finalUrl = finalUrl.replace('recipient=9876543210', `recipient=${encodeURIComponent(mobile10)}`);
+    }
+    if (!apiUrl.includes('[MESSAGE]') && !apiUrl.includes('[CONTENT') && finalUrl.includes('message=Hello+World')) {
+      finalUrl = finalUrl.replace('message=Hello+World', `message=${encodeURIComponent(message)}`);
+    } else if (!apiUrl.includes('[MESSAGE]') && !apiUrl.includes('[CONTENT') && finalUrl.includes('message=Hello%20World')) {
+      finalUrl = finalUrl.replace('message=Hello%20World', `message=${encodeURIComponent(message)}`);
+    }
+
+    // Keyword replacements for POST Body
+    let finalBody = postBody
+      .replace(/\[RECIPIENT\]/gi, mobile10)
+      .replace(/\[MOBILE_NO\]/gi, mobile10)
+      .replace(/\[MOBILE\]/gi, mobile10)
+      .replace(/\[PHONE\]/gi, mobile10)
+      .replace(/\[MOBILE_WITH_CC\]/gi, mobileWithCc)
+      .replace(/\[MOBILE_91\]/gi, mobileWithCc)
+      .replace(/\[MESSAGE\]/gi, message)
+      .replace(/\[CONTENT\]/gi, message)
+      .replace(/\[MSG\]/gi, message)
+      .replace(/\[TEXT\]/gi, message)
+      .replace(/\[SIM_SLOT\]/gi, simSlot)
+      .replace(/\[SIM\]/gi, simSlot);
+
+    // Parse custom headers
+    const reqHeaders = {};
+    if (rawHeaders) {
+      const lines = rawHeaders.split('\n');
+      for (const line of lines) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx > 0) {
+          const key = line.slice(0, colonIdx).trim().toLowerCase();
+          const val = line.slice(colonIdx + 1).trim();
+          if (key && val) {
+            reqHeaders[key] = val;
+          }
+        }
+      }
+    }
+
+    const fetchOptions = {
+      method: requestType,
+      signal: AbortSignal.timeout(15000),
+    };
+
+    if (requestType === 'POST') {
+      if (!reqHeaders['content-type']) {
+        if (finalBody.trim().startsWith('{') || finalBody.trim().startsWith('[')) {
+          reqHeaders['content-type'] = 'application/json';
+        } else {
+          reqHeaders['content-type'] = 'application/x-www-form-urlencoded';
+        }
+      }
+      fetchOptions.body = finalBody;
+    }
+
+    if (Object.keys(reqHeaders).length > 0) {
+      fetchOptions.headers = reqHeaders;
+    }
+
+    try {
+      const res = await fetch(finalUrl, fetchOptions);
+      const respText = await res.text();
+      sendJson(response, 200, {
+        ok: true,
+        status: res.status,
+        response: respText.slice(0, 500),
+        message: `Test SMS request dispatched with status ${res.status}.`,
+      });
+    } catch (err) {
+      throw httpError(`SMS Gateway Test Error: ${err.message}`, 400);
+    }
+  }
+
   /**
    * POST /api/admin/settings/services/whatsapp - Save WhatsApp configuration
    */
@@ -2930,6 +3344,8 @@ module.exports = function createAdminServiceSettingsPage({
     handleSaveGeneralSettings,
     handleSaveEmailSettings,
     handleTestEmail,
+    handleSaveSmsSettings,
+    handleTestSms,
     handleSaveWhatsappSettings,
     handleTestWhatsapp,
     handleSavePlanApiSettings,
