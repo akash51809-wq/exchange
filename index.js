@@ -97,6 +97,8 @@ const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-histor
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
 const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
 const createAdminNotificationsPage = require('./pages/admin-notifications');
+const createAdminSendBulkWhatsappPage = require('./pages/admin-send-bulk-whatsapp');
+const createAdminSendBulkEmailPage = require('./pages/admin-send-bulk-email');
 const createAdminApiSettingPage = require('./pages/admin-api-setting');
 const {
   DEFAULT_DEVELOPER_APIS,
@@ -144,6 +146,7 @@ const createBuyerApiService = require('./lib/buyer-api-service');
 const {
   sendWhatsappNotification,
   sendEmailNotification,
+  logSentMessage,
   DEFAULT_NOTIFICATION_TEMPLATES,
   seedNotificationTemplates,
   sendNotificationEvent,
@@ -360,6 +363,17 @@ const {
 const {
   sendAdminNotificationsPage,
 } = createAdminNotificationsPage({
+  db,
+});
+const {
+  sendAdminSendBulkWhatsappPage,
+} = createAdminSendBulkWhatsappPage({
+  db,
+  decryptMobile,
+});
+const {
+  sendAdminSendBulkEmailPage,
+} = createAdminSendBulkEmailPage({
   db,
 });
 const {
@@ -4794,6 +4808,22 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/settings/send-bulk-whatsapp') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminSendBulkWhatsappPage(admin, response);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/settings/send-bulk-email') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminSendBulkEmailPage(admin, response);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -5953,6 +5983,276 @@ async function handleRequest(request, response) {
         );
         if (!res.rowCount) throw httpError('Notification event not found', 404);
         sendJson(response, 200, { ok: true, message: 'Notification template saved successfully.', template: res.rows[0] });
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/bulk-whatsapp/send' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const targetType = String(input.targetType || 'all').trim();
+        const userStatus = String(input.userStatus || 'all').trim();
+        const userIds = Array.isArray(input.userIds) ? input.userIds : [];
+        const rawMessage = String(input.message || '').trim();
+
+        if (!rawMessage) throw httpError('WhatsApp message text is required.', 400);
+
+        let userQuery = '';
+        let queryParams = [];
+
+        if (targetType === 'specific') {
+          if (userIds.length === 0) throw httpError('Please select at least one user.', 400);
+          userQuery = `SELECT id, username, name, phone_ciphertext, status 
+                       FROM users 
+                       WHERE id = ANY($1::uuid[]) AND role = 'user' AND deleted_at IS NULL
+                       ORDER BY name ASC, username ASC`;
+          queryParams = [userIds];
+        } else {
+          if (userStatus === 'active') {
+            userQuery = `SELECT id, username, name, phone_ciphertext, status 
+                         FROM users 
+                         WHERE role = 'user' AND status = 'active' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          } else if (userStatus === 'inactive') {
+            userQuery = `SELECT id, username, name, phone_ciphertext, status 
+                         FROM users 
+                         WHERE role = 'user' AND status != 'active' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          } else {
+            userQuery = `SELECT id, username, name, phone_ciphertext, status 
+                         FROM users 
+                         WHERE role = 'user' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          }
+        }
+
+        const usersRes = await db.query(userQuery, queryParams);
+        const targetUsers = usersRes.rows || [];
+
+        let sentCount = 0;
+        let failedCount = 0;
+        const results = [];
+
+        for (const user of targetUsers) {
+          let userMobile = '';
+          if (user.phone_ciphertext && typeof decryptMobile === 'function') {
+            try { userMobile = decryptMobile(user.phone_ciphertext); } catch (_) {}
+          }
+          userMobile = String(userMobile || '').replace(/\\D/g, '');
+
+          const firmName = String(user.name || user.username || 'User').trim();
+          const personalizedMsg = rawMessage.replace(/\\[NAME\\]/gi, firmName);
+
+          if (!userMobile || userMobile.length < 10) {
+            failedCount++;
+            results.push({
+              id: user.id,
+              name: firmName,
+              username: user.username,
+              mobile: userMobile || '-',
+              sent: false,
+              reason: 'No valid mobile number found for user.',
+            });
+            continue;
+          }
+
+          try {
+            const sendRes = await sendWhatsappNotification({
+              db,
+              decryptServiceConfig,
+              toNumber: userMobile,
+              message: personalizedMsg,
+            });
+
+            if (sendRes && sendRes.sent) {
+              sentCount++;
+              await logSentMessage(db, {
+                userId: user.id,
+                userName: firmName,
+                recipient: userMobile,
+                msgType: 'Bulk WhatsApp',
+                platform: 'whatsapp',
+                content: personalizedMsg,
+                status: 'sent',
+                responsePayload: sendRes,
+              });
+              results.push({
+                id: user.id,
+                name: firmName,
+                username: user.username,
+                mobile: userMobile,
+                sent: true,
+                status: sendRes.status,
+              });
+            } else {
+              failedCount++;
+              results.push({
+                id: user.id,
+                name: firmName,
+                username: user.username,
+                mobile: userMobile,
+                sent: false,
+                reason: sendRes?.error || sendRes?.reason || 'Failed to dispatch via WhatsApp gateway.',
+              });
+            }
+          } catch (err) {
+            failedCount++;
+            results.push({
+              id: user.id,
+              name: firmName,
+              username: user.username,
+              mobile: userMobile,
+              sent: false,
+              reason: err.message,
+            });
+          }
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          total: targetUsers.length,
+          sent: sentCount,
+          failed: failedCount,
+          results,
+        });
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/bulk-email/send' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+
+        const input = await readJson(request);
+        const targetType = String(input.targetType || 'all').trim();
+        const userStatus = String(input.userStatus || 'all').trim();
+        const userIds = Array.isArray(input.userIds) ? input.userIds : [];
+        const rawSubject = String(input.subject || '').trim();
+        const rawMessage = String(input.message || '').trim();
+
+        if (!rawSubject) throw httpError('Email subject is required.', 400);
+        if (!rawMessage) throw httpError('Email message text is required.', 400);
+
+        let userQuery = '';
+        let queryParams = [];
+
+        if (targetType === 'specific') {
+          if (userIds.length === 0) throw httpError('Please select at least one user.', 400);
+          userQuery = `SELECT id, username, name, email, status 
+                       FROM users 
+                       WHERE id = ANY($1::uuid[]) AND role = 'user' AND deleted_at IS NULL
+                       ORDER BY name ASC, username ASC`;
+          queryParams = [userIds];
+        } else {
+          if (userStatus === 'active') {
+            userQuery = `SELECT id, username, name, email, status 
+                         FROM users 
+                         WHERE role = 'user' AND status = 'active' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          } else if (userStatus === 'inactive') {
+            userQuery = `SELECT id, username, name, email, status 
+                         FROM users 
+                         WHERE role = 'user' AND status != 'active' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          } else {
+            userQuery = `SELECT id, username, name, email, status 
+                         FROM users 
+                         WHERE role = 'user' AND deleted_at IS NULL
+                         ORDER BY name ASC, username ASC`;
+          }
+        }
+
+        const usersRes = await db.query(userQuery, queryParams);
+        const targetUsers = usersRes.rows || [];
+
+        let sentCount = 0;
+        let failedCount = 0;
+        const results = [];
+
+        for (const user of targetUsers) {
+          const userEmail = String(user.email || '').trim().toLowerCase();
+          const firmName = String(user.name || user.username || 'User').trim();
+
+          const personalizedSubject = rawSubject.replace(/\\[NAME\\]/gi, firmName);
+          const personalizedBody = rawMessage.replace(/\\[NAME\\]/gi, firmName);
+
+          if (!userEmail || !userEmail.includes('@')) {
+            failedCount++;
+            results.push({
+              id: user.id,
+              name: firmName,
+              username: user.username,
+              email: userEmail || '-',
+              sent: false,
+              reason: 'No valid email address found for user.',
+            });
+            continue;
+          }
+
+          try {
+            const sendRes = await sendEmailNotification({
+              db,
+              decryptServiceConfig,
+              toEmail: userEmail,
+              subject: personalizedSubject,
+              text: personalizedBody,
+            });
+
+            if (sendRes && sendRes.sent) {
+              sentCount++;
+              await logSentMessage(db, {
+                userId: user.id,
+                userName: firmName,
+                recipient: userEmail,
+                msgType: 'Bulk Email',
+                platform: 'email',
+                content: personalizedBody,
+                subject: personalizedSubject,
+                status: 'sent',
+                responsePayload: sendRes,
+              });
+              results.push({
+                id: user.id,
+                name: firmName,
+                username: user.username,
+                email: userEmail,
+                sent: true,
+              });
+            } else {
+              failedCount++;
+              results.push({
+                id: user.id,
+                name: firmName,
+                username: user.username,
+                email: userEmail,
+                sent: false,
+                reason: sendRes?.error || sendRes?.reason || 'Failed to dispatch via Email SMTP / Google Script.',
+              });
+            }
+          } catch (err) {
+            failedCount++;
+            results.push({
+              id: user.id,
+              name: firmName,
+              username: user.username,
+              email: userEmail,
+              sent: false,
+              reason: err.message,
+            });
+          }
+        }
+
+        sendJson(response, 200, {
+          ok: true,
+          total: targetUsers.length,
+          sent: sentCount,
+          failed: failedCount,
+          results,
+        });
         statusCode = 200;
         return;
       }

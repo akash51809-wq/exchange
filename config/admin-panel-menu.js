@@ -40,6 +40,8 @@ const ADMIN_PANEL_MENU = [
     { label: 'Show Operator', path: '/admin/settings/show-operator' },
     { label: 'Service Settings', path: '/admin/settings/service-settings' },
     { label: 'Notification Settings', path: '/admin/settings/notifications' },
+    { label: 'Send Bulk WhatsApp', path: '/admin/settings/send-bulk-whatsapp' },
+    { label: 'Send Bulk Email', path: '/admin/settings/send-bulk-email' },
     { label: 'Wallet Settings', path: '/admin/settings/wallet-settings' },
     { label: 'Website Settings', path: '/admin/settings/website-settings' },
   ] },

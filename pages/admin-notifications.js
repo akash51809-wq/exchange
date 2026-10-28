@@ -383,6 +383,12 @@ module.exports = function createAdminNotificationsPage({ db }) {
                 <p class="text-muted mb-0 small">Configure automated notification delivery channels and message templates per event.</p>
               </div>
               <div>
+                <a href="/admin/settings/send-bulk-whatsapp" class="btn btn-outline-success btn-sm mr-2 font-weight-bold">
+                  <i class="fab fa-whatsapp mr-1"></i> Send Bulk WhatsApp
+                </a>
+                <a href="/admin/settings/send-bulk-email" class="btn btn-outline-primary btn-sm mr-2 font-weight-bold">
+                  <i class="fa fa-envelope mr-1"></i> Send Bulk Email
+                </a>
                 <button type="button" class="btn btn-outline-primary btn-sm" onclick="location.reload()">
                   <i class="fa fa-refresh mr-1"></i> Refresh
                 </button>
