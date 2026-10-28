@@ -9,8 +9,9 @@ module.exports = function createAdminNotificationsPage({ db }) {
     // Fetch all notification templates sorted by sort_order
     let result = await db.query(
       `SELECT id, event_key, title, category, recipient_type,
-              whatsapp_enabled, email_enabled, whatsapp_template,
-              email_subject, email_template, allowed_keywords, sort_order, updated_at
+              whatsapp_enabled, email_enabled, sms_enabled,
+              whatsapp_template, email_subject, email_template, sms_template,
+              allowed_keywords, sort_order, updated_at
        FROM admin_notification_templates
        ORDER BY sort_order ASC, title ASC`
     ).catch(() => ({ rows: [] }));
@@ -20,8 +21,9 @@ module.exports = function createAdminNotificationsPage({ db }) {
       await seedNotificationTemplates(db).catch(() => {});
       result = await db.query(
         `SELECT id, event_key, title, category, recipient_type,
-                whatsapp_enabled, email_enabled, whatsapp_template,
-                email_subject, email_template, allowed_keywords, sort_order, updated_at
+                whatsapp_enabled, email_enabled, sms_enabled,
+                whatsapp_template, email_subject, email_template, sms_template,
+                allowed_keywords, sort_order, updated_at
          FROM admin_notification_templates
          ORDER BY sort_order ASC, title ASC`
       ).catch(() => ({ rows: [] }));

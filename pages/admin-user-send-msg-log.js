@@ -116,6 +116,9 @@ module.exports = function createAdminUserSendMsgLogPage({
     const values = [];
     const addParam = (val) => { values.push(val); return `$${values.length}`; };
 
+    // Always restrict to real, successfully sent messages
+    conditions.push("l.status = 'sent'");
+
     if (validFrom) {
       conditions.push(`l.created_at >= (${addParam(validFrom)}::date::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     }
@@ -238,10 +241,10 @@ module.exports = function createAdminUserSendMsgLogPage({
       db.query(`
         SELECT DISTINCT msg_type
         FROM user_sent_msg_logs
-        WHERE msg_type IS NOT NULL AND msg_type != ''
+        WHERE msg_type IS NOT NULL AND msg_type != '' AND status = 'sent'
         ORDER BY msg_type ASC
       `).catch(() => ({ rows: [] })),
-      // Platform counters for the current date range
+      // Platform counters for the current date range (only real, sent messages)
       db.query(`
         SELECT
           COUNT(*) AS total_count,
@@ -249,7 +252,8 @@ module.exports = function createAdminUserSendMsgLogPage({
           COUNT(*) FILTER (WHERE platform = 'whatsapp') AS whatsapp_count,
           COUNT(*) FILTER (WHERE platform = 'email') AS email_count
         FROM user_sent_msg_logs l
-        WHERE l.created_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
+        WHERE l.status = 'sent'
+          AND l.created_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
           AND l.created_at < ((($2::date + 1)::timestamp) AT TIME ZONE 'Asia/Kolkata')
       `, [filters.from, filters.to]).catch(() => ({ rows: [{ total_count: 0, sms_count: 0, whatsapp_count: 0, email_count: 0 }] })),
     ]);

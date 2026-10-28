@@ -76,11 +76,11 @@ test('Admin Notifications - 18 Templates Specification and Keywords', async (t) 
     assert.ok(byKey.seller_api_auto_disabled.allowed_keywords.includes('reason'));
   });
 
-  await t.test('whatsapp, email, and sms channels are enabled by default with max 160-char SMS lock', () => {
+  await t.test('whatsapp and email channels are enabled by default, sms disabled by default with max 160-char SMS lock', () => {
     for (const t of DEFAULT_NOTIFICATION_TEMPLATES) {
       assert.equal(t.whatsapp_enabled, true);
       assert.equal(t.email_enabled, true);
-      assert.equal(t.sms_enabled, true);
+      assert.equal(t.sms_enabled, false); // SMS disabled by default; only sent if explicitly turned ON in admin notification settings
       assert.ok(t.whatsapp_template.length > 0);
       assert.ok(t.email_subject.length > 0);
       assert.ok(t.email_template.length > 0);

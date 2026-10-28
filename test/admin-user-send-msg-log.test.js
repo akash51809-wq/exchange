@@ -68,6 +68,94 @@ test('Message Logging Functionality - logSentMessage & sendNotificationEvent', a
     assert.equal(insertedRows[0].content, 'Your Login OTP is 123456.');
   });
 
+  await t.test('logSentMessage rejects non-sent or failed messages to prevent dummy/fake report logs', async () => {
+    const insertedRows = [];
+    const mockDb = {
+      query: async (sql, params) => {
+        if (sql.includes('INSERT INTO user_sent_msg_logs')) {
+          insertedRows.push(params);
+          return { rowCount: 1, rows: [{ id: 'mock-id' }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+
+    // Case 1: status is failed
+    const res1 = await logSentMessage(mockDb, {
+      recipient: '9876543210',
+      status: 'failed',
+      content: 'Failed SMS',
+      responsePayload: { sent: false },
+    });
+    assert.equal(res1, null, 'Should return null for failed status');
+
+    // Case 2: status is sent but responsePayload.sent is false
+    const res2 = await logSentMessage(mockDb, {
+      recipient: '9876543210',
+      status: 'sent',
+      content: 'Unsent SMS',
+      responsePayload: { sent: false, reason: 'SMS gateway not configured' },
+    });
+    assert.equal(res2, null, 'Should return null when sent is false');
+
+    assert.equal(insertedRows.length, 0, 'No rows should ever be inserted for non-sent messages');
+  });
+
+  await t.test('sendNotificationEvent does NOT log SMS when SMS is disabled in template', async () => {
+    const loggedMessages = [];
+    const mockDb = {
+      query: async (sql, params) => {
+        if (sql.includes('SELECT event_key, title')) {
+          return {
+            rowCount: 1,
+            rows: [{
+              event_key: 'login_otp',
+              title: 'Login OTP',
+              recipient_type: 'user',
+              whatsapp_enabled: true,
+              email_enabled: false,
+              sms_enabled: false, // SMS is OFF
+              whatsapp_template: 'Your OTP is {{otp}}',
+              sms_template: 'SMS OTP: {{otp}}',
+            }],
+          };
+        }
+        if (sql.includes("service_key = 'whatsapp'")) {
+          return { rowCount: 1, rows: [{ config_ciphertext: Buffer.from('mock'), is_enabled: true }] };
+        }
+        if (sql.includes('INSERT INTO user_sent_msg_logs')) {
+          loggedMessages.push({
+            recipient: params[2],
+            msg_type: params[3],
+            platform: params[4],
+          });
+          return { rowCount: 1, rows: [{ id: 'log-1' }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+
+    const originalFetch = global.fetch;
+    global.fetch = async () => ({ status: 200, text: async () => '{"status":"ok"}' });
+
+    try {
+      const res = await sendNotificationEvent({
+        db: mockDb,
+        decryptServiceConfig: () => ({ apiUrl: 'https://example.com/api?to=[RECIPIENT]&msg=[MESSAGE]' }),
+        eventKey: 'login_otp',
+        params: { otp: '123456' },
+        recipientMobile: '9988776655',
+      });
+
+      assert.equal(res.sms.disabled, true);
+      assert.equal(res.whatsapp.sent, true);
+      assert.equal(loggedMessages.length, 1);
+      assert.equal(loggedMessages[0].platform, 'whatsapp');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
   await t.test('sendNotificationEvent records dispatched notifications in user_sent_msg_logs', async () => {
     const loggedMessages = [];
     const mockDb = {

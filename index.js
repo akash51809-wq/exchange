@@ -982,7 +982,7 @@ const DATABASE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_key ON admin_notification_templates(event_key);
   CREATE INDEX IF NOT EXISTS idx_admin_notification_templates_sort ON admin_notification_templates(sort_order);
-  ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN NOT NULL DEFAULT true;
+  ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_enabled BOOLEAN NOT NULL DEFAULT false;
   ALTER TABLE admin_notification_templates ADD COLUMN IF NOT EXISTS sms_template TEXT NOT NULL DEFAULT '';
   ALTER TABLE users ADD COLUMN IF NOT EXISTS kyc_status TEXT NOT NULL DEFAULT 'not_submitted';
 
@@ -5886,8 +5886,9 @@ async function handleRequest(request, response) {
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         const res = await db.query(
           `SELECT id, event_key, title, category, recipient_type,
-                  whatsapp_enabled, email_enabled, whatsapp_template,
-                  email_subject, email_template, allowed_keywords, sort_order, updated_at
+                  whatsapp_enabled, email_enabled, sms_enabled,
+                  whatsapp_template, email_subject, email_template, sms_template,
+                  allowed_keywords, sort_order, updated_at
            FROM admin_notification_templates
            ORDER BY sort_order ASC, title ASC`
         );
