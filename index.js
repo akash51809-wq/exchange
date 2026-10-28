@@ -164,6 +164,7 @@ const APP_SECRET = process.env.APP_SECRET || (process.env.NODE_ENV === 'producti
 let ADMIN_BOOTSTRAP_PASSWORD = process.env.ADMIN_BOOTSTRAP_PASSWORD || (process.env.NODE_ENV === 'production' ? undefined : 'Admin@123');
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const SESSION_COOKIE = 'exchange_session';
+const ADMIN_SESSION_COOKIE = 'exchange_admin_session';
 const SESSION_DURATION_SECONDS = 12 * 60 * 60;
 const authRateLimits = new Map();
 
@@ -455,6 +456,7 @@ const DATABASE_SCHEMA = `
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ
   );
+  ALTER TABLE user_sessions ADD COLUMN IF NOT EXISTS impersonated_by UUID REFERENCES users(id) ON DELETE SET NULL;
   CREATE INDEX IF NOT EXISTS user_sessions_user_active_idx ON user_sessions (user_id, expires_at) WHERE revoked_at IS NULL;
 
   CREATE TABLE IF NOT EXISTS user_login_logs (
@@ -1795,20 +1797,37 @@ async function registerUser(request, response) {
   });
 }
 
-function readSessionToken(request) {
+function readSessionToken(request, cookieName = SESSION_COOKIE) {
   const cookieHeader = String(request.headers.cookie || '');
-  const entry = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${SESSION_COOKIE}=`));
-  return entry ? decodeURIComponent(entry.slice(SESSION_COOKIE.length + 1)) : null;
+  const entry = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${cookieName}=`));
+  return entry ? decodeURIComponent(entry.slice(cookieName.length + 1)) : null;
 }
 
 async function getSession(request) {
-  const token = readSessionToken(request);
+  const urlPath = String(request.url || '').split('?')[0];
+  const isAdminRoute = urlPath.startsWith('/admin') || urlPath.startsWith('/api/admin');
+
+  if (isAdminRoute) {
+    const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE);
+    if (adminToken && adminToken.length <= 128) {
+      const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest();
+      const adminRes = await db.query(
+        `SELECT u.id, u.username, u.name, u.role, s.impersonated_by FROM user_sessions s
+         JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active' AND u.deleted_at IS NULL AND u.role = 'admin'`,
+        [adminTokenHash],
+      );
+      if (adminRes.rows[0]) return adminRes.rows[0];
+    }
+  }
+
+  const token = readSessionToken(request, SESSION_COOKIE);
   if (!token || token.length > 128) return null;
   const tokenHash = crypto.createHash('sha256').update(token).digest();
   const result = await db.query(
-    `SELECT u.id, u.username, u.name, u.role FROM user_sessions s
+    `SELECT u.id, u.username, u.name, u.role, s.impersonated_by FROM user_sessions s
      JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active' AND u.deleted_at IS NULL`,
+     WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND (u.status = 'active' OR s.impersonated_by IS NOT NULL) AND u.deleted_at IS NULL`,
     [tokenHash],
   );
   return result.rows[0] || null;
@@ -1816,6 +1835,10 @@ async function getSession(request) {
 
 function sessionCookie(token, maxAge) {
   return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${IS_PRODUCTION ? '; Secure' : ''}`;
+}
+
+function adminSessionCookie(token, maxAge) {
+  return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${IS_PRODUCTION ? '; Secure' : ''}`;
 }
 
 async function loginUser(request, response) {
@@ -2026,12 +2049,27 @@ async function loginUser(request, response) {
 async function logoutUser(request, response) {
   checkSameOrigin(request);
   const token = readSessionToken(request);
+  const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE);
   if (token) {
     const tokenHash = crypto.createHash('sha256').update(token).digest();
     await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
     await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
   }
-  sendJson(response, 200, { message: 'Logged out successfully.' }, { 'set-cookie': sessionCookie('', 0) });
+  if (adminToken) {
+    sendJson(response, 200, { message: 'Exited user view.', redirect: '/admin/users/list' }, {
+      'set-cookie': [
+        sessionCookie(adminToken, SESSION_DURATION_SECONDS),
+        adminSessionCookie('', 0),
+      ],
+    });
+    return;
+  }
+  sendJson(response, 200, { message: 'Logged out successfully.' }, {
+    'set-cookie': [
+      sessionCookie('', 0),
+      adminSessionCookie('', 0),
+    ],
+  });
 }
 
 const { USER_PANEL_PAGES } = require('./config/user-panel-menu');
@@ -3103,6 +3141,108 @@ async function deleteManagedUserSellerApi(request, response, userId, apiId) {
   );
   if (!res.rowCount) throw httpError('Seller API not found.', 404);
   sendJson(response, 200, { ok: true, message: 'Seller API deleted successfully.' });
+}
+
+async function handleSwitchToUser(request, response, userId) {
+  checkSameOrigin(request);
+  const admin = await getSession(request);
+  if (!admin) throw httpError('Login required.', 401);
+  if (admin.role !== 'admin') throw httpError('This feature is only available to Admin.', 403);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(userId)) {
+    throw httpError('User ID is invalid.', 400);
+  }
+
+  const userRes = await db.query(
+    `SELECT id, username, name, role, status FROM users WHERE id = $1 AND role = 'user' AND deleted_at IS NULL`,
+    [userId],
+  );
+  if (!userRes.rowCount) throw httpError('User not found.', 404);
+  const targetUser = userRes.rows[0];
+
+  const userToken = crypto.randomBytes(32).toString('base64url');
+  const userTokenHash = crypto.createHash('sha256').update(userToken).digest();
+
+  await db.query(
+    `INSERT INTO user_sessions (user_id, token_hash, expires_at, impersonated_by)
+     VALUES ($1, $2, now() + interval '12 hours', $3)`,
+    [targetUser.id, userTokenHash, admin.id],
+  );
+
+  const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE) || readSessionToken(request, SESSION_COOKIE);
+
+  const cookies = [
+    sessionCookie(userToken, SESSION_DURATION_SECONDS),
+  ];
+  if (adminToken) {
+    cookies.push(adminSessionCookie(adminToken, SESSION_DURATION_SECONDS));
+  }
+
+  try {
+    await db.query(
+      `INSERT INTO audit_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'admin_switch_to_user', 'user', $2, $3)`,
+      [admin.id, targetUser.id, JSON.stringify({ userId: targetUser.username, name: targetUser.name })],
+    );
+  } catch (_) {}
+
+  const accept = String(request.headers.accept || '');
+  if (request.url.startsWith('/api/') || (accept.includes('application/json') && !accept.includes('text/html'))) {
+    sendJson(response, 200, {
+      ok: true,
+      message: `Switched to user ${targetUser.username}`,
+      redirect: '/dashboard',
+      user: { id: targetUser.id, username: targetUser.username, name: targetUser.name },
+    }, { 'set-cookie': cookies });
+    return;
+  }
+
+  response.writeHead(302, {
+    location: '/dashboard',
+    'set-cookie': cookies,
+  });
+  response.end();
+}
+
+async function handleSwitchBackToAdmin(request, response) {
+  checkSameOrigin(request);
+  const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE) || readSessionToken(request, SESSION_COOKIE);
+  const userToken = readSessionToken(request, SESSION_COOKIE);
+
+  if (userToken) {
+    const userTokenHash = crypto.createHash('sha256').update(userToken).digest();
+    await db.query(
+      `UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND impersonated_by IS NOT NULL`,
+      [userTokenHash],
+    ).catch(() => {});
+  }
+
+  if (adminToken) {
+    const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest();
+    const adminCheck = await db.query(
+      `SELECT u.id, u.role FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.role = 'admin'`,
+      [adminTokenHash],
+    );
+    if (adminCheck.rowCount) {
+      response.writeHead(302, {
+        location: '/admin/users/list',
+        'set-cookie': [
+          sessionCookie(adminToken, SESSION_DURATION_SECONDS),
+          adminSessionCookie('', 0),
+        ],
+      });
+      response.end();
+      return;
+    }
+  }
+
+  response.writeHead(302, {
+    location: '/admin/login',
+    'set-cookie': [
+      sessionCookie('', 0),
+      adminSessionCookie('', 0),
+    ],
+  });
+  response.end();
 }
 
 async function sendFundRequestProof(request, response, requestId) {
@@ -4794,6 +4934,18 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
+      const userSwitchMatch = url.pathname.match(/^\/admin\/users\/([0-9a-f-]{36})\/switch$/i) ||
+                              url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/switch$/i);
+      if (userSwitchMatch) {
+        await handleSwitchToUser(request, response, userSwitchMatch[1]);
+        statusCode = response.statusCode || 302;
+        return;
+      }
+      if (url.pathname === '/admin/switch-back' || url.pathname === '/admin/users/switch-back') {
+        await handleSwitchBackToAdmin(request, response);
+        statusCode = response.statusCode || 302;
+        return;
+      }
       const proofMatch = url.pathname.match(/^\/admin\/payment\/fund-request\/proof\/([0-9a-f-]{36})$/i);
       if (proofMatch) {
         await sendFundRequestProof(request, response, proofMatch[1]);
@@ -5327,6 +5479,12 @@ async function handleRequest(request, response) {
       const userConfigurePostMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/configure$/i);
       if (userConfigurePostMatch) {
         await updateManagedUserConfigure(request, response, userConfigurePostMatch[1]);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      const userSwitchPostMatch = url.pathname.match(/^\/api\/admin\/users\/([0-9a-f-]{36})\/switch$/i);
+      if (userSwitchPostMatch) {
+        await handleSwitchToUser(request, response, userSwitchPostMatch[1]);
         statusCode = response.statusCode || 200;
         return;
       }
@@ -6929,21 +7087,23 @@ async function handleRequest(request, response) {
         if (!isIp) throw httpError('Invalid IP address format.', 400);
 
         const challengeKey = `user_ip:${session.id}`;
-        const challenge = await db.query(
-          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
-           WHERE phone_lookup_hash = $1`,
-          [challengeKey],
-        );
-        const row = challenge.rows[0];
-        if (!row || row.purpose !== 'ip_add' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
-          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
-        }
-        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_add'))) {
-          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
-          throw httpError('Incorrect OTP entered.', 400);
-        }
+        if (!session.impersonated_by) {
+          const challenge = await db.query(
+            `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+             WHERE phone_lookup_hash = $1`,
+            [challengeKey],
+          );
+          const row = challenge.rows[0];
+          if (!row || row.purpose !== 'ip_add' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+            throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+          }
+          if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_add'))) {
+            await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+            throw httpError('Incorrect OTP entered.', 400);
+          }
 
-        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+          await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+        }
 
         await db.query(
           `INSERT INTO user_whitelisted_ips (user_id, ip_address, status)
@@ -6970,21 +7130,23 @@ async function handleRequest(request, response) {
         if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
 
         const challengeKey = `user_ip:${session.id}`;
-        const challenge = await db.query(
-          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
-           WHERE phone_lookup_hash = $1`,
-          [challengeKey],
-        );
-        const row = challenge.rows[0];
-        if (!row || row.purpose !== 'ip_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
-          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
-        }
-        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_delete'))) {
-          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
-          throw httpError('Incorrect OTP entered.', 400);
-        }
+        if (!session.impersonated_by) {
+          const challenge = await db.query(
+            `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+             WHERE phone_lookup_hash = $1`,
+            [challengeKey],
+          );
+          const row = challenge.rows[0];
+          if (!row || row.purpose !== 'ip_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+            throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+          }
+          if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'ip_delete'))) {
+            await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+            throw httpError('Incorrect OTP entered.', 400);
+          }
 
-        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+          await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+        }
 
         await db.query(
           `DELETE FROM user_whitelisted_ips WHERE id = $1 AND user_id = $2`,
@@ -7086,21 +7248,23 @@ async function handleRequest(request, response) {
         if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
 
         const challengeKey = `user_cb:${session.id}`;
-        const challenge = await db.query(
-          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
-           WHERE phone_lookup_hash = $1`,
-          [challengeKey],
-        );
-        const row = challenge.rows[0];
-        if (!row || row.purpose !== 'callback_save' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
-          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
-        }
-        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_save'))) {
-          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
-          throw httpError('Incorrect OTP entered.', 400);
-        }
+        if (!session.impersonated_by) {
+          const challenge = await db.query(
+            `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+             WHERE phone_lookup_hash = $1`,
+            [challengeKey],
+          );
+          const row = challenge.rows[0];
+          if (!row || row.purpose !== 'callback_save' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+            throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+          }
+          if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_save'))) {
+            await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+            throw httpError('Incorrect OTP entered.', 400);
+          }
 
-        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+          await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+        }
 
         await db.query(
           'UPDATE users SET callback_url = $1, updated_at = now() WHERE id = $2',
@@ -7123,21 +7287,23 @@ async function handleRequest(request, response) {
         if (!/^\d{6}$/.test(otp)) throw httpError('6-digit OTP is required.', 400);
 
         const challengeKey = `user_cb:${session.id}`;
-        const challenge = await db.query(
-          `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
-           WHERE phone_lookup_hash = $1`,
-          [challengeKey],
-        );
-        const row = challenge.rows[0];
-        if (!row || row.purpose !== 'callback_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
-          throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
-        }
-        if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_delete'))) {
-          await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
-          throw httpError('Incorrect OTP entered.', 400);
-        }
+        if (!session.impersonated_by) {
+          const challenge = await db.query(
+            `SELECT otp_hash, purpose, expires_at, attempts, consumed_at FROM otp_challenges
+             WHERE phone_lookup_hash = $1`,
+            [challengeKey],
+          );
+          const row = challenge.rows[0];
+          if (!row || row.purpose !== 'callback_delete' || row.consumed_at || new Date(row.expires_at) <= new Date() || row.attempts >= 5) {
+            throw httpError('OTP expired or invalid. Please request a new OTP.', 400);
+          }
+          if (!constantTimeEqual(row.otp_hash, otpDigest(challengeKey, otp, 'callback_delete'))) {
+            await db.query('UPDATE otp_challenges SET attempts = attempts + 1 WHERE phone_lookup_hash = $1', [challengeKey]);
+            throw httpError('Incorrect OTP entered.', 400);
+          }
 
-        await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+          await db.query('UPDATE otp_challenges SET consumed_at = now() WHERE phone_lookup_hash = $1', [challengeKey]);
+        }
 
         await db.query(
           'UPDATE users SET callback_url = NULL, updated_at = now() WHERE id = $1',
