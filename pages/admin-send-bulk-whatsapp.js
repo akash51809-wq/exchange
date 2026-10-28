@@ -293,7 +293,7 @@ module.exports = function createAdminSendBulkWhatsappPage({ db, decryptMobile })
                           <tbody>
                             <tr>
                               <td><span class="keyword-badge" id="btnInsertName">[NAME]</span></td>
-                              <td class="font-weight-bold text-dark">Firm Name</td>
+                              <td class="font-weight-bold text-dark">Firm Name / User Name (e.g. goyalpay)</td>
                               <td class="text-center">
                                 <button type="button" class="btn btn-xs btn-outline-primary btn-insert-keyword" data-keyword="[NAME]">
                                   <i class="fa fa-plus mr-1"></i>Insert

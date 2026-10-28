@@ -150,6 +150,7 @@ const {
   DEFAULT_NOTIFICATION_TEMPLATES,
   seedNotificationTemplates,
   sendNotificationEvent,
+  formatBulkPersonalizedText,
 } = require('./lib/notification-service');
 const { fetchOperatorLookup } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
@@ -6055,7 +6056,7 @@ async function handleRequest(request, response) {
             userMobile = String(userMobile || '').replace(/\D/g, '');
 
             const firmName = String(user.name || user.username || 'User').trim();
-            const personalizedMsg = rawMessage.replace(/\[NAME\]/gi, firmName);
+            const personalizedMsg = formatBulkPersonalizedText(rawMessage, user);
 
             if (!userMobile || userMobile.length < 10) continue;
 
@@ -6154,8 +6155,8 @@ async function handleRequest(request, response) {
             const userEmail = String(user.email || '').trim().toLowerCase();
             const firmName = String(user.name || user.username || 'User').trim();
 
-            const personalizedSubject = rawSubject.replace(/\[NAME\]/gi, firmName);
-            const personalizedBody = rawMessage.replace(/\[NAME\]/gi, firmName);
+            const personalizedSubject = formatBulkPersonalizedText(rawSubject, user);
+            const personalizedBody = formatBulkPersonalizedText(rawMessage, user);
 
             if (!userEmail || !userEmail.includes('@')) continue;
 

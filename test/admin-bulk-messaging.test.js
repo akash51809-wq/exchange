@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const { ADMIN_PANEL_MENU, renderAdminNavigation } = require('../config/admin-panel-menu');
 const createAdminSendBulkWhatsappPage = require('../pages/admin-send-bulk-whatsapp');
 const createAdminSendBulkEmailPage = require('../pages/admin-send-bulk-email');
-const { logSentMessage } = require('../lib/notification-service');
+const { logSentMessage, formatBulkPersonalizedText } = require('../lib/notification-service');
 
 test('Admin Navigation Menu - Bulk WhatsApp & Bulk Email Menu Items in Settings', () => {
   const settingsMenu = ADMIN_PANEL_MENU.find(m => m.label === 'Settings');
@@ -176,24 +176,46 @@ test('Send Bulk Email Page - Top Navigation Bar & Clean Component Elements', asy
 test('Bulk WhatsApp & Email Keyword Personalization Replacement', () => {
   const user = {
     id: 'u-1',
-    name: 'Shree Krishna Telecom',
-    username: 'sktelecom',
+    name: 'GOYALPAY',
+    username: '9839680707',
   };
 
-  const firmName = user.name || user.username || 'User';
+  // Exact user case tested live
+  const sampleMsg = 'hi [NAME], \nThis is testing message.';
+  const formattedMsg = formatBulkPersonalizedText(sampleMsg, user);
+  assert.equal(formattedMsg, 'hi GOYALPAY, \nThis is testing message.');
 
-  const waTemplate = 'Dear [NAME], exciting new offers are now live on your portal account!';
-  const personalizedWa = waTemplate.replace(/\[NAME\]/gi, firmName);
-  assert.equal(personalizedWa, 'Dear Shree Krishna Telecom, exciting new offers are now live on your portal account!');
+  // Lowercase & case-insensitive variations
+  assert.equal(formatBulkPersonalizedText('hi [name], welcome!', user), 'hi GOYALPAY, welcome!');
+  assert.equal(formatBulkPersonalizedText('hi [Name], welcome!', user), 'hi GOYALPAY, welcome!');
+  assert.equal(formatBulkPersonalizedText('hi [ NAME ], welcome!', user), 'hi GOYALPAY, welcome!');
+  assert.equal(formatBulkPersonalizedText('hi [FIRM_NAME], welcome!', user), 'hi GOYALPAY, welcome!');
 
+  // Username keyword replacement
+  assert.equal(
+    formatBulkPersonalizedText('Account: [NAME], Login: [USERNAME]', user),
+    'Account: GOYALPAY, Login: 9839680707'
+  );
+
+  // Curly braces format
+  assert.equal(formatBulkPersonalizedText('hi {{name}}, welcome!', user), 'hi GOYALPAY, welcome!');
+
+  // Fallback when name is empty/null
+  const userNoName = { id: 'u-2', name: '', username: 'goyalpay' };
+  assert.equal(
+    formatBulkPersonalizedText('hi [NAME], \nThis is testing message.', userNoName),
+    'hi goyalpay, \nThis is testing message.'
+  );
+
+  // Email subject & body
   const emailSubjectTmpl = 'Notice for [NAME] regarding wallet limits';
   const emailBodyTmpl = 'Hello [NAME],\n\nPlease verify your profile.\n\nRegards,\nExchange Portal';
 
-  const personalizedSubject = emailSubjectTmpl.replace(/\[NAME\]/gi, firmName);
-  const personalizedBody = emailBodyTmpl.replace(/\[NAME\]/gi, firmName);
+  const personalizedSubject = formatBulkPersonalizedText(emailSubjectTmpl, user);
+  const personalizedBody = formatBulkPersonalizedText(emailBodyTmpl, user);
 
-  assert.equal(personalizedSubject, 'Notice for Shree Krishna Telecom regarding wallet limits');
-  assert.ok(personalizedBody.includes('Hello Shree Krishna Telecom,'));
+  assert.equal(personalizedSubject, 'Notice for GOYALPAY regarding wallet limits');
+  assert.ok(personalizedBody.includes('Hello GOYALPAY,'));
 });
 
 test('Bulk Messaging Sent Log Integration - logSentMessage with msgType', async () => {
