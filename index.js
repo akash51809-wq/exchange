@@ -99,6 +99,13 @@ const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
 const createAdminNotificationsPage = require('./pages/admin-notifications');
 const createAdminSendBulkWhatsappPage = require('./pages/admin-send-bulk-whatsapp');
 const createAdminSendBulkEmailPage = require('./pages/admin-send-bulk-email');
+const createAdminIncomingSmsPage = require('./pages/admin-incoming-sms');
+const {
+  processIncomingSms,
+  parseIncomingBankSms,
+  autoMatchPendingFundRequestOnSubmission,
+  getIncomingSmsConfig,
+} = require('./lib/incoming-sms-service');
 const createAdminApiSettingPage = require('./pages/admin-api-setting');
 const {
   DEFAULT_DEVELOPER_APIS,
@@ -241,6 +248,7 @@ const {
   handleSavePlanApiSettings,
   handleTestPlanApi,
   handleSaveMarginDifferenceSettings,
+  handleSaveIncomingSmsSettings,
 } = createAdminServiceSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
 const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
 const { sendUserKycPage } = createUserKycPage({ db });
@@ -376,6 +384,13 @@ const {
   sendAdminSendBulkEmailPage,
 } = createAdminSendBulkEmailPage({
   db,
+});
+const {
+  sendAdminIncomingSmsPage,
+} = createAdminIncomingSmsPage({
+  db,
+  decryptServiceConfig,
+  formatMinorUnits,
 });
 const {
   sendAdminApiSettingPage,
@@ -640,6 +655,26 @@ const DATABASE_SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS seller_api_integration_requests_user_idx ON seller_api_integration_requests (user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS seller_api_integration_requests_status_idx ON seller_api_integration_requests (status, created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS incoming_sms_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    sender TEXT,
+    raw_message TEXT NOT NULL,
+    sim_slot TEXT DEFAULT '0',
+    parsed_amount_minor BIGINT,
+    parsed_utr TEXT,
+    parsed_bank TEXT,
+    match_status TEXT NOT NULL DEFAULT 'unmatched',
+    matched_fund_request_id UUID REFERENCES wallet_fund_requests(id) ON DELETE SET NULL,
+    matched_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    processed_at TIMESTAMPTZ,
+    auto_approval_note TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  );
+  CREATE INDEX IF NOT EXISTS incoming_sms_logs_created_idx ON incoming_sms_logs (created_at DESC);
+  CREATE INDEX IF NOT EXISTS incoming_sms_logs_utr_idx ON incoming_sms_logs (parsed_utr);
+  CREATE INDEX IF NOT EXISTS incoming_sms_logs_status_idx ON incoming_sms_logs (match_status);
 
   CREATE TABLE IF NOT EXISTS seller_margin_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1172,6 +1207,43 @@ function readJson(request, maxBytes = MAX_JSON_BYTES) {
       } catch {
         reject(Object.assign(new Error('Malformed JSON payload.'), { statusCode: 400 }));
       }
+    });
+    request.on('error', reject);
+  });
+}
+
+function readWebhookPayload(request, maxBytes = MAX_JSON_BYTES) {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks = [];
+    request.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > maxBytes) {
+        reject(Object.assign(new Error('Request size exceeds allowed limit.'), { statusCode: 413 }));
+        request.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    request.on('end', () => {
+      const rawText = Buffer.concat(chunks).toString('utf8');
+      const cType = String(request.headers['content-type'] || '').toLowerCase();
+      if (cType.includes('application/json') || (rawText.trim().startsWith('{') && rawText.trim().endsWith('}'))) {
+        try {
+          const parsed = JSON.parse(rawText);
+          resolve(parsed && typeof parsed === 'object' ? parsed : { message: rawText });
+          return;
+        } catch (_) {}
+      }
+      if (rawText.includes('=')) {
+        try {
+          const sp = new URLSearchParams(rawText);
+          const obj = Object.fromEntries(sp.entries());
+          resolve(obj);
+          return;
+        } catch (_) {}
+      }
+      resolve({ message: rawText });
     });
     request.on('error', reject);
   });
@@ -2356,7 +2428,30 @@ async function createFundRequest(request, response) {
     }).catch(() => {});
   } catch (_) {}
 
-  sendJson(response, 201, { requestId: reqId, status: saved.rows[0].status, amount: formattedAmt });
+  // Auto-match if matching incoming SMS was pre-received
+  let autoMatchRes = null;
+  try {
+    autoMatchRes = await autoMatchPendingFundRequestOnSubmission({
+      db,
+      fundRequestId: reqId,
+      userId: user.id,
+      amountMinor,
+      transactionId,
+      formatMinorUnits,
+      sendNotificationEvent,
+      decryptServiceConfig,
+      decryptMobile,
+    });
+  } catch (_) {}
+
+  const finalStatus = autoMatchRes && autoMatchRes.autoApproved ? 'approved' : saved.rows[0].status;
+  sendJson(response, 201, {
+    requestId: reqId,
+    status: finalStatus,
+    amount: formattedAmt,
+    autoApproved: Boolean(autoMatchRes && autoMatchRes.autoApproved),
+    message: autoMatchRes && autoMatchRes.autoApproved ? 'Payment auto-approved via matching bank SMS!' : 'Fund request submitted successfully.',
+  });
 }
 
 async function decideFundRequest(request, response, requestId) {
@@ -4700,6 +4795,18 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (url.pathname === '/admin/reports/incoming-sms' || url.pathname === '/admin/incoming-sms' || url.pathname === '/admin/settings/incoming-sms') {
+        const admin = await getSession(request);
+        if (!admin) {
+          redirectTo(response, '/admin/login');
+          statusCode = 302;
+          return;
+        }
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminIncomingSmsPage(admin, response, url);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/user/invoices/download') {
         const user = await getSession(request);
         if (!user) throw httpError('login required', 401);
@@ -5909,6 +6016,116 @@ async function handleRequest(request, response) {
         const input = await readJson(request);
         await handleSaveMarginDifferenceSettings(request, response, input);
         statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/services/incoming-sms' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleSaveIncomingSmsSettings(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/services/incoming-sms/test' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        const simRes = await processIncomingSms({
+          db,
+          decryptServiceConfig,
+          encryptFundField,
+          decryptFundField,
+          fundFieldHash,
+          formatMinorUnits,
+          sendNotificationEvent,
+          decryptMobile,
+          sender: input.sender || 'TEST-BANK',
+          rawMessage: input.message || '',
+          simSlot: input.sim || '0',
+          rawPayload: input,
+          isSimulation: true,
+        });
+        sendJson(response, 200, simRes);
+        statusCode = 200;
+        return;
+      }
+      if (
+        (url.pathname === '/api/webhook/incoming-sms' || url.pathname === '/api/incoming-sms') &&
+        (request.method === 'POST' || request.method === 'GET')
+      ) {
+        const incConfig = await getIncomingSmsConfig(db, decryptServiceConfig);
+        if (!incConfig.isEnabled) {
+          sendJson(response, 403, { ok: false, error: 'Incoming SMS service is disabled in Service Settings.' });
+          statusCode = 403;
+          return;
+        }
+
+        let input = {};
+        if (request.method === 'POST') {
+          input = await readWebhookPayload(request);
+        } else {
+          input = Object.fromEntries(url.searchParams.entries());
+        }
+
+        for (const [k, v] of url.searchParams.entries()) {
+          if (!input[k]) input[k] = v;
+        }
+
+        if (incConfig.secretKey) {
+          const authHeader = String(request.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+          const apiKeyHeader = String(request.headers['x-api-key'] || '').trim();
+          const providedToken = String(input.token || input.secret || input.apiKey || input.key || authHeader || apiKeyHeader).trim();
+
+          if (providedToken !== incConfig.secretKey) {
+            sendJson(response, 401, { ok: false, error: 'Unauthorized: Invalid or missing webhook secret key.' });
+            statusCode = 401;
+            return;
+          }
+        }
+
+        const sender = String(input.sender || input.from || input.address || input.phone || input.sender_number || input.senderId || input.title || 'Unknown').trim();
+        if (incConfig.allowedSenders && incConfig.allowedSenders.trim()) {
+          const allowedList = incConfig.allowedSenders.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+          const senderLower = sender.toLowerCase();
+          const isAllowed = allowedList.some(a => senderLower.includes(a));
+          if (!isAllowed) {
+            sendJson(response, 200, { ok: true, ignored: true, reason: 'Sender not in whitelist.' });
+            statusCode = 200;
+            return;
+          }
+        }
+
+        const rawMessage = String(input.message || input.text || input.msg || input.body || input.content || input.sms || '').trim();
+        const simSlot = String(input.sim || input.sim_slot || input.simSlot || input.slot || '0').trim();
+
+        if (!rawMessage) {
+          sendJson(response, 400, { ok: false, error: 'SMS message text is required (message, text, msg, or body).' });
+          statusCode = 400;
+          return;
+        }
+
+        const procRes = await processIncomingSms({
+          db,
+          decryptServiceConfig,
+          encryptFundField,
+          decryptFundField,
+          fundFieldHash,
+          formatMinorUnits,
+          sendNotificationEvent,
+          decryptMobile,
+          sender,
+          rawMessage,
+          simSlot,
+          rawPayload: input,
+          isSimulation: false,
+        });
+
+        sendJson(response, 200, procRes);
+        statusCode = 200;
         return;
       }
       if (url.pathname === '/api/admin/settings/notifications' && request.method === 'GET') {

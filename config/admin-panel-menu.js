@@ -32,6 +32,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'Fake Complaint Ratio', path: '/admin/reports/fake-complaint-ratio' },
     { label: 'Recharge Log', path: '/admin/reports/recharge-log' },
     { label: 'User Send Msg Log', path: '/admin/reports/user-send-msg-log' },
+    { label: 'Incoming SMS Log', path: '/admin/reports/incoming-sms' },
     { label: 'Invoices', path: '/admin/invoice' },
   ] },
   { label: 'Settings', path: '#', items: [

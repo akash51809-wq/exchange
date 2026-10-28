@@ -403,6 +403,9 @@ module.exports = function createAdminServiceSettingsPage({
                 <button type="button" class="settings-tab-btn" data-target="#tabSms">
                   <i class="fa fa-commenting-o"></i> SMS Gateway
                 </button>
+                <button type="button" class="settings-tab-btn" data-target="#tabIncomingSms">
+                  <i class="fa fa-inbox"></i> Incoming SMS
+                </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabTelegram">
                   <i class="fa fa-telegram"></i> Telegram Bot <span class="badge-future">Coming Soon</span>
                 </button>
@@ -1512,6 +1515,154 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
+            <!-- 5.5 INCOMING SMS & WEBHOOK TAB -->
+            <!-- ========================================== -->
+            <div class="tab-pane" id="tabIncomingSms">
+              <div class="settings-panel-card">
+                <div class="settings-panel-header">
+                  <h5><i class="fa fa-inbox text-primary"></i> Incoming SMS &amp; Webhook Receiver (Auto Payment Topup)</h5>
+                  <div class="custom-control custom-switch custom-switch-lg">
+                    <input type="checkbox" class="custom-control-input" id="incomingSmsEnabled" checked>
+                    <label class="custom-control-label" for="incomingSmsEnabled" id="incomingSmsEnabledLabel">Incoming SMS Enabled</label>
+                  </div>
+                </div>
+                <div class="settings-panel-body">
+
+                  <div class="help-callout">
+                    <strong><i class="fa fa-info-circle"></i> Automated Buyer Payment Approval:</strong>
+                    <p class="mb-1">Configure your SMS forwarder app (e.g. Android SMS Forwarder / Tasker / MacroDroid / SMS Gateway) to forward all incoming bank transaction SMS to the Webhook URL below.</p>
+                    <p class="mb-1">When an incoming bank SMS arrives with a credited amount and UTR / UPI reference number, the system automatically verifies and approves the buyer's pending Wallet Fund Request instantly!</p>
+                    <p class="mb-0">Supported Methods: <code>POST</code> (JSON or Form URL-encoded) and <code>GET</code> query parameters.</p>
+                  </div>
+
+                  <form id="incomingSmsForm">
+                    <div class="row">
+                      <div class="col-md-8 form-group">
+                        <label class="font-weight-bold text-dark mb-1">
+                          <i class="fa fa-link text-primary mr-1"></i> Incoming SMS Webhook URL *
+                        </label>
+                        <div class="input-group">
+                          <input type="text" id="serviceIncomingSmsWebhookUrl" class="form-control font-monospace" readonly value="">
+                          <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-primary font-weight-bold" id="btnCopyServiceWebhookUrl">
+                              <i class="fa fa-copy mr-1"></i> Copy URL
+                            </button>
+                          </div>
+                        </div>
+                        <small class="form-text text-muted">Set this URL in your SMS forwarder app or message panel webhook settings.</small>
+                      </div>
+
+                      <div class="col-md-4 form-group">
+                        <label for="incomingSmsSecretKey" class="font-weight-bold text-dark mb-1">
+                          <i class="fa fa-key text-warning mr-1"></i> Webhook Secret Key / Token (Optional)
+                        </label>
+                        <div class="input-group">
+                          <input type="text" id="incomingSmsSecretKey" class="form-control font-monospace" placeholder="e.g. secret_token_xyz">
+                          <div class="input-group-append">
+                            <button type="button" class="btn btn-outline-secondary" id="btnGenSecretKey" title="Generate Random Key">
+                              <i class="fa fa-refresh"></i>
+                            </button>
+                          </div>
+                        </div>
+                        <small class="form-text text-muted">Leave empty to accept messages without token authentication.</small>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="col-md-6 form-group">
+                        <div class="card p-3 bg-light border">
+                          <div class="custom-control custom-checkbox">
+                            <input type="checkbox" class="custom-control-input" id="incomingSmsAutoCredit" checked>
+                            <label class="custom-control-label font-weight-bold text-dark" for="incomingSmsAutoCredit">
+                              <i class="fa fa-bolt text-warning mr-1"></i> Auto-Update Buyer Payment Request
+                            </label>
+                          </div>
+                          <small class="text-muted mt-1 d-block">
+                            When enabled, pending buyer fund requests with matching UTR reference numbers will be automatically approved and credited to the buyer wallet immediately upon SMS arrival.
+                          </small>
+                        </div>
+                      </div>
+
+                      <div class="col-md-6 form-group">
+                        <label for="incomingSmsAllowedSenders" class="font-weight-bold text-dark mb-1">
+                          <i class="fa fa-filter text-info mr-1"></i> Bank Sender Whitelist (Optional)
+                        </label>
+                        <input type="text" id="incomingSmsAllowedSenders" class="form-control" placeholder="SBI, HDFC, ICICI, AXIS, PNB, BOB, KOTAK (or leave blank for all)">
+                        <small class="form-text text-muted">Comma-separated sender IDs or bank names to accept. Leave blank to process all incoming SMS.</small>
+                      </div>
+                    </div>
+
+                    <!-- Webhook Parameters Reference -->
+                    <div class="card mb-3 border-info" style="background:#f0f9ff; border-radius:8px;">
+                      <div class="card-body p-3">
+                        <div class="font-weight-bold text-primary mb-2" style="font-size:13px;">
+                          <i class="fa fa-code mr-1"></i> Supported Webhook Request Formats:
+                        </div>
+                        <div class="row">
+                          <div class="col-md-6">
+                            <div class="small font-weight-bold mb-1">1. HTTP POST JSON Payload:</div>
+                            <pre class="bg-dark text-success p-2 rounded small mb-2 font-monospace">{
+  "sender": "VM-SBIINB",
+  "message": "Dear User, A/C ... credited by Rs 2000 ... ref 430291827364",
+  "sim": "0",
+  "token": "YOUR_SECRET_KEY"
+}</pre>
+                          </div>
+                          <div class="col-md-6">
+                            <div class="small font-weight-bold mb-1">2. HTTP GET or Form-Urlencoded:</div>
+                            <pre class="bg-dark text-info p-2 rounded small mb-2 font-monospace">GET /api/webhook/incoming-sms?sender=AX-HDFCBK&amp;message=...credited...&amp;token=YOUR_SECRET_KEY</pre>
+                            <small class="text-muted d-block">System automatically accepts <code>sender</code>, <code>message</code> (or <code>text</code>, <code>msg</code>, <code>body</code>), <code>sim</code>, and <code>token</code>.</small>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top flex-wrap" style="gap:10px;">
+                      <div>
+                        <button type="submit" class="btn btn-primary font-weight-bold" id="btnSaveIncomingSms">
+                          <i class="fa fa-save mr-1"></i> Save Incoming SMS Settings
+                        </button>
+                        <span class="text-muted small ml-2" id="incomingSmsSaveStatus"></span>
+                      </div>
+                      <a href="/admin/reports/incoming-sms" class="btn btn-outline-info font-weight-bold">
+                        <i class="fa fa-bar-chart mr-1"></i> View Incoming SMS Chart &amp; Logs
+                      </a>
+                    </div>
+                  </form>
+
+                  <!-- Test Incoming SMS Box -->
+                  <div class="test-box-card mt-4">
+                    <h6 class="font-weight-bold text-dark mb-2"><i class="fa fa-bolt text-warning mr-1"></i> Live Simulator: Test Incoming Bank Credit SMS</h6>
+                    <p class="text-muted small mb-3">Simulate an incoming SMS message to verify parser extraction (Amount, UTR, Bank) and test buyer auto-credit live.</p>
+                    <div class="row align-items-end">
+                      <div class="col-md-3 form-group mb-md-0">
+                        <label for="testIncomingBankSelect" class="small font-weight-bold">Select Template</label>
+                        <select id="testIncomingBankSelect" class="form-control form-control-sm">
+                          <option value="sbi">SBI (Rs. 2,000.00)</option>
+                          <option value="hdfc">HDFC (Rs. 5,000.00)</option>
+                          <option value="icici">ICICI (Rs. 1,500.00)</option>
+                          <option value="axis">Axis (Rs. 3,000.00)</option>
+                          <option value="custom">Custom SMS</option>
+                        </select>
+                      </div>
+                      <div class="col-md-6 form-group mb-md-0">
+                        <label for="testIncomingSmsMsg" class="small font-weight-bold">SMS Text to Simulate</label>
+                        <input type="text" id="testIncomingSmsMsg" class="form-control form-control-sm font-monospace" value="Dear SBI User, your A/C ending 1234 has been credited by Rs. 2,000.00 on 28-10-26 by UPI ref no 430291827364.">
+                      </div>
+                      <div class="col-md-3">
+                        <button type="button" class="btn btn-info btn-block btn-sm font-weight-bold" id="btnTestIncomingSms">
+                          <i class="fa fa-play mr-1"></i> Test &amp; Simulate
+                        </button>
+                      </div>
+                    </div>
+                    <div id="testIncomingSmsAlert" class="mt-3" style="display: none;"></div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- ========================================== -->
             <!-- 5. TELEGRAM BOT TAB (COMING SOON) -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabTelegram">
@@ -1848,6 +1999,30 @@ module.exports = function createAdminServiceSettingsPage({
           const postRow = document.getElementById('smsPostOptionsRow');
           if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
         }
+        // Populate Incoming SMS
+        if (data.incoming_sms) {
+          const inc = data.incoming_sms;
+          const incSwitch = document.getElementById('incomingSmsEnabled');
+          const incLabel = document.getElementById('incomingSmsEnabledLabel');
+          if (incSwitch && incLabel) {
+            incSwitch.checked = Boolean(inc.isEnabled);
+            incLabel.textContent = incSwitch.checked ? 'Incoming SMS Enabled' : 'Incoming SMS Disabled';
+            incLabel.style.color = incSwitch.checked ? '#16a34a' : '#64748b';
+          }
+          if (document.getElementById('incomingSmsAutoCredit')) {
+            document.getElementById('incomingSmsAutoCredit').checked = inc.autoUpdatePayment !== false;
+          }
+          if (document.getElementById('incomingSmsSecretKey')) {
+            document.getElementById('incomingSmsSecretKey').value = inc.secretKey || '';
+          }
+          if (document.getElementById('incomingSmsAllowedSenders')) {
+            document.getElementById('incomingSmsAllowedSenders').value = inc.allowedSenders || '';
+          }
+        }
+        if (document.getElementById('serviceIncomingSmsWebhookUrl')) {
+          document.getElementById('serviceIncomingSmsWebhookUrl').value = window.location.origin + '/api/webhook/incoming-sms';
+        }
+
         // Populate Plan API (ezytm plan API)
         if (data.plan_api || data.planApi) {
           const p = data.plan_api || data.planApi;
@@ -2022,6 +2197,123 @@ module.exports = function createAdminServiceSettingsPage({
       }
     });
 
+
+    // Incoming SMS Switch Label update
+    const incSwitch = document.getElementById('incomingSmsEnabled');
+    const incLabel = document.getElementById('incomingSmsEnabledLabel');
+    if (incSwitch && incLabel) {
+      incSwitch.addEventListener('change', () => {
+        incLabel.textContent = incSwitch.checked ? 'Incoming SMS Enabled' : 'Incoming SMS Disabled';
+        incLabel.style.color = incSwitch.checked ? '#16a34a' : '#64748b';
+      });
+    }
+
+    // Copy Webhook URL in Service Settings
+    document.getElementById('btnCopyServiceWebhookUrl')?.addEventListener('click', () => {
+      const urlEl = document.getElementById('serviceIncomingSmsWebhookUrl');
+      if (urlEl) {
+        navigator.clipboard.writeText(urlEl.value).then(() => {
+          alert('Webhook URL copied: ' + urlEl.value);
+        });
+      }
+    });
+
+    // Generate Secret Key
+    document.getElementById('btnGenSecretKey')?.addEventListener('click', () => {
+      const randomSecret = 'sec_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 8);
+      const secretInput = document.getElementById('incomingSmsSecretKey');
+      if (secretInput) secretInput.value = randomSecret;
+    });
+
+    // Save Incoming SMS Form
+    const incomingSmsForm = document.getElementById('incomingSmsForm');
+    const btnSaveIncomingSms = document.getElementById('btnSaveIncomingSms');
+    const incomingSmsSaveStatus = document.getElementById('incomingSmsSaveStatus');
+
+    if (incomingSmsForm) {
+      incomingSmsForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btnSaveIncomingSms.disabled = true;
+        btnSaveIncomingSms.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
+        incomingSmsSaveStatus.textContent = '';
+
+        const payload = {
+          isEnabled: incSwitch ? incSwitch.checked : false,
+          autoUpdatePayment: document.getElementById('incomingSmsAutoCredit') ? document.getElementById('incomingSmsAutoCredit').checked : true,
+          secretKey: document.getElementById('incomingSmsSecretKey') ? document.getElementById('incomingSmsSecretKey').value.trim() : '',
+          allowedSenders: document.getElementById('incomingSmsAllowedSenders') ? document.getElementById('incomingSmsAllowedSenders').value.trim() : '',
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/incoming-sms', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save Incoming SMS settings.');
+          incomingSmsSaveStatus.textContent = '✓ Saved successfully!';
+          incomingSmsSaveStatus.className = 'text-success font-weight-bold';
+          setTimeout(() => incomingSmsSaveStatus.textContent = '', 3000);
+        } catch (err) {
+          incomingSmsSaveStatus.textContent = '✗ ' + err.message;
+          incomingSmsSaveStatus.className = 'text-danger font-weight-bold';
+        } finally {
+          btnSaveIncomingSms.disabled = false;
+          btnSaveIncomingSms.innerHTML = '<i class="fa fa-save mr-1"></i> Save Incoming SMS Settings';
+        }
+      });
+    }
+
+    // Test Simulator in Service Settings
+    const testSimTemplates = {
+      sbi: 'Dear SBI User, your A/C ending 1234 has been credited by Rs. 2,000.00 on 28-10-26 by UPI ref no 430291827364.',
+      hdfc: 'Dear Customer, INR 5,000.00 deposited to A/C **5678 on 28-OCT-26 by UPI. UPI Ref 430291827365',
+      icici: 'Your a/c no. XX9876 is credited with Rs 1,500.00 on 28-OCT-26. UPI:430291827367-Transfer',
+      axis: 'Axis Bank: Account 93849335819868 has been credited with INR 3,000.00 on 28-10-2026 by UPI/430291827368/Transfer.',
+      custom: 'Your account has been credited with Rs. 500.00 via UPI ref 123456789012'
+    };
+
+    document.getElementById('testIncomingBankSelect')?.addEventListener('change', (e) => {
+      const msg = testSimTemplates[e.target.value] || testSimTemplates.sbi;
+      const input = document.getElementById('testIncomingSmsMsg');
+      if (input) input.value = msg;
+    });
+
+    document.getElementById('btnTestIncomingSms')?.addEventListener('click', async () => {
+      const btn = document.getElementById('btnTestIncomingSms');
+      const alertBox = document.getElementById('testIncomingSmsAlert');
+      const msg = document.getElementById('testIncomingSmsMsg')?.value || '';
+      btn.disabled = true;
+      alertBox.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/settings/services/incoming-sms/test', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ message: msg, sender: 'TEST-BANK' }),
+        });
+        const data = await res.json();
+        alertBox.style.display = 'block';
+        if (res.ok) {
+          alertBox.className = 'alert alert-success mt-3';
+          alertBox.innerHTML = '<strong><i class="fa fa-check-circle mr-1"></i>Parser Success:</strong> ' +
+            (data.message || 'Processed') +
+            '<div class="mt-1 small font-monospace">Bank: ' + (data.bank || 'N/A') + ' | Amount: ₹' + (data.amountStr || '0') + ' | UTR: ' + (data.utr || 'N/A') + ' | Match: ' + (data.matchStatus || 'unmatched') + '</div>';
+        } else {
+          alertBox.className = 'alert alert-danger mt-3';
+          alertBox.innerHTML = '<strong><i class="fa fa-times-circle mr-1"></i>Error:</strong> ' + (data.error || 'Failed');
+        }
+      } catch (err) {
+        alertBox.style.display = 'block';
+        alertBox.className = 'alert alert-danger mt-3';
+        alertBox.innerHTML = '<strong><i class="fa fa-times-circle mr-1"></i>Error:</strong> ' + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
 
     // Save SMS Form
     const smsForm = document.getElementById('smsForm');
@@ -3348,6 +3640,34 @@ module.exports = function createAdminServiceSettingsPage({
   /**
    * POST /api/admin/settings/services/margin-difference - Save Margin Difference configuration
    */
+  /**
+   * POST /api/admin/settings/services/incoming-sms - Save Incoming SMS configuration
+   */
+  async function handleSaveIncomingSmsSettings(request, response, input) {
+    const isEnabled = input.isEnabled !== false;
+    const autoUpdatePayment = input.autoUpdatePayment !== false;
+    const secretKey = String(input.secretKey || '').trim();
+    const allowedSenders = String(input.allowedSenders || '').trim();
+
+    const config = {
+      autoUpdatePayment,
+      secretKey,
+      allowedSenders,
+    };
+
+    const ciphertext = encryptServiceConfig(config);
+
+    await db.query(
+      `INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext, updated_at)
+       VALUES ('incoming_sms', $1, $2, now())
+       ON CONFLICT (service_key) DO UPDATE
+       SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
+      [isEnabled, ciphertext],
+    );
+
+    sendJson(response, 200, { ok: true, message: 'Incoming SMS settings saved successfully.', incomingSms: { isEnabled, ...config } });
+  }
+
   async function handleSaveMarginDifferenceSettings(request, response, input) {
     const isEnabled = input.isEnabled !== false;
     const marginDiffPercent = parseFloat(input.marginDifferencePercent ?? input.percent ?? 0.10);
@@ -3388,5 +3708,6 @@ module.exports = function createAdminServiceSettingsPage({
     handleSavePlanApiSettings,
     handleTestPlanApi,
     handleSaveMarginDifferenceSettings,
+    handleSaveIncomingSmsSettings,
   };
 };
