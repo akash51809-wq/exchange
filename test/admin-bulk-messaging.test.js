@@ -27,7 +27,7 @@ test('Admin Navigation Menu - Bulk WhatsApp & Bulk Email Menu Items in Settings'
   assert.ok(navHtml.includes('Send Bulk Email'));
 });
 
-test('Send Bulk WhatsApp Page - Component Rendering & Elements', async () => {
+test('Send Bulk WhatsApp Page - Top Navigation Bar & Clean Component Elements', async () => {
   const mockUsers = [
     {
       id: '11111111-1111-4111-8111-111111111111',
@@ -60,10 +60,16 @@ test('Send Bulk WhatsApp Page - Component Rendering & Elements', async () => {
 
   await sendAdminSendBulkWhatsappPage({ id: 'admin-1', role: 'admin' }, mockResponse);
 
-  // Check Page Title and Navigation Tabs
+  // Check Standard Top Navigation Menu Bar is present (as on every other page)
+  assert.ok(outputHtml.includes('horizontalMenu'), 'Must include standard horizontal menu');
+  assert.ok(outputHtml.includes('horizontalMenu-list'), 'Must include horizontalMenu-list');
+
+  // Check Page Title and Breadcrumbs
   assert.ok(outputHtml.includes('Send Bulk WhatsApp'));
-  assert.ok(outputHtml.includes('/admin/settings/send-bulk-email'));
-  assert.ok(outputHtml.includes('/admin/settings/notifications'));
+
+  // Ensure extra tabs and extra switch buttons are removed
+  assert.ok(!outputHtml.includes('nav-tabs-custom'), 'Extra tabs must be removed');
+  assert.ok(!outputHtml.includes('Switch to Bulk Email'), 'Extra switch button must be removed');
 
   // Check Recipient Mode Radios: Specific User vs All User
   assert.ok(outputHtml.includes('Choose Specific User'));
@@ -84,7 +90,7 @@ test('Send Bulk WhatsApp Page - Component Rendering & Elements', async () => {
 
   // Check Keyword Box: [NAME] Firm Name
   assert.ok(outputHtml.includes('[NAME]'));
-  assert.ok(outputHtml.includes('Firm Name / User Name'));
+  assert.ok(outputHtml.includes('Firm Name'));
 
   // Check Send Button
   assert.ok(outputHtml.includes('id="btnSendWhatsapp"'));
@@ -95,7 +101,7 @@ test('Send Bulk WhatsApp Page - Component Rendering & Elements', async () => {
   assert.ok(outputHtml.includes('Sharma Communication'));
 });
 
-test('Send Bulk Email Page - Component Rendering & Elements', async () => {
+test('Send Bulk Email Page - Top Navigation Bar & Clean Component Elements', async () => {
   const mockUsers = [
     {
       id: '11111111-1111-4111-8111-111111111111',
@@ -127,9 +133,16 @@ test('Send Bulk Email Page - Component Rendering & Elements', async () => {
 
   await sendAdminSendBulkEmailPage({ id: 'admin-1', role: 'admin' }, mockResponse);
 
-  // Check Page Title and Navigation Tabs
+  // Check Standard Top Navigation Menu Bar is present (as on every other page)
+  assert.ok(outputHtml.includes('horizontalMenu'), 'Must include standard horizontal menu');
+  assert.ok(outputHtml.includes('horizontalMenu-list'), 'Must include horizontalMenu-list');
+
+  // Check Page Title and Breadcrumbs
   assert.ok(outputHtml.includes('Send Bulk Email'));
-  assert.ok(outputHtml.includes('/admin/settings/send-bulk-whatsapp'));
+
+  // Ensure extra tabs and extra switch buttons are removed
+  assert.ok(!outputHtml.includes('nav-tabs-custom'), 'Extra tabs must be removed');
+  assert.ok(!outputHtml.includes('Switch to Bulk WhatsApp'), 'Extra switch button must be removed');
 
   // Check Recipient Mode Radios: Specific User vs All User
   assert.ok(outputHtml.includes('Choose Specific User'));
@@ -149,7 +162,7 @@ test('Send Bulk Email Page - Component Rendering & Elements', async () => {
 
   // Check Keyword Box: [NAME] Firm Name
   assert.ok(outputHtml.includes('[NAME]'));
-  assert.ok(outputHtml.includes('Firm Name / User Name'));
+  assert.ok(outputHtml.includes('Firm Name'));
 
   // Check Send Button
   assert.ok(outputHtml.includes('id="btnSendEmail"'));

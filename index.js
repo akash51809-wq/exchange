@@ -6032,93 +6032,59 @@ async function handleRequest(request, response) {
         const usersRes = await db.query(userQuery, queryParams);
         const targetUsers = usersRes.rows || [];
 
-        let sentCount = 0;
-        let failedCount = 0;
-        const results = [];
-
-        for (const user of targetUsers) {
-          let userMobile = '';
-          if (user.phone_ciphertext && typeof decryptMobile === 'function') {
-            try { userMobile = decryptMobile(user.phone_ciphertext); } catch (_) {}
-          }
-          userMobile = String(userMobile || '').replace(/\\D/g, '');
-
-          const firmName = String(user.name || user.username || 'User').trim();
-          const personalizedMsg = rawMessage.replace(/\\[NAME\\]/gi, firmName);
-
-          if (!userMobile || userMobile.length < 10) {
-            failedCount++;
-            results.push({
-              id: user.id,
-              name: firmName,
-              username: user.username,
-              mobile: userMobile || '-',
-              sent: false,
-              reason: 'No valid mobile number found for user.',
-            });
-            continue;
-          }
-
-          try {
-            const sendRes = await sendWhatsappNotification({
-              db,
-              decryptServiceConfig,
-              toNumber: userMobile,
-              message: personalizedMsg,
-            });
-
-            if (sendRes && sendRes.sent) {
-              sentCount++;
-              await logSentMessage(db, {
-                userId: user.id,
-                userName: firmName,
-                recipient: userMobile,
-                msgType: 'Bulk WhatsApp',
-                platform: 'whatsapp',
-                content: personalizedMsg,
-                status: 'sent',
-                responsePayload: sendRes,
-              });
-              results.push({
-                id: user.id,
-                name: firmName,
-                username: user.username,
-                mobile: userMobile,
-                sent: true,
-                status: sendRes.status,
-              });
-            } else {
-              failedCount++;
-              results.push({
-                id: user.id,
-                name: firmName,
-                username: user.username,
-                mobile: userMobile,
-                sent: false,
-                reason: sendRes?.error || sendRes?.reason || 'Failed to dispatch via WhatsApp gateway.',
-              });
-            }
-          } catch (err) {
-            failedCount++;
-            results.push({
-              id: user.id,
-              name: firmName,
-              username: user.username,
-              mobile: userMobile,
-              sent: false,
-              reason: err.message,
-            });
-          }
+        if (targetUsers.length === 0) {
+          throw httpError('No matching users found to send.', 400);
         }
 
+        // Return immediate response so system and UI are instantly free
         sendJson(response, 200, {
           ok: true,
+          queued: true,
           total: targetUsers.length,
-          sent: sentCount,
-          failed: failedCount,
-          results,
+          message: 'Message sending initiated successfully in background.',
         });
         statusCode = 200;
+
+        // Execute broadcast in background without blocking
+        setImmediate(async () => {
+          for (const user of targetUsers) {
+            let userMobile = '';
+            if (user.phone_ciphertext && typeof decryptMobile === 'function') {
+              try { userMobile = decryptMobile(user.phone_ciphertext); } catch (_) {}
+            }
+            userMobile = String(userMobile || '').replace(/\D/g, '');
+
+            const firmName = String(user.name || user.username || 'User').trim();
+            const personalizedMsg = rawMessage.replace(/\[NAME\]/gi, firmName);
+
+            if (!userMobile || userMobile.length < 10) continue;
+
+            try {
+              const sendRes = await sendWhatsappNotification({
+                db,
+                decryptServiceConfig,
+                toNumber: userMobile,
+                message: personalizedMsg,
+              });
+
+              if (sendRes && sendRes.sent) {
+                await logSentMessage(db, {
+                  userId: user.id,
+                  userName: firmName,
+                  recipient: userMobile,
+                  msgType: 'Bulk WhatsApp',
+                  platform: 'whatsapp',
+                  content: personalizedMsg,
+                  status: 'sent',
+                  responsePayload: sendRes,
+                });
+              }
+            } catch (err) {
+              console.error(`[Bulk WhatsApp Error] User ${user.id}:`, err.message);
+            }
+          }
+        });
+
         return;
       }
       if (url.pathname === '/api/admin/bulk-email/send' && request.method === 'POST') {
@@ -6169,91 +6135,58 @@ async function handleRequest(request, response) {
         const usersRes = await db.query(userQuery, queryParams);
         const targetUsers = usersRes.rows || [];
 
-        let sentCount = 0;
-        let failedCount = 0;
-        const results = [];
-
-        for (const user of targetUsers) {
-          const userEmail = String(user.email || '').trim().toLowerCase();
-          const firmName = String(user.name || user.username || 'User').trim();
-
-          const personalizedSubject = rawSubject.replace(/\\[NAME\\]/gi, firmName);
-          const personalizedBody = rawMessage.replace(/\\[NAME\\]/gi, firmName);
-
-          if (!userEmail || !userEmail.includes('@')) {
-            failedCount++;
-            results.push({
-              id: user.id,
-              name: firmName,
-              username: user.username,
-              email: userEmail || '-',
-              sent: false,
-              reason: 'No valid email address found for user.',
-            });
-            continue;
-          }
-
-          try {
-            const sendRes = await sendEmailNotification({
-              db,
-              decryptServiceConfig,
-              toEmail: userEmail,
-              subject: personalizedSubject,
-              text: personalizedBody,
-            });
-
-            if (sendRes && sendRes.sent) {
-              sentCount++;
-              await logSentMessage(db, {
-                userId: user.id,
-                userName: firmName,
-                recipient: userEmail,
-                msgType: 'Bulk Email',
-                platform: 'email',
-                content: personalizedBody,
-                subject: personalizedSubject,
-                status: 'sent',
-                responsePayload: sendRes,
-              });
-              results.push({
-                id: user.id,
-                name: firmName,
-                username: user.username,
-                email: userEmail,
-                sent: true,
-              });
-            } else {
-              failedCount++;
-              results.push({
-                id: user.id,
-                name: firmName,
-                username: user.username,
-                email: userEmail,
-                sent: false,
-                reason: sendRes?.error || sendRes?.reason || 'Failed to dispatch via Email SMTP / Google Script.',
-              });
-            }
-          } catch (err) {
-            failedCount++;
-            results.push({
-              id: user.id,
-              name: firmName,
-              username: user.username,
-              email: userEmail,
-              sent: false,
-              reason: err.message,
-            });
-          }
+        if (targetUsers.length === 0) {
+          throw httpError('No matching users found to send.', 400);
         }
 
+        // Return immediate response so system and UI are instantly free
         sendJson(response, 200, {
           ok: true,
+          queued: true,
           total: targetUsers.length,
-          sent: sentCount,
-          failed: failedCount,
-          results,
+          message: 'Message sending initiated successfully in background.',
         });
         statusCode = 200;
+
+        // Execute broadcast in background without blocking
+        setImmediate(async () => {
+          for (const user of targetUsers) {
+            const userEmail = String(user.email || '').trim().toLowerCase();
+            const firmName = String(user.name || user.username || 'User').trim();
+
+            const personalizedSubject = rawSubject.replace(/\[NAME\]/gi, firmName);
+            const personalizedBody = rawMessage.replace(/\[NAME\]/gi, firmName);
+
+            if (!userEmail || !userEmail.includes('@')) continue;
+
+            try {
+              const sendRes = await sendEmailNotification({
+                db,
+                decryptServiceConfig,
+                toEmail: userEmail,
+                subject: personalizedSubject,
+                text: personalizedBody,
+              });
+
+              if (sendRes && sendRes.sent) {
+                await logSentMessage(db, {
+                  userId: user.id,
+                  userName: firmName,
+                  recipient: userEmail,
+                  msgType: 'Bulk Email',
+                  platform: 'email',
+                  content: personalizedBody,
+                  subject: personalizedSubject,
+                  status: 'sent',
+                  responsePayload: sendRes,
+                });
+              }
+            } catch (err) {
+              console.error(`[Bulk Email Error] User ${user.id}:`, err.message);
+            }
+          }
+        });
+
         return;
       }
       if (url.pathname === '/api/buyer/disputes') {
