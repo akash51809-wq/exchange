@@ -140,7 +140,6 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
 
       const formattedAmount = `₹${formatMinorUnits(row.amount_minor)}`;
       const formattedMargin = `₹${formatMinorUnits(row.margin_minor || '0')}`;
-      const shortTxnId = String(row.id).slice(0, 13) + '...';
 
       // Dispute Action or Status Badge
       let disputeCell = '';
@@ -183,7 +182,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       return `
         <tr>
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
-          <td class="font-monospace font-weight-bold text-primary" title="${escapeHtml(row.id)}">${escapeHtml(shortTxnId)}</td>
+          <td class="font-monospace font-weight-bold text-primary" style="font-size:11px;word-break:break-all;min-width:220px;" title="${escapeHtml(row.id)}">${escapeHtml(row.id)}</td>
           <td><strong class="text-dark">${escapeHtml(row.operator_name || row.operator_code || 'Operator')}</strong></td>
           <td><span class="badge badge-light border text-dark">${escapeHtml(row.circle_name || 'All')}</span></td>
           <td class="font-monospace font-weight-bold text-dark">${escapeHtml(mobile)}</td>
@@ -220,40 +219,40 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     .txn-page-container {
-      padding: 12px 18px 40px;
+      padding: 6px 14px 24px;
     }
     .txn-header-card {
       background: #1b3576;
       border-radius: 4px;
-      padding: 10px 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      padding: 6px 12px;
+      margin-bottom: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 6px;
     }
     .txn-header-title {
       color: #ffffff;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       margin: 0;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
     .txn-filter-form {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       margin: 0;
     }
     .txn-filter-group {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
     .txn-filter-group label {
       color: #d1dcf5;
@@ -263,18 +262,18 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       white-space: nowrap;
     }
     .txn-filter-select, .txn-filter-input {
-      height: 31px;
-      padding: 2px 6px;
-      font-size: 12px;
+      height: 27px;
+      padding: 1px 6px;
+      font-size: 11px;
       border-radius: 3px;
       border: 1px solid #ced4da;
       background-color: #ffffff;
       color: #333333;
     }
     .txn-btn-search {
-      height: 31px;
-      padding: 0 14px;
-      font-size: 12px;
+      height: 27px;
+      padding: 0 12px;
+      font-size: 11px;
       font-weight: 600;
       background-color: #0d6efd;
       border: 1px solid #0b5ed7;
@@ -282,7 +281,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       border-radius: 3px;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       cursor: pointer;
     }
     .txn-btn-search:hover {
@@ -290,9 +289,9 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       color: #ffffff;
     }
     .txn-btn-refresh {
-      height: 31px;
-      padding: 0 12px;
-      font-size: 12px;
+      height: 27px;
+      padding: 0 10px;
+      font-size: 11px;
       font-weight: 600;
       background-color: #10b981;
       border: 1px solid #059669;
@@ -300,7 +299,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       border-radius: 3px;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       text-decoration: none;
     }
     .txn-btn-refresh:hover {
@@ -309,33 +308,39 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       text-decoration: none;
     }
 
-    /* Summary KPI Bar */
+    /* Summary KPI Bar - Ultra Compact */
     .txn-summary-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 6px;
+      margin-bottom: 6px;
     }
     .txn-kpi-card {
       flex: 1;
-      min-width: 140px;
+      min-width: 130px;
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
-      padding: 8px 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 4px 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
     .txn-kpi-title {
-      font-size: 11px;
+      font-size: 10px;
       color: #64748b;
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
-      margin-bottom: 2px;
+      margin-bottom: 0;
+      line-height: 1.2;
     }
     .txn-kpi-val {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       color: #1e293b;
+      line-height: 1.2;
     }
 
     /* Table */

@@ -41,6 +41,26 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
     }
   }
 
+  function formatDuration(createdIso, updatedIso, status) {
+    if (status === 'pending' || status === 'processing') {
+      return '<span class="text-warning"><i class="fa fa-hourglass-start mr-1"></i>Running...</span>';
+    }
+    if (!createdIso) return '-';
+    const start = new Date(createdIso).getTime();
+    const end = updatedIso ? new Date(updatedIso).getTime() : start;
+    const diffMs = Math.max(0, end - start);
+    if (diffMs < 1000) {
+      return `${diffMs} ms`;
+    }
+    const totalSecs = diffMs / 1000;
+    if (totalSecs < 60) {
+      return `${totalSecs.toFixed(1)}s`;
+    }
+    const mins = Math.floor(totalSecs / 60);
+    const remSecs = Math.round(totalSecs % 60);
+    return `${mins}m ${remSecs}s`;
+  }
+
   async function sendUserSellerSalesTxnPage(user, response, searchParams) {
     const navigation = renderUserNavigation().replace('horizontal-mainwrapper container clearfix', 'horizontal-mainwrapper container-fluid px-2 clearfix');
     const today = getTodayString();
@@ -90,13 +110,15 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
     else if (filters.limit === 'all') limitClause = 'LIMIT 1000';
 
     const query = `
-      SELECT r.id, r.user_id AS buyer_user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
+      SELECT r.id, r.user_id AS buyer_user_id, r.seller_user_id, r.seller_api_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor, r.seller_margin_minor,
-             r.status, r.idempotency_key, r.provider_reference, r.with_gst, r.created_at,
-             o.operator_code, u.username AS buyer_username, u.name AS buyer_name
+             r.status, r.idempotency_key, r.provider_reference, r.with_gst, r.created_at, r.updated_at,
+             o.operator_code, u.username AS buyer_username, u.name AS buyer_name,
+             sapi.name AS seller_api_name, sapi.short_name AS seller_api_short_name
       FROM recharge_orders r
       LEFT JOIN operator_definitions o ON o.id = r.operator_id
       LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN seller_api_settings sapi ON sapi.id = r.seller_api_id
       WHERE ${conditions.join(' AND ')}
       ORDER BY r.created_at DESC
       ${limitClause}
@@ -141,19 +163,41 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
 
       const formattedAmount = `₹${formatMinorUnits(row.amount_minor)}`;
       const formattedMargin = `₹${formatMinorUnits(rowSellerMargin.toString())}`;
-      const shortTxnId = String(row.id).slice(0, 13) + '...';
+      const apiDisplayName = row.seller_api_name || row.seller_api_short_name || 'Direct / Internal';
+      const durationHtml = formatDuration(row.created_at, row.updated_at, row.status);
 
       return `
         <tr>
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
-          <td class="font-monospace font-weight-bold text-primary" title="${escapeHtml(row.id)}">${escapeHtml(shortTxnId)}</td>
+          <td style="white-space:nowrap;font-size:11px;line-height:1.35;">
+            <div class="font-monospace text-dark font-weight-bold" title="1. Request Time">
+              <i class="fa fa-arrow-circle-up text-primary mr-1" style="font-size:11px;"></i>${escapeHtml(formatDateTime(row.created_at))}
+            </div>
+            <div class="font-monospace text-muted mt-1" title="2. Response Time">
+              <i class="fa fa-arrow-circle-down text-success mr-1" style="font-size:11px;"></i>${row.status === 'pending' || row.status === 'processing' ? '<span class="text-warning font-weight-bold">Awaiting...</span>' : escapeHtml(formatDateTime(row.updated_at || row.created_at))}
+            </div>
+            <div class="mt-1 font-monospace" title="3. Total Used Time">
+              <span class="badge badge-light border text-dark px-1 py-0 font-weight-bold" style="font-size:10px;">
+                <i class="fa fa-clock-o text-info mr-1"></i>${durationHtml}
+              </span>
+            </div>
+          </td>
+          <td style="min-width:220px;">
+            <div class="font-monospace font-weight-bold text-primary" style="font-size:11px;word-break:break-all;" title="${escapeHtml(row.id)}">
+              ${escapeHtml(row.id)}
+            </div>
+            <div class="mt-1">
+              <span class="badge badge-primary px-2 py-0" style="background:#1d4ed8;font-size:10px;font-weight:600;" title="Seller Processed API">
+                <i class="fa fa-plug mr-1"></i>${escapeHtml(apiDisplayName)}
+              </span>
+            </div>
+          </td>
           <td>
             <strong class="text-dark">${escapeHtml(row.operator_name || row.operator_code || 'Operator')}</strong>
           </td>
           <td><span class="badge badge-light border text-dark">${escapeHtml(row.circle_name || 'All')}</span></td>
           <td class="font-monospace font-weight-bold text-dark">${escapeHtml(mobile)}</td>
           <td class="text-center"><span class="badge ${row.with_gst ? 'badge-primary' : 'badge-secondary'}">${row.with_gst ? 'With GST' : 'No GST'}</span></td>
-          <td class="small text-muted font-monospace" style="white-space:nowrap;">${escapeHtml(formatDateTime(row.created_at))}</td>
           <td class="text-right font-weight-bold text-dark font-monospace">${formattedAmount}</td>
           <td class="text-right font-weight-bold text-success font-monospace">${formattedMargin}</td>
           <td class="text-center">${statusBadge}</td>
@@ -184,40 +228,40 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
     .txn-page-container {
-      padding: 12px 18px 40px;
+      padding: 6px 14px 24px;
     }
     .txn-header-card {
       background: #1b3576;
       border-radius: 4px;
-      padding: 10px 16px;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+      padding: 6px 12px;
+      margin-bottom: 6px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
       display: flex;
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 6px;
     }
     .txn-header-title {
       color: #ffffff;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       margin: 0;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
     .txn-filter-form {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       margin: 0;
     }
     .txn-filter-group {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
     }
     .txn-filter-group label {
       color: #d1dcf5;
@@ -227,18 +271,18 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       white-space: nowrap;
     }
     .txn-filter-select, .txn-filter-input {
-      height: 31px;
-      padding: 2px 6px;
-      font-size: 12px;
+      height: 27px;
+      padding: 1px 6px;
+      font-size: 11px;
       border-radius: 3px;
       border: 1px solid #ced4da;
       background-color: #ffffff;
       color: #333333;
     }
     .txn-btn-search {
-      height: 31px;
-      padding: 0 14px;
-      font-size: 12px;
+      height: 27px;
+      padding: 0 12px;
+      font-size: 11px;
       font-weight: 600;
       background-color: #0d6efd;
       border: 1px solid #0b5ed7;
@@ -246,7 +290,7 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       border-radius: 3px;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       cursor: pointer;
     }
     .txn-btn-search:hover {
@@ -254,9 +298,9 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       color: #ffffff;
     }
     .txn-btn-refresh {
-      height: 31px;
-      padding: 0 12px;
-      font-size: 12px;
+      height: 27px;
+      padding: 0 10px;
+      font-size: 11px;
       font-weight: 600;
       background-color: #10b981;
       border: 1px solid #059669;
@@ -264,7 +308,7 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       border-radius: 3px;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 4px;
       text-decoration: none;
     }
     .txn-btn-refresh:hover {
@@ -273,33 +317,39 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       text-decoration: none;
     }
 
-    /* Summary KPI Bar */
+    /* Summary KPI Bar - Ultra Compact */
     .txn-summary-bar {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
-      margin-bottom: 12px;
+      gap: 6px;
+      margin-bottom: 6px;
     }
     .txn-kpi-card {
       flex: 1;
-      min-width: 140px;
+      min-width: 130px;
       background: #ffffff;
       border: 1px solid #e2e8f0;
       border-radius: 4px;
-      padding: 8px 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      padding: 4px 10px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
     .txn-kpi-title {
-      font-size: 11px;
+      font-size: 10px;
       color: #64748b;
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
-      margin-bottom: 2px;
+      margin-bottom: 0;
+      line-height: 1.2;
     }
     .txn-kpi-val {
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       color: #1e293b;
+      line-height: 1.2;
     }
 
     /* Table */
@@ -454,17 +504,17 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
               <table class="txn-table table-bordered">
                 <thead>
                   <tr>
-                    <th>Sl No</th>
-                    <th>Txn ID</th>
-                    <th>Ope Name</th>
+                    <th style="width: 35px;">#</th>
+                    <th style="min-width: 175px;">Date &amp; Time (Req / Resp / Used)</th>
+                    <th style="min-width: 220px;">Txn ID &amp; API</th>
+                    <th>Operator</th>
                     <th>Circle</th>
                     <th>Number</th>
-                    <th>GST Type</th>
-                    <th>Date with Time</th>
+                    <th>GST</th>
                     <th>Amount</th>
                     <th>Margin</th>
                     <th>Status</th>
-                    <th>Ope ID</th>
+                    <th>Operator Ref</th>
                     <th>Ref ID</th>
                   </tr>
                 </thead>
