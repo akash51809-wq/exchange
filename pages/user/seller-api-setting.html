@@ -195,7 +195,11 @@
     .balance-input-lg { font-size: 15px; font-weight: 700; color: #047857; background: #ecfdf5 !important; border: 1px solid #a7f3d0 !important; }
     
     .active-api-badge { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; border-radius: 5px; padding: 5px 10px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .modal.show { display: block !important; background: rgba(15, 23, 42, 0.55); }
+    .modal-backdrop.show { opacity: 0.5; }
   </style>
+  <script src="/assets/js/jquery-3.5.1.min.js"></script>
+  <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
 </head>
 <body>
   <div class="page"><div class="page-main">
@@ -938,7 +942,55 @@
   <script>
   (() => {
     'use strict';
-    const $ = id => document.getElementById(id);
+    const $ = id => document.getElementById(String(id).replace(/^#/, ''));
+
+    function showModal(modalId) {
+      const id = String(modalId).replace(/^#/, '');
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (window.jQuery && typeof window.jQuery(el).modal === 'function') {
+        window.jQuery(el).modal('show');
+        return;
+      }
+      el.classList.add('show');
+      el.style.display = 'block';
+      el.removeAttribute('aria-hidden');
+      el.setAttribute('aria-modal', 'true');
+      document.body.classList.add('modal-open');
+      let backdrop = document.getElementById('modal-backdrop-' + id);
+      if (!backdrop) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'modal-backdrop-' + id;
+        backdrop.className = 'modal-backdrop fade show';
+        backdrop.onclick = () => hideModal(id);
+        document.body.appendChild(backdrop);
+      }
+    }
+
+    function hideModal(modalId) {
+      const id = String(modalId).replace(/^#/, '');
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (window.jQuery && typeof window.jQuery(el).modal === 'function') {
+        try { window.jQuery(el).modal('hide'); } catch {}
+      }
+      el.classList.remove('show');
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden', 'true');
+      el.removeAttribute('aria-modal');
+      document.body.classList.remove('modal-open');
+      const backdrop = document.getElementById('modal-backdrop-' + id);
+      if (backdrop) backdrop.remove();
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    }
+
+    document.addEventListener('click', (e) => {
+      const dismissBtn = e.target.closest('[data-dismiss="modal"], .modal .close, .btn-modal-close');
+      if (dismissBtn) {
+        const modal = dismissBtn.closest('.modal');
+        if (modal) hideModal(modal.id);
+      }
+    });
     const escapeHtml = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     let currentResponseData = null;
@@ -2465,7 +2517,7 @@
           btn.onclick = () => {
             $('modalApiId').value = btn.dataset.id;
             $('modalIpInput').value = btn.dataset.ip || '';
-            $('#callbackIpModal').modal('show');
+            showModal('callbackIpModal');
           };
         });
 
@@ -2715,7 +2767,7 @@
         });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error);
-        $('#callbackIpModal').modal('hide');
+        hideModal('callbackIpModal');
         loadSavedApis();
       } catch (err) {
         alert(`Error: ${err.message}`);
@@ -2796,7 +2848,7 @@
         });
       }
 
-      $('#opCodeModal').modal('show');
+      showModal('opCodeModal');
     }
 
     // Add Row button in OpCode modal
@@ -2883,7 +2935,7 @@
         }
 
         alert(`✓ Operator codes mapping saved successfully for "${apiName}"! (${Object.keys(mapping).length} operators mapped)`);
-        $('#opCodeModal').modal('hide');
+        hideModal('opCodeModal');
       } catch (err) {
         alert(`Error saving operator codes: ${err.message}`);
       } finally {

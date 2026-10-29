@@ -35,6 +35,10 @@ test('Seller API Setting Page - OpCode Modal & Interactive Elements Present', ()
   assert.ok(html.includes('id="btnLoadStandardOpCodes"'), 'btnLoadStandardOpCodes must exist');
   assert.ok(html.includes('id="btnSaveOpCodes"'), 'btnSaveOpCodes must exist');
   assert.ok(html.includes('openOpCodeModal'), 'openOpCodeModal function must exist');
+  assert.ok(html.includes("showModal('opCodeModal')"), 'showModal helper must be used to open opCodeModal');
+  assert.ok(!html.includes("$('#opCodeModal').modal('show')"), 'broken jQuery selector modal show must be removed');
+  assert.ok(html.includes("showModal('callbackIpModal')"), 'showModal helper must be used to open callbackIpModal');
+  assert.ok(!html.includes("$('#callbackIpModal').modal('show')"), 'broken jQuery selector callback modal show must be removed');
 });
 
 test('Stock API Helper - Flexible Balance Key Fallback (totalBalance & mainBalance)', () => {
