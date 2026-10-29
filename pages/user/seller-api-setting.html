@@ -1502,6 +1502,7 @@
             $('callbackSystemUrl').value = `http://${window.location.host || '127.0.0.1:3000'}/CallBack/${data.id}`;
             alert(`✓ ${template.name} API saved successfully!\nLive Wallet Balance: ₹ ${data.balance || '0.00'}\nAll endpoints (Balance, Recharge, Status Check, Dispute) have been configured automatically!`);
           } else {
+            $('drawerTitleText').textContent = 'Edit API: ' + (name || 'API');
             alert(`✓ ${template.name} API updated successfully!\nLive Wallet Balance: ₹ ${data.balance || '0.00'}`);
           }
 

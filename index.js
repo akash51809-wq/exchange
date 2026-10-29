@@ -5320,19 +5320,9 @@ async function handleRequest(request, response) {
 
         if (action === 'update') {
           const input = await readJson(request);
-          const name = String(input.name || '').trim();
-          const targetUrl = String(input.url || (input.request && input.request.url) || '').trim();
-          const urlType = String(input.urlType || 'Balance URL').trim();
-          const requestType = String(input.requestType || (input.request && input.request.method) || 'GET').trim().toUpperCase();
-          const responseType = String(input.responseType || (input.response && input.response.type) || 'JSON').trim().toUpperCase();
-          const parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || []);
-          const balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || '').trim();
-
-          if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
-          if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL is required.', 400);
 
           const row = await db.query(
-            'SELECT config_ciphertext, balance_value, last_balance_at FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+            'SELECT config_ciphertext, balance_value, balance_key, last_balance_at FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
           if (!row.rowCount) throw httpError('API setting not found.', 404);
@@ -5341,6 +5331,50 @@ async function handleRequest(request, response) {
           try {
             config = decryptSellerApiConfig(row.rows[0].config_ciphertext);
           } catch {}
+
+          let name = String(input.name || config.name || '').trim();
+          let targetUrl = String(input.url || (input.request && input.request.url) || config.url || '').trim();
+          let urlType = String(input.urlType || config.urlType || 'Balance URL').trim();
+          let requestType = String(input.requestType || (input.request && input.request.method) || config.requestType || 'GET').trim().toUpperCase();
+          let responseType = String(input.responseType || (input.response && input.response.type) || config.responseType || 'JSON').trim().toUpperCase();
+          let parameters = Array.isArray(input.parameters) ? input.parameters : (input.request?.parameters || config.parameters || []);
+          let balanceKey = String(input.balanceKey || (input.response?.mapping?.stock) || config.balanceKey || row.rows[0].balance_key || '').trim();
+
+          // If templateId or templateName provided, auto-configure from developer API template
+          if (input.templateId || input.templateName || (input.credentials && (config.templateId || config.templateName))) {
+            const tplId = input.templateId || config.templateId || '00000000-0000-0000-0000-000000000000';
+            const tplName = input.templateName || config.templateName || '';
+            const tplRes = await db.query(
+              `SELECT * FROM developer_api_templates WHERE (id::text = $1 OR name = $2) AND is_active = true LIMIT 1`,
+              [tplId, tplName]
+            );
+            if (tplRes.rowCount) {
+              const tpl = tplRes.rows[0];
+              const mergedCreds = Object.assign({}, config.credentials || {}, input.credentials || {});
+              const generated = applyTemplateCredentials(tpl, mergedCreds, input.name || name || config.name);
+              name = (input.name && input.name.trim()) || name || generated.name;
+              targetUrl = generated.url;
+              urlType = generated.urlType;
+              requestType = generated.requestType;
+              responseType = generated.responseType;
+              parameters = generated.parameters;
+              balanceKey = generated.balanceKey;
+              config.recharge = generated.recharge;
+              config.statusCheck = generated.statusCheck;
+              config.dispute = generated.dispute;
+              config.callback = generated.callback;
+              config.operatorCodes = generated.operatorCodes;
+              config.circleCodes = generated.circleCodes;
+              config.credentials = mergedCreds;
+              config.templateId = tpl.id;
+              config.templateName = tpl.name;
+              input.templateId = tpl.id;
+              input.templateName = tpl.name;
+            }
+          }
+
+          if (!name || name.length > 100) throw httpError('API Name must be between 1 and 100 characters.', 400);
+          if (!targetUrl || targetUrl.length > 2_000) throw httpError('Stock API URL is required.', 400);
 
           let balanceValue = row.rows[0].balance_value || '';
           let lastBalanceAt = row.rows[0].last_balance_at;
@@ -5385,11 +5419,12 @@ async function handleRequest(request, response) {
 
           await db.query(
             `UPDATE seller_api_settings
-             SET name = $1, config_ciphertext = $2, balance_value = $3, balance_key = $4,
-                 last_balance_at = COALESCE($5, last_balance_at), updated_at = now()
-             WHERE id = $6 AND user_id = $7`,
+             SET name = $1, short_name = $2, config_ciphertext = $3, balance_value = $4, balance_key = $5,
+                 last_balance_at = COALESCE($6, last_balance_at), updated_at = now()
+             WHERE id = $7 AND user_id = $8`,
             [
               name,
+              name.slice(0, 20),
               encryptSellerApiConfig(config),
               balanceValue,
               balanceKey,

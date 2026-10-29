@@ -4,6 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const createUserBuyerPurchaseTxnPage = require('../pages/user-buyer-purchase-txn');
 const createUserSellerSalesTxnPage = require('../pages/user-seller-sales-txn');
+const { DEFAULT_DEVELOPER_APIS, applyTemplateCredentials } = require('../lib/developer-api-presets');
 
 function formatMinorUnits(value) {
   const minor = BigInt(value || '0');
@@ -167,4 +168,24 @@ test('Buyer Purchase Txn Page - Full Txn ID and Slim Summary Box', async () => {
 
   // 2. Slim/compact summary bar styling
   assert.ok(output.body.includes('padding: 4px 10px;'), 'Summary KPI card must have compact vertical padding');
+});
+
+test('Seller API Settings Update - Template API can be renamed without Stock API URL error', () => {
+  const rambhiya = DEFAULT_DEVELOPER_APIS.find(a => a.name.includes('Rambhiya'));
+  assert.ok(rambhiya, 'Rambhiya template must exist');
+
+  const credentials = {
+    domain: 'https://www.easyrechargesolution.com/',
+    username: '8864861234',
+    token: 'Nz8vD2varwb5dJ7d9Qejei2FVGdcST'
+  };
+
+  // Test applying template with updated name "ERS"
+  const configured = applyTemplateCredentials(rambhiya, credentials, 'ERS');
+  assert.equal(configured.name, 'ERS', 'Custom name ERS must be preserved');
+  assert.ok(configured.url, 'Target URL must be generated');
+  assert.ok(configured.url.includes('easyrechargesolution.com'), 'Target URL must contain domain');
+  assert.ok(configured.recharge && configured.recharge.url, 'Recharge URL must be generated');
+  assert.ok(configured.statusCheck && configured.statusCheck.url, 'Status check URL must be generated');
+  assert.ok(configured.dispute && configured.dispute.url, 'Dispute URL must be generated');
 });
