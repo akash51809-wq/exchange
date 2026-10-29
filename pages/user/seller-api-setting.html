@@ -228,10 +228,7 @@
               <th style="width: 140px;">Owner Name</th>
               <th style="width: 170px;">Name</th>
               <th>APIUrl</th>
-              <th style="width: 75px; text-align: center;">OpCode</th>
-              <th style="width: 75px; text-align: center;">Operator</th>
-              <th style="width: 75px; text-align: center;">Package</th>
-              <th style="width: 75px; text-align: center;">Valid Till</th>
+              <th style="width: 80px; text-align: center;">OpCode</th>
               <th style="width: 65px; text-align: center;">IsActive</th>
               <th style="width: 85px; text-align: center;">IsAdminApproved</th>
               <th style="width: 110px; text-align: center;">Callback Ip</th>
@@ -239,7 +236,7 @@
           </thead>
           <tbody id="apiListTableBody">
             <tr>
-              <td colspan="12" class="text-center py-4 text-muted">
+              <td colspan="9" class="text-center py-4 text-muted">
                 <i class="fa fa-spinner fa-spin mr-1"></i> Loading API list from database...
               </td>
             </tr>
@@ -867,6 +864,69 @@
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
               <button type="button" class="btn btn-primary btn-sm px-3" id="btnSaveCallbackIp">Save IP</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OpCode Mapping Configuration Modal -->
+      <div class="modal fade" id="opCodeModal" tabindex="-1" role="dialog" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+          <div class="modal-content" style="border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
+            <div class="modal-header" style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
+              <div>
+                <h5 class="modal-title font-weight-bold mb-1" style="font-size: 16px; color: #1e293b;">
+                  <i class="fa fa-code text-primary mr-1"></i> Operator Code (OpCode) Mapping
+                </h5>
+                <div class="small text-muted">
+                  API: <strong id="opCodeModalApiName" class="text-primary font-weight-bold"></strong> &nbsp;|&nbsp; Configure operator codes expected by this provider API (substitutes <code>{OPCODE}</code> in recharge URL/params).
+                </div>
+              </div>
+              <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+            </div>
+            <div class="modal-body p-3" style="max-height: 65vh; overflow-y: auto;">
+              <input type="hidden" id="opCodeModalApiId">
+              
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <div class="input-group input-group-sm" style="max-width: 280px;">
+                  <div class="input-group-prepend">
+                    <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>
+                  </div>
+                  <input type="text" id="opCodeSearchInput" class="form-control" placeholder="Search operator or code...">
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-primary mr-2" id="btnLoadStandardOpCodes" title="Populate standard India Telecom & DTH operators">
+                    <i class="fa fa-refresh mr-1"></i> Add Standard Operators
+                  </button>
+                  <button type="button" class="btn btn-sm btn-success font-weight-bold" id="btnAddOpCodeRow">
+                    <i class="fa fa-plus mr-1"></i> Add Row
+                  </button>
+                </div>
+              </div>
+
+              <div class="table-responsive">
+                <table class="table table-bordered table-hover table-sm mb-0" id="opCodeTable" style="font-size: 12.5px;">
+                  <thead class="bg-light">
+                    <tr>
+                      <th style="width: 45%;">Operator Name / System Code (Input from Buyer / Order)</th>
+                      <th style="width: 45%;">Provider OpCode (Expected by this API Provider)</th>
+                      <th style="width: 10%; text-align: center;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="opCodeTableBody">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+              <div id="opCodeNoResults" class="text-center py-3 text-muted" style="display:none;">
+                No matching operators found for your search.
+              </div>
+            </div>
+            <div class="modal-footer" style="background: #f8fafc; border-top: 1px solid #e2e8f0;">
+              <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Cancel</button>
+              <button type="button" class="btn btn-primary btn-sm px-4 font-weight-bold" id="btnSaveOpCodes">
+                <i class="fa fa-check-circle mr-1" id="saveOpCodesIcon"></i> Save OpCodes
+              </button>
             </div>
           </div>
         </div>
@@ -2304,7 +2364,7 @@
         }
 
         if (savedApisList.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="12" class="text-center py-4 text-muted">No API configured yet. Click <strong>"+ New"</strong> button above to add your first API.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No API configured yet. Click <strong>"+ New"</strong> button above to add your first API.</td></tr>';
           return;
         }
 
@@ -2352,16 +2412,7 @@
                 <div class="api-url-text" title="${escapeHtml(displayUrl)}">${escapeHtml(displayUrl)}</div>
               </td>
               <td style="text-align: center;">
-                <button type="button" class="btn-tag-action btn-opcode" data-id="${api.id}">OP Code</button>
-              </td>
-              <td style="text-align: center;">
-                <button type="button" class="btn-tag-action btn-operator" data-id="${api.id}">Operator</button>
-              </td>
-              <td style="text-align: center;">
-                <button type="button" class="btn-tag-action btn-tag-package btn-purchase" data-id="${api.id}">Purchase</button>
-              </td>
-              <td style="text-align: center; font-weight: 600;">
-                ${escapeHtml(api.validTill || 'N/A')}
+                <button type="button" class="btn-tag-action btn-opcode font-weight-bold" data-id="${api.id}" title="Edit Operator Codes"><i class="fa fa-code mr-1"></i>OpCode</button>
               </td>
               <td style="text-align: center;">
                 <label class="switch-toggle">
@@ -2599,7 +2650,11 @@
               const r = await fetch(`/api/seller/api-settings/${id}/refresh`, { method: 'POST' });
               const d = await r.json();
               if (!r.ok) throw new Error(d.error);
-              alert(`✓ Live Balance for this API: ₹ ${d.balance || '0.00'}`);
+              if (d.providerError) {
+                alert(`⚠️ API Provider Warning / Error:\n${d.providerError}\n\nNote: If this is an IP restriction, please whitelist our Server IP (${$('serverIpBanner').textContent || '49.43.112.72'}) in your API provider portal.`);
+              } else {
+                alert(`✓ Live Balance for this API: ₹ ${d.balance || '0.00'}`);
+              }
               loadSavedApis();
             } catch (err) {
               alert(`Could not refresh balance: ${err.message}`);
@@ -2630,13 +2685,21 @@
           };
         });
 
-        // OpCode, Operator, Purchase place-holders
-        tbody.querySelectorAll('.btn-opcode').forEach(b => b.onclick = () => alert('OpCode mapping table configured for this API.'));
-        tbody.querySelectorAll('.btn-operator').forEach(b => b.onclick = () => alert('Operator routing configuration for this API.'));
-        tbody.querySelectorAll('.btn-purchase').forEach(b => b.onclick = () => alert('Package / Purchase settings for this API.'));
+        // OpCode button handler - opens editable modal for Quick Add or Manual Add APIs
+        tbody.querySelectorAll('.btn-opcode').forEach(b => {
+          b.onclick = () => {
+            const apiId = b.dataset.id;
+            const api = savedApisList.find(a => a.id === apiId);
+            if (!api) {
+              alert('API configuration not found in list.');
+              return;
+            }
+            openOpCodeModal(api);
+          };
+        });
 
       } catch (e) {
-        tbody.innerHTML = `<tr><td colspan="12" class="text-center py-4 text-danger">Error loading API list: ${escapeHtml(e.message)}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-danger">Error loading API list: ${escapeHtml(e.message)}</td></tr>`;
       }
     }
 
@@ -2656,6 +2719,176 @@
         loadSavedApis();
       } catch (err) {
         alert(`Error: ${err.message}`);
+      }
+    };
+
+    // --- OP CODE MAPPING MODAL LOGIC ---
+    const STANDARD_OPERATORS_LIST = [
+      { key: 'AIRTEL', defaultCode: 'AT' },
+      { key: 'AT', defaultCode: 'AT' },
+      { key: 'JIO', defaultCode: 'JO' },
+      { key: 'JO', defaultCode: 'JO' },
+      { key: 'VI', defaultCode: 'VI' },
+      { key: 'VODAFONE', defaultCode: 'VI' },
+      { key: 'IDEA', defaultCode: 'VI' },
+      { key: 'BSNL', defaultCode: 'BS' },
+      { key: 'BS', defaultCode: 'BS' },
+      { key: 'BT', defaultCode: 'BT' },
+      { key: 'AIRTEL DTH', defaultCode: 'AD' },
+      { key: 'AD', defaultCode: 'AD' },
+      { key: 'ATDTH', defaultCode: 'ATDTH' },
+      { key: 'DISH TV', defaultCode: 'DT' },
+      { key: 'DISHTV', defaultCode: 'DISHTV' },
+      { key: 'DT', defaultCode: 'DT' },
+      { key: 'TATA PLAY', defaultCode: 'TS' },
+      { key: 'TATASKY', defaultCode: 'TATASKY' },
+      { key: 'TS', defaultCode: 'TS' },
+      { key: 'VIDEOCON D2H', defaultCode: 'VD' },
+      { key: 'VDDTH', defaultCode: 'VDDTH' },
+      { key: 'D2H', defaultCode: 'VD' },
+      { key: 'SUN DIRECT', defaultCode: 'SD' },
+      { key: 'SUNDTH', defaultCode: 'SUNDTH' },
+      { key: 'SD', defaultCode: 'SD' },
+      { key: 'MYJIO', defaultCode: 'MJ' },
+      { key: 'MJ', defaultCode: 'MJ' }
+    ];
+
+    function createOpCodeRow(key = '', val = '') {
+      const tr = document.createElement('tr');
+      tr.className = 'opcode-row';
+      tr.innerHTML = `
+        <td>
+          <input type="text" class="form-control form-control-sm font-weight-bold opcode-key-input" value="${escapeHtml(key)}" placeholder="e.g. AIRTEL or JIO" style="font-size: 12.5px;">
+        </td>
+        <td>
+          <input type="text" class="form-control form-control-sm opcode-val-input" value="${escapeHtml(val)}" placeholder="Provider OpCode (e.g. AT or 1)" style="font-size: 12.5px; font-family: monospace; font-weight: 600; color: #1e5ba8;">
+        </td>
+        <td style="text-align: center;">
+          <button type="button" class="btn btn-xs btn-outline-danger btn-remove-opcode" title="Remove" style="padding: 2px 7px; font-size: 11px;">
+            <i class="fa fa-trash"></i>
+          </button>
+        </td>
+      `;
+      tr.querySelector('.btn-remove-opcode').onclick = () => tr.remove();
+      return tr;
+    }
+
+    function openOpCodeModal(api) {
+      $('opCodeModalApiId').value = api.id;
+      $('opCodeModalApiName').textContent = api.name;
+      const tbody = $('opCodeTableBody');
+      tbody.innerHTML = '';
+      $('opCodeSearchInput').value = '';
+      $('opCodeNoResults').style.display = 'none';
+
+      const currentCodes = (api.operatorCodes && typeof api.operatorCodes === 'object') ? api.operatorCodes : {};
+      const presentKeys = new Set(Object.keys(currentCodes));
+
+      // 1. Add existing mapped codes
+      for (const [k, v] of Object.entries(currentCodes)) {
+        tbody.appendChild(createOpCodeRow(k, v));
+      }
+
+      // 2. If empty (e.g. manual API or unmapped), populate standard list
+      if (presentKeys.size === 0) {
+        STANDARD_OPERATORS_LIST.forEach(op => {
+          tbody.appendChild(createOpCodeRow(op.key, op.defaultCode));
+        });
+      }
+
+      $('#opCodeModal').modal('show');
+    }
+
+    // Add Row button in OpCode modal
+    $('btnAddOpCodeRow').onclick = () => {
+      const tbody = $('opCodeTableBody');
+      const newRow = createOpCodeRow('', '');
+      tbody.appendChild(newRow);
+      const input = newRow.querySelector('.opcode-key-input');
+      if (input) input.focus();
+    };
+
+    // Add Standard Operators button
+    $('btnLoadStandardOpCodes').onclick = () => {
+      const tbody = $('opCodeTableBody');
+      const existingKeys = new Set();
+      tbody.querySelectorAll('.opcode-key-input').forEach(inp => {
+        if (inp.value.trim()) existingKeys.add(inp.value.trim().toUpperCase());
+      });
+      let added = 0;
+      STANDARD_OPERATORS_LIST.forEach(op => {
+        if (!existingKeys.has(op.key.toUpperCase())) {
+          tbody.appendChild(createOpCodeRow(op.key, op.defaultCode));
+          added++;
+        }
+      });
+      if (added > 0) {
+        alert(`✓ Added ${added} standard operator(s) to mapping table.`);
+      } else {
+        alert('All standard operators are already present in the table.');
+      }
+    };
+
+    // Search filter in OpCode modal
+    $('opCodeSearchInput').oninput = () => {
+      const q = $('opCodeSearchInput').value.trim().toLowerCase();
+      const rows = $('opCodeTableBody').querySelectorAll('.opcode-row');
+      let visible = 0;
+      rows.forEach(r => {
+        const k = (r.querySelector('.opcode-key-input')?.value || '').toLowerCase();
+        const v = (r.querySelector('.opcode-val-input')?.value || '').toLowerCase();
+        if (!q || k.includes(q) || v.includes(q)) {
+          r.style.display = '';
+          visible++;
+        } else {
+          r.style.display = 'none';
+        }
+      });
+      $('opCodeNoResults').style.display = visible === 0 ? 'block' : 'none';
+    };
+
+    // Save OpCodes button in OpCode modal
+    $('btnSaveOpCodes').onclick = async () => {
+      const apiId = $('opCodeModalApiId').value;
+      const api = savedApisList.find(a => a.id === apiId);
+      const apiName = api ? api.name : 'this API';
+
+      const mapping = {};
+      const rows = $('opCodeTableBody').querySelectorAll('.opcode-row');
+      rows.forEach(r => {
+        const key = r.querySelector('.opcode-key-input')?.value.trim();
+        const val = r.querySelector('.opcode-val-input')?.value.trim();
+        if (key && val) {
+          mapping[key] = val;
+        }
+      });
+
+      const btn = $('btnSaveOpCodes');
+      const icon = $('saveOpCodesIcon');
+      btn.disabled = true;
+      icon.className = 'fa fa-spinner fa-spin mr-1';
+
+      try {
+        const res = await fetch(`/api/seller/api-settings/${apiId}/opcode-config`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ operatorCodes: mapping })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Failed to save operator codes.');
+
+        // Update local object in savedApisList
+        if (api) {
+          api.operatorCodes = mapping;
+        }
+
+        alert(`✓ Operator codes mapping saved successfully for "${apiName}"! (${Object.keys(mapping).length} operators mapped)`);
+        $('#opCodeModal').modal('hide');
+      } catch (err) {
+        alert(`Error saving operator codes: ${err.message}`);
+      } finally {
+        btn.disabled = false;
+        icon.className = 'fa fa-check-circle mr-1';
       }
     };
 

@@ -179,9 +179,24 @@ const ADMIN_SESSION_COOKIE = 'exchange_admin_session';
 const SESSION_DURATION_SECONDS = 12 * 60 * 60;
 const authRateLimits = new Map();
 
+let cachedPublicServerIp = '';
+async function resolvePublicServerIp() {
+  try {
+    const res = await fetch('https://api.ipify.org?format=json', { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ip) {
+        cachedPublicServerIp = String(data.ip).trim();
+      }
+    }
+  } catch {}
+}
+resolvePublicServerIp();
+
 function getServerIp() {
   const envIp = process.env.SERVER_PUBLIC_IP || process.env.SERVER_IP;
   if (envIp) return envIp;
+  if (cachedPublicServerIp) return cachedPublicServerIp;
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name] || []) {
@@ -5581,9 +5596,40 @@ async function handleRequest(request, response) {
           return;
         }
 
+        if (action === 'opcode-config' || action === 'operator-codes') {
+          const input = await readJson(request);
+          const operatorCodes = input.operatorCodes !== undefined ? input.operatorCodes : input;
+          if (typeof operatorCodes !== 'object' || operatorCodes === null || Array.isArray(operatorCodes)) {
+            throw httpError('Invalid operator codes mapping payload (object required).', 400);
+          }
+
+          const row = await db.query(
+            'SELECT config_ciphertext FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+            [apiId, session.id],
+          );
+          if (!row.rowCount) throw httpError('API setting not found.', 404);
+
+          let config = {};
+          try {
+            config = decryptSellerApiConfig(row.rows[0].config_ciphertext);
+          } catch {}
+
+          config.operatorCodes = operatorCodes;
+          config.updatedAt = new Date().toISOString();
+
+          await db.query(
+            'UPDATE seller_api_settings SET config_ciphertext = $1, updated_at = now() WHERE id = $2 AND user_id = $3',
+            [encryptSellerApiConfig(config), apiId, session.id],
+          );
+
+          sendJson(response, 200, { ok: true, message: 'Operator codes mapping updated successfully.', operatorCodes: config.operatorCodes });
+          statusCode = 200;
+          return;
+        }
+
         if (action === 'refresh') {
           const row = await db.query(
-            'SELECT config_ciphertext, balance_key FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+            'SELECT config_ciphertext, balance_key, balance_value FROM seller_api_settings WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
             [apiId, session.id],
           );
           if (!row.rowCount) throw httpError('API setting not found.', 404);
@@ -5603,13 +5649,25 @@ async function handleRequest(request, response) {
             balanceKey,
           });
 
+          if (testRes.providerError) {
+            sendJson(response, 200, {
+              ok: false,
+              balance: row.rows[0].balance_value || '0.00',
+              providerError: testRes.providerError,
+              status: testRes.status,
+              latencyMs: testRes.latencyMs
+            });
+            statusCode = 200;
+            return;
+          }
+
           const newBalance = testRes.extractedBalance !== null ? String(testRes.extractedBalance) : '0.00';
           await db.query(
             'UPDATE seller_api_settings SET balance_value = $1, last_balance_at = now(), updated_at = now() WHERE id = $2 AND user_id = $3',
             [newBalance, apiId, session.id],
           );
 
-          sendJson(response, 200, { balance: newBalance, status: testRes.status, latencyMs: testRes.latencyMs });
+          sendJson(response, 200, { ok: true, balance: newBalance, status: testRes.status, latencyMs: testRes.latencyMs });
           statusCode = 200;
           return;
         }
