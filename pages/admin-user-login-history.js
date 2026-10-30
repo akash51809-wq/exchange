@@ -122,6 +122,7 @@ module.exports = function createAdminUserLoginHistoryPage({ db, sendJson, httpEr
     const fromDate = String(params.get('fromDate') || '').trim();
     const toDate = String(params.get('toDate') || '').trim();
     const userName = String(params.get('userName') || params.get('user') || '').trim();
+    const ipFilter = String(params.get('ip') || params.get('ipAddress') || '').trim();
     const statusFilter = String(params.get('status') || '').trim().toLowerCase();
     const deviceFilter = String(params.get('device') || '').trim();
     const roleFilter = String(params.get('role') || '').trim().toLowerCase();
@@ -140,6 +141,9 @@ module.exports = function createAdminUserLoginHistoryPage({ db, sendJson, httpEr
       const uLike = add(`%${userName}%`);
       conditions.push(`(l.username ILIKE ${uLike} OR COALESCE(l.name, '') ILIKE ${uLike} OR COALESCE(u.email, '') ILIKE ${uLike} OR COALESCE(u.business_name, '') ILIKE ${uLike})`);
     }
+    if (ipFilter) {
+      conditions.push(`l.ip_address ILIKE ${add(`%${ipFilter}%`)}`);
+    }
     if (statusFilter && statusFilter !== 'all') {
       conditions.push(`l.status = ${add(statusFilter)}`);
     }
@@ -156,6 +160,7 @@ module.exports = function createAdminUserLoginHistoryPage({ db, sendJson, httpEr
       fromDate,
       toDate,
       userName,
+      ipFilter,
       statusFilter,
       deviceFilter,
       roleFilter,
@@ -258,6 +263,7 @@ module.exports = function createAdminUserLoginHistoryPage({ db, sendJson, httpEr
       fromDate,
       toDate,
       userName,
+      ipFilter,
       statusFilter,
       deviceFilter,
       roleFilter,
@@ -508,9 +514,13 @@ module.exports = function createAdminUserLoginHistoryPage({ db, sendJson, httpEr
                   <label class="small font-weight-bold text-muted mb-1" for="filterToDate">To Date</label>
                   <input type="date" class="form-control form-control-sm" id="filterToDate" name="toDate" value="${escapeHtml(toDate)}">
                 </div>
-                <div class="form-group col-md-3 col-sm-6 mb-2">
+                <div class="form-group col-md-2 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterUser">Party / Username</label>
-                  <input type="text" class="form-control form-control-sm" id="filterUser" name="userName" value="${escapeHtml(userName)}" placeholder="Search name or username...">
+                  <input type="text" class="form-control form-control-sm" id="filterUser" name="userName" value="${escapeHtml(userName)}" placeholder="Search user...">
+                </div>
+                <div class="form-group col-md-2 col-sm-6 mb-2">
+                  <label class="small font-weight-bold text-muted mb-1" for="filterIp">IP Address</label>
+                  <input type="text" class="form-control form-control-sm" id="filterIp" name="ip" value="${escapeHtml(ipFilter || '')}" placeholder="Search IP...">
                 </div>
                 <div class="form-group col-md-2 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterDevice">Device Type</label>

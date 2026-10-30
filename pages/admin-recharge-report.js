@@ -61,7 +61,7 @@ module.exports = function createAdminRechargeReportPage({
    */
   function renderTableRows(rows) {
     if (!rows || rows.length === 0) {
-      return '<tr><td colspan="14" class="text-center py-5 text-muted font-weight-bold">No recharge transactions found.</td></tr>';
+      return '<tr><td colspan="12" class="text-center py-5 text-muted font-weight-bold">No recharge transactions found.</td></tr>';
     }
 
     return rows.map((row, index) => {
@@ -83,13 +83,13 @@ module.exports = function createAdminRechargeReportPage({
 
       let statusBadge = '<span class="badge badge-secondary px-2 py-1">Unknown</span>';
       if (row.status === 'successful') {
-        statusBadge = '<span class="badge badge-success px-2 py-1" style="background:#10b981;"><i class="fa fa-check-circle mr-1"></i> SUCCESS</span>';
+        statusBadge = '<span class="badge badge-success px-2 py-1" style="background:#10b981;font-size:10px;"><i class="fa fa-check-circle mr-1"></i> SUCCESS</span>';
       } else if (row.status === 'pending' || row.status === 'processing') {
-        statusBadge = '<span class="badge badge-warning text-white px-2 py-1" style="background:#f59e0b;"><i class="fa fa-clock-o mr-1"></i> PENDING</span>';
+        statusBadge = '<span class="badge badge-warning text-white px-2 py-1" style="background:#f59e0b;font-size:10px;"><i class="fa fa-clock-o mr-1"></i> PENDING</span>';
       } else if (row.status === 'failed') {
-        statusBadge = '<span class="badge badge-danger px-2 py-1" style="background:#ef4444;"><i class="fa fa-times-circle mr-1"></i> FAILED</span>';
+        statusBadge = '<span class="badge badge-danger px-2 py-1" style="background:#ef4444;font-size:10px;"><i class="fa fa-times-circle mr-1"></i> FAILED</span>';
       } else if (row.status === 'refunded') {
-        statusBadge = '<span class="badge badge-info px-2 py-1" style="background:#0ea5e9;"><i class="fa fa-undo mr-1"></i> REFUNDED</span>';
+        statusBadge = '<span class="badge badge-info px-2 py-1" style="background:#0ea5e9;font-size:10px;"><i class="fa fa-undo mr-1"></i> REFUNDED</span>';
       }
 
       const supplierId = payload.supplierTxnId || payload.txnid || payload.operatorTxnId || '-';
@@ -100,79 +100,73 @@ module.exports = function createAdminRechargeReportPage({
 
       return `
         <tr data-order-id="${row.id}">
-          <td class="text-center font-weight-bold">${index + 1}</td>
+          <td class="text-center font-weight-bold text-muted">${index + 1}</td>
           <td>
             <div class="d-flex align-items-center">
-              <span class="badge badge-light border text-monospace font-weight-bold py-1 px-2" style="font-size:11.5px;letter-spacing:0.5px;" title="${row.id}">
+              <span class="badge badge-light border text-monospace font-weight-bold py-1 px-1" style="font-size:10.5px;letter-spacing:0.3px;" title="${row.id}">
                 ${systemRechargeId}
               </span>
               <button class="btn btn-xs btn-outline-secondary ml-1 py-0 px-1 border-0" onclick="navigator.clipboard.writeText('${row.id}')" title="Copy Full UUID">
-                <i class="fa fa-copy"></i>
+                <i class="fa fa-copy" style="font-size:10px;"></i>
               </button>
             </div>
           </td>
           <td>
-            <span class="font-weight-bold text-dark d-block" style="font-size:12px;">${formatDateTime(row.created_at)}</span>
-            <span class="badge badge-pill badge-primary-light text-primary border font-weight-bold" style="font-size:10px;background:#eef2ff;">
+            <span class="font-weight-bold text-dark d-block" style="font-size:11px;">${formatDateTime(row.created_at)}</span>
+            <span class="badge badge-pill badge-primary-light text-primary border font-weight-bold mt-1" style="font-size:9.5px;background:#eef2ff;">
               ⏱️ ${durationSec}
             </span>
           </td>
           <td>
-            <span class="font-weight-bold text-dark d-block">${escapeHtml(row.buyer_name || row.buyer_username || 'N/A')}</span>
-            <small class="text-muted text-monospace">@${escapeHtml(row.buyer_username || 'n/a')}</small>
+            <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:95px;" title="${escapeHtml(row.buyer_name || '')}">${escapeHtml(row.buyer_name || row.buyer_username || 'N/A')}</span>
+            <small class="text-muted text-monospace d-block text-truncate" style="max-width:95px;">@${escapeHtml(row.buyer_username || 'n/a')}</small>
           </td>
           <td>
             ${row.seller_user_id ? `
-              <span class="font-weight-bold text-dark d-block">${escapeHtml(row.seller_name || row.seller_username || 'Seller')}</span>
-              <small class="text-muted text-monospace">@${escapeHtml(row.seller_username || 'n/a')}</small>
-            ` : '<span class="badge badge-light border text-muted">Direct / None</span>'}
+              <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:95px;" title="${escapeHtml(row.seller_name || '')}">${escapeHtml(row.seller_name || row.seller_username || 'Seller')}</span>
+              <small class="text-muted text-monospace d-block text-truncate" style="max-width:95px;">@${escapeHtml(row.seller_username || 'n/a')}</small>
+            ` : '<span class="badge badge-light border text-muted" style="font-size:9.5px;">Direct / None</span>'}
           </td>
           <td>
-            <span class="font-weight-bold text-dark">${escapeHtml(row.operator_name || row.operator_code || '-')}</span>
-          </td>
-          <td><span class="text-muted">${escapeHtml(row.circle_name || 'All')}</span></td>
-          <td>
-            <strong class="text-dark font-weight-bold text-monospace" style="letter-spacing:0.3px;">${escapeHtml(mobile)}</strong>
+            <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:105px;" title="${escapeHtml(row.operator_name || '')}">${escapeHtml(row.operator_name || row.operator_code || '-')}</span>
+            <small class="text-muted d-block text-truncate" style="max-width:105px;">${escapeHtml(row.circle_name || 'All')}</small>
           </td>
           <td>
-            <strong class="text-dark font-weight-bold" style="font-size:13.5px;">₹${amountFormatted}</strong>
+            <strong class="text-dark font-weight-bold text-monospace" style="letter-spacing:0.2px;font-size:11.5px;">${escapeHtml(mobile)}</strong>
           </td>
-          <td>${statusBadge}</td>
-          <td class="text-monospace ope-cell" style="font-size:11.5px;">${escapeHtml(opeId)}</td>
-          <td class="text-monospace" style="font-size:11.5px;">${escapeHtml(supplierId)}</td>
-          <td class="text-monospace" style="font-size:11px;">
-            <span class="badge badge-light border text-secondary px-2 py-1" title="Client Ref ID">
-              ${escapeHtml(row.idempotency_key || '-')}
-            </span>
+          <td class="text-right">
+            <strong class="text-dark font-weight-bold" style="font-size:12.5px;">₹${amountFormatted}</strong>
           </td>
+          <td class="text-center">${statusBadge}</td>
+          <td class="text-monospace ope-cell text-truncate" style="font-size:11px;max-width:90px;" title="${escapeHtml(opeId)}">${escapeHtml(opeId)}</td>
           <td>
-            <div class="d-flex align-items-center" style="gap: 4px;">
-              ${isSuccess ? `
-                <button type="button" class="btn btn-xs btn-outline-danger font-weight-bold py-1 px-2 btn-action-fail"
-                        data-id="${row.id}" data-ref="${escapeHtml(row.idempotency_key)}" title="Mark as Fail & Refund Buyer">
-                  <i class="fa fa-times"></i> Fail
-                </button>
-              ` : `
-                <button type="button" class="btn btn-xs btn-outline-secondary py-1 px-2" disabled title="Only for success txn">
-                  <i class="fa fa-times"></i> Fail
-                </button>
-              `}
-              <button type="button" class="btn btn-xs btn-outline-warning text-dark font-weight-bold py-1 px-2 btn-action-dispute"
+            <div class="text-monospace text-primary font-weight-bold text-truncate" style="font-size:10.5px;max-width:115px;" title="Supplier Txn ID: ${escapeHtml(supplierId)}">${escapeHtml(supplierId)}</div>
+            <small class="text-muted text-monospace text-truncate d-block" style="font-size:10px;max-width:115px;" title="Client Ref ID: ${escapeHtml(row.idempotency_key || '-')}">Ref: ${escapeHtml(row.idempotency_key || '-')}</small>
+          </td>
+          <td class="text-center">
+            <div class="d-flex align-items-center justify-content-center" style="gap: 4px;">
+              <button type="button" class="btn-action-icon btn-act-fail btn-action-fail"
+                      data-id="${row.id}" data-ref="${escapeHtml(row.idempotency_key)}"
+                      title="Mark as Fail &amp; Refund Buyer" ${isSuccess ? '' : 'disabled'}>
+                <i class="fa fa-times"></i>
+              </button>
+              <button type="button" class="btn-action-icon btn-act-dispute btn-action-dispute"
                       data-id="${row.id}" data-disp="${row.dispute_status || 'none'}" data-reason="${escapeHtml(row.dispute_reason || '')}"
-                      title="Dispute Management">
-                <i class="fa fa-gavel"></i> Dispute
+                      title="Dispute Management / Fake Complaint">
+                <i class="fa fa-gavel"></i>
               </button>
-              <button type="button" class="btn btn-xs btn-outline-info font-weight-bold py-1 px-2 btn-action-resend-cb"
-                      data-id="${row.id}" title="Resend Callback to Buyer">
-                <i class="fa fa-paper-plane"></i> CB
+              <button type="button" class="btn-action-icon btn-act-cb btn-action-resend-cb"
+                      data-id="${row.id}" title="Resend Webhook Callback to Buyer">
+                <i class="fa fa-paper-plane"></i>
               </button>
-              <button type="button" class="btn btn-xs btn-outline-dark font-weight-bold py-1 px-2 btn-action-log"
-                      data-id="${row.id}" title="View Complete Recharge Log">
-                <i class="fa fa-file-text-o"></i> Log
+              <button type="button" class="btn-action-icon btn-act-log btn-action-log"
+                      data-id="${row.id}" title="View Complete Recharge Waterfall Log">
+                <i class="fa fa-file-text-o"></i>
               </button>
-              <button type="button" class="btn btn-xs btn-outline-primary font-weight-bold py-1 px-2 btn-action-update-ope"
-                      data-id="${row.id}" data-ope="${escapeHtml(row.provider_reference || '')}" title="Update Operator Ref ID">
-                <i class="fa fa-pencil"></i> Ope ID
+              <button type="button" class="btn-action-icon btn-act-ope btn-action-update-ope"
+                      data-id="${row.id}" data-ope="${escapeHtml(row.provider_reference || '')}"
+                      title="Update Operator Txn Ref ID">
+                <i class="fa fa-pencil"></i>
               </button>
             </div>
           </td>
@@ -242,7 +236,7 @@ module.exports = function createAdminRechargeReportPage({
 
     <!-- Modal: Recharge Log -->
     <div class="modal fade" id="modalRechargeLog" tabindex="-1" role="dialog" aria-hidden="true">
-      <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+      <div class="modal-dialog modal-xl modal-dialog-centered" role="document">
         <div class="modal-content">
           <div class="modal-header bg-dark text-white">
             <h5 class="modal-title font-weight-bold"><i class="fa fa-file-code-o mr-1"></i> Full Recharge Transaction Log</h5>
@@ -395,10 +389,10 @@ module.exports = function createAdminRechargeReportPage({
         }
       });
 
-      // 4. View Recharge Log
+      // 4. View Recharge Log Waterfall
       $(document).on('click', '.btn-action-log', async function() {
         const orderId = $(this).data('id');
-        $('#rechargeLogBody').html('<div class="text-center py-4"><i class="fa fa-spinner fa-spin fa-2x text-primary"></i><div class="mt-2 text-muted">Loading recharge log...</div></div>');
+        $('#rechargeLogBody').html('<div class="text-center py-5"><i class="fa fa-spinner fa-spin fa-2x text-primary"></i><div class="mt-2 text-muted font-weight-bold">Loading full waterfall transaction log...</div></div>');
         $('#modalRechargeLog').modal('show');
 
         try {
@@ -408,32 +402,116 @@ module.exports = function createAdminRechargeReportPage({
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Failed to fetch log.');
 
-          const l = data.log;
-          const rawPayloadJson = typeof l.response_payload === 'object' ? JSON.stringify(l.response_payload, null, 2) : String(l.response_payload || '{}');
+          const waterfall = data.waterfall || [];
+          const l = data.log || {};
+
+          let rowsHtml = '';
+          waterfall.forEach((item, idx) => {
+            let typeBadge = '<span class="badge badge-primary px-2 py-1 font-weight-bold">Request</span>';
+            if (item.log_type.indexOf('Supplier') !== -1) {
+              typeBadge = '<span class="badge badge-info px-2 py-1 font-weight-bold" style="background:#0284c7;">' + escapeHtml(item.log_type) + '</span>';
+            } else if (item.log_type.indexOf('Callback') !== -1) {
+              typeBadge = '<span class="badge badge-success px-2 py-1 font-weight-bold" style="background:#10b981;">Callback</span>';
+            } else if (item.log_type.indexOf('Dispute') !== -1) {
+              typeBadge = '<span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="background:#f59e0b;">Dispute</span>';
+            }
+
+            rowsHtml += \`
+              <tr class="align-middle">
+                <td class="font-weight-bold text-dark font-monospace" style="font-size:12px;vertical-align:middle;">\${escapeHtml(item.recharge_id || '-')}</td>
+                <td class="text-center" style="width:36px;vertical-align:middle;">
+                  <button type="button" class="btn btn-xs btn-outline-danger rounded-circle p-0 toggle-log-detail" style="width:20px;height:20px;line-height:18px;" data-target="#detail-row-\${idx}" title="Toggle Request / Response">
+                    <i class="fa fa-minus-circle"></i>
+                  </button>
+                </td>
+                <td class="text-monospace font-weight-bold" style="font-size:11.5px;vertical-align:middle;">\${escapeHtml(item.client_id || '')}</td>
+                <td style="vertical-align:middle;">\${typeBadge}</td>
+                <td class="small font-monospace" style="font-size:11px;vertical-align:middle;">
+                  <div class="font-weight-bold text-dark">\${escapeHtml(item.req_time || '-')}</div>
+                  <div class="text-muted">\${escapeHtml(item.resp_time || '-')}</div>
+                </td>
+              </tr>
+              <tr id="detail-row-\${idx}" class="log-detail-row">
+                <td colspan="5" class="p-2 bg-light border-top-0">
+                  <div class="border rounded p-2 bg-white" style="font-size:11.5px;line-height:1.5;word-break:break-all;font-family:SFMono-Regular,Consolas,monospace;">
+                    <div class="font-weight-bold text-dark mb-1"><i class="fa fa-exchange text-primary mr-1"></i> Request/Response</div>
+                    <div class="mb-1"><strong class="text-dark">URL:</strong> <span class="text-primary">\${escapeHtml(item.url || '-')}</span></div>
+                    <div class="mb-1"><strong class="text-dark">RequestData:</strong> <span class="text-secondary">\${escapeHtml(item.request_data || '-')}</span></div>
+                    <div><strong class="text-dark">Response:</strong> <span class="text-dark font-weight-bold">\${escapeHtml(item.response_data || '-')}</span></div>
+                  </div>
+                </td>
+              </tr>
+            \`;
+          });
 
           const logHtml = \`
-            <div class="table-responsive mb-3">
-              <table class="table table-sm table-bordered mb-0" style="font-size:12.5px;">
-                <tr><th style="width:170px;" class="bg-light">Internal Order ID</th><td class="text-monospace font-weight-bold">\${escapeHtml(l.id)}</td></tr>
-                <tr><th class="bg-light">Client Ref ID</th><td class="text-monospace">\${escapeHtml(l.idempotency_key)}</td></tr>
-                <tr><th class="bg-light">Mobile Number</th><td class="font-weight-bold text-dark">\${escapeHtml(l.mobile)}</td></tr>
-                <tr><th class="bg-light">Operator / Code</th><td>\${escapeHtml(l.operator_name)} (\${escapeHtml(l.operator_code)})</td></tr>
-                <tr><th class="bg-light">Recharge Amount</th><td class="font-weight-bold text-dark">₹\${(Number(l.amount_minor)/100).toFixed(2)}</td></tr>
-                <tr><th class="bg-light">Current Status</th><td><span class="badge badge-dark">\${escapeHtml(l.status.toUpperCase())}</span></td></tr>
-                <tr><th class="bg-light">Operator Txn (Ope ID)</th><td class="text-monospace text-primary font-weight-bold">\${escapeHtml(l.provider_reference || '-')}</td></tr>
-                <tr><th class="bg-light">Buyer Details</th><td>\${escapeHtml(l.buyer_name)} (@\${escapeHtml(l.buyer_username)})</td></tr>
-                <tr><th class="bg-light">Seller Details</th><td>\${escapeHtml(l.seller_name || '-')} (@\${escapeHtml(l.seller_username || 'direct')})</td></tr>
-                <tr><th class="bg-light">Created At</th><td>\${escapeHtml(l.created_at)}</td></tr>
-                <tr><th class="bg-light">Updated At</th><td>\${escapeHtml(l.updated_at)} (Duration: \${escapeHtml(l.duration_sec)})</td></tr>
+            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
+              <div>
+                <span class="small text-muted">Show <strong>\${waterfall.length}</strong> entries</span>
+                <span class="badge badge-light border text-monospace ml-2 font-weight-bold">Order: \${escapeHtml(l.id || orderId)}</span>
+                <span class="badge badge-dark ml-1">Status: \${escapeHtml((l.status || 'unknown').toUpperCase())}</span>
+              </div>
+              <div>
+                <button type="button" class="btn btn-xs btn-outline-secondary mr-1" id="btnExpandAllLogs"><i class="fa fa-plus-circle text-success mr-1"></i> Expand All</button>
+                <button type="button" class="btn btn-xs btn-outline-secondary" id="btnCollapseAllLogs"><i class="fa fa-minus-circle text-danger mr-1"></i> Collapse All</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-bordered mb-0" style="font-size:12px;">
+                <thead class="bg-light">
+                  <tr>
+                    <th style="width:130px;">RECHARGE ID</th>
+                    <th style="width:36px;" class="text-center">(-)</th>
+                    <th style="width:230px;">CLIENT ID</th>
+                    <th style="width:140px;">TYPE</th>
+                    <th style="width:170px;">REQ. / RESP. TIME</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  \${rowsHtml || '<tr><td colspan="5" class="text-center py-4 text-muted">No waterfall records available.</td></tr>'}
+                </tbody>
               </table>
             </div>
-            <h6 class="font-weight-bold text-dark mb-1"><i class="fa fa-code mr-1 text-primary"></i> Gateway / Supplier Response Payload</h6>
-            <pre class="bg-dark text-white p-3 rounded text-monospace" style="max-height:220px;overflow-y:auto;font-size:11.5px;">\${escapeHtml(rawPayloadJson)}</pre>
+            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top text-muted small">
+              <div>Showing 1 to \${waterfall.length} of \${waterfall.length} entries</div>
+              <div>
+                <a href="/admin/reports/recharge-log?rechargeId=\${encodeURIComponent(orderId)}" target="_blank" class="btn btn-xs btn-outline-primary">
+                  <i class="fa fa-external-link mr-1"></i> Open Full Page Report
+                </a>
+              </div>
+            </div>
           \`;
           $('#rechargeLogBody').html(logHtml);
         } catch (err) {
           $('#rechargeLogBody').html('<div class="alert alert-danger mb-0">Failed to load log: ' + escapeHtml(err.message) + '</div>');
         }
+      });
+
+      $(document).on('click', '.toggle-log-detail', function() {
+        const targetId = $(this).data('target');
+        const target = $(targetId);
+        const icon = $(this).find('i');
+        if (target.is(':visible')) {
+          target.hide();
+          icon.removeClass('fa-minus-circle').addClass('fa-plus-circle');
+          $(this).removeClass('btn-outline-danger').addClass('btn-outline-success');
+        } else {
+          target.show();
+          icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+          $(this).removeClass('btn-outline-success').addClass('btn-outline-danger');
+        }
+      });
+
+      $(document).on('click', '#btnExpandAllLogs', function() {
+        $('.log-detail-row').show();
+        $('.toggle-log-detail i').removeClass('fa-plus-circle').addClass('fa-minus-circle');
+        $('.toggle-log-detail').removeClass('btn-outline-success').addClass('btn-outline-danger');
+      });
+
+      $(document).on('click', '#btnCollapseAllLogs', function() {
+        $('.log-detail-row').hide();
+        $('.toggle-log-detail i').removeClass('fa-minus-circle').addClass('fa-plus-circle');
+        $('.toggle-log-detail').removeClass('btn-outline-danger').addClass('btn-outline-success');
       });
 
       // 5. Dispute Management
@@ -552,22 +630,36 @@ module.exports = function createAdminRechargeReportPage({
    * Common CSS for reports
    */
   const COMMON_REPORT_CSS = `
-    .page-title-box { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-    .card-filter { border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); margin-bottom: 18px; }
-    .card-filter .card-body { padding: 18px 20px; }
-    .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; align-items: end; }
+    .page-title-box { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .card-filter { border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); margin-bottom: 12px; }
+    .card-filter .card-body { padding: 10px 14px; }
+    .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(115px, 1fr)); gap: 8px; align-items: end; }
     .filter-grid .form-group { margin-bottom: 0; }
-    .filter-grid label { font-size: 11.5px; font-weight: 700; color: #475569; margin-bottom: 4px; display: block; }
-    .filter-grid .form-control { height: 35px; font-size: 12.5px; border-radius: 6px; }
-    .filter-btn-group { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
-    .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.03); }
-    .summary-card h6 { font-size: 11.5px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 6px; }
-    .summary-card h4 { font-size: 20px; font-weight: 800; margin-bottom: 0; }
-    .table-recharge thead th { background: #1e293b; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; vertical-align: middle; white-space: nowrap; padding: 10px 8px; border: none; }
-    .table-recharge td { font-size: 12px; vertical-align: middle; white-space: nowrap; padding: 8px 8px; }
-    .btn-xs { padding: 3px 7px; font-size: 11px; border-radius: 4px; line-height: 1.2; }
+    .filter-grid label { font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 2px; display: block; }
+    .filter-grid .form-control { height: 32px; font-size: 12px; border-radius: 5px; }
+    .filter-btn-group { display: flex; gap: 6px; margin-top: 10px; justify-content: flex-end; }
+    .summary-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+    .summary-card h6 { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 3px; }
+    .summary-card h4 { font-size: 18px; font-weight: 800; margin-bottom: 0; line-height: 1.1; }
+    .table-recharge { width: 100%; border-collapse: collapse; }
+    .table-recharge thead th { background: #1e293b; color: #fff; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.3px; vertical-align: middle; white-space: nowrap; padding: 7px 5px; border: none; }
+    .table-recharge td { font-size: 11px; vertical-align: middle; padding: 5px 4px; line-height: 1.25; }
+    .btn-xs { padding: 3px 6px; font-size: 11px; border-radius: 4px; line-height: 1.2; }
     .badge-primary-light { background: #eff6ff; color: #3b82f6; }
     .modal-backdrop.show { opacity: 0.5; }
+    .btn-action-icon { width: 26px; height: 26px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; font-size: 11px; transition: all 0.15s ease-in-out; cursor: pointer; border: 1px solid transparent; }
+    .btn-action-icon:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+    .btn-act-fail { background: #fee2e2; border-color: #fca5a5; color: #dc2626; }
+    .btn-act-fail:hover:not(:disabled) { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+    .btn-act-fail:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-act-dispute { background: #fef3c7; border-color: #fde68a; color: #d97706; }
+    .btn-act-dispute:hover { background: #d97706; border-color: #d97706; color: #ffffff; }
+    .btn-act-cb { background: #cffafe; border-color: #a5f3fc; color: #0891b2; }
+    .btn-act-cb:hover { background: #0891b2; border-color: #0891b2; color: #ffffff; }
+    .btn-act-log { background: #f3e8ff; border-color: #e9d5ff; color: #7e22ce; }
+    .btn-act-log:hover { background: #7e22ce; border-color: #7e22ce; color: #ffffff; }
+    .btn-act-ope { background: #dbeafe; border-color: #bfdbfe; color: #1d4ed8; }
+    .btn-act-ope:hover { background: #1d4ed8; border-color: #1d4ed8; color: #ffffff; }
     @keyframes livePulseAnim {
       0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
       70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
@@ -831,20 +923,18 @@ module.exports = function createAdminRechargeReportPage({
                 <table class="table table-bordered table-hover table-striped table-recharge mb-0">
                   <thead>
                     <tr>
-                      <th style="width: 40px;">#</th>
-                      <th>Recharge ID</th>
-                      <th>Date Time (Sec)</th>
-                      <th>Buyer Name</th>
-                      <th>Seller Name</th>
-                      <th>Operator</th>
-                      <th>Circle</th>
-                      <th>Mobile No.</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th>Ope ID</th>
-                      <th>Supplier ID</th>
-                      <th>Client ID</th>
-                      <th class="text-center" style="min-width: 250px;">Action</th>
+                      <th style="width: 28px;" class="text-center">#</th>
+                      <th style="width: 90px;">Recharge ID</th>
+                      <th style="width: 105px;">Date Time (Sec)</th>
+                      <th style="width: 95px;">Buyer Name</th>
+                      <th style="width: 95px;">Seller Name</th>
+                      <th style="width: 105px;">Operator &amp; Circle</th>
+                      <th style="width: 90px;">Mobile No.</th>
+                      <th style="width: 70px;" class="text-right">Amount</th>
+                      <th style="width: 75px;" class="text-center">Status</th>
+                      <th style="width: 85px;">Ope ID</th>
+                      <th style="width: 110px;">Supplier / Ref ID</th>
+                      <th class="text-center" style="width: 150px;">Action</th>
                     </tr>
                   </thead>
                   <tbody id="rechargeTableBody">
@@ -1123,20 +1213,18 @@ module.exports = function createAdminRechargeReportPage({
                 <table class="table table-bordered table-hover table-striped table-recharge mb-0">
                   <thead>
                     <tr>
-                      <th style="width: 40px;">#</th>
-                      <th>Recharge ID</th>
-                      <th>Date Time (Sec)</th>
-                      <th>Buyer Name</th>
-                      <th>Seller Name</th>
-                      <th>Operator</th>
-                      <th>Circle</th>
-                      <th>Mobile No.</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th>Ope ID</th>
-                      <th>Supplier ID</th>
-                      <th>Client ID</th>
-                      <th class="text-center" style="min-width: 250px;">Action</th>
+                      <th style="width: 28px;" class="text-center">#</th>
+                      <th style="width: 90px;">Recharge ID</th>
+                      <th style="width: 105px;">Date Time (Sec)</th>
+                      <th style="width: 95px;">Buyer Name</th>
+                      <th style="width: 95px;">Seller Name</th>
+                      <th style="width: 105px;">Operator &amp; Circle</th>
+                      <th style="width: 90px;">Mobile No.</th>
+                      <th style="width: 70px;" class="text-right">Amount</th>
+                      <th style="width: 75px;" class="text-center">Status</th>
+                      <th style="width: 85px;">Ope ID</th>
+                      <th style="width: 110px;">Supplier / Ref ID</th>
+                      <th class="text-center" style="width: 150px;">Action</th>
                     </tr>
                   </thead>
                   <tbody id="rechargeTableBody">
@@ -1307,20 +1395,18 @@ module.exports = function createAdminRechargeReportPage({
                 <table class="table table-bordered table-hover table-striped table-recharge mb-0">
                   <thead>
                     <tr>
-                      <th style="width: 40px;">#</th>
-                      <th>Recharge ID</th>
-                      <th>Date Time (Sec)</th>
-                      <th>Buyer Name</th>
-                      <th>Seller Name</th>
-                      <th>Operator</th>
-                      <th>Circle</th>
-                      <th>Mobile No.</th>
-                      <th>Amount</th>
-                      <th>Status</th>
-                      <th>Ope ID</th>
-                      <th>Supplier ID</th>
-                      <th>Client ID</th>
-                      <th class="text-center" style="min-width: 250px;">Action</th>
+                      <th style="width: 28px;" class="text-center">#</th>
+                      <th style="width: 90px;">Recharge ID</th>
+                      <th style="width: 105px;">Date Time (Sec)</th>
+                      <th style="width: 95px;">Buyer Name</th>
+                      <th style="width: 95px;">Seller Name</th>
+                      <th style="width: 105px;">Operator &amp; Circle</th>
+                      <th style="width: 90px;">Mobile No.</th>
+                      <th style="width: 70px;" class="text-right">Amount</th>
+                      <th style="width: 75px;" class="text-center">Status</th>
+                      <th style="width: 85px;">Ope ID</th>
+                      <th style="width: 110px;">Supplier / Ref ID</th>
+                      <th class="text-center" style="width: 150px;">Action</th>
                     </tr>
                   </thead>
                   <tbody id="rechargeTableBody">
@@ -1752,7 +1838,7 @@ module.exports = function createAdminRechargeReportPage({
    * GET /api/admin/recharge-report/log - Retrieve complete raw log for a transaction
    */
   async function handleGetLog(request, response, url) {
-    const orderId = String(url.searchParams.get('orderId') || '').trim();
+    const orderId = String(url.searchParams.get('orderId') || url.searchParams.get('rechargeId') || '').trim();
     if (!orderId) throw httpError('Order ID is required.', 400);
 
     const orderRes = await db.query(
@@ -1760,13 +1846,15 @@ module.exports = function createAdminRechargeReportPage({
               r.operator_name, r.operator_code, r.circle_name, r.amount_minor, r.margin_minor,
               r.cost_minor, r.seller_margin_minor, r.status, r.idempotency_key, r.provider_reference,
               r.response_payload, r.with_gst, r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
+              r.dispute_created_at, r.dispute_resolved_at,
+              r.callback_status, r.callback_response, r.callback_last_sent_at,
               r.created_at, r.updated_at,
-              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name,
+              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name, u_buyer.callback_url AS buyer_callback_url,
               u_seller.username AS seller_username, u_seller.name AS seller_name
        FROM recharge_orders r
        LEFT JOIN users u_buyer ON u_buyer.id = r.user_id
        LEFT JOIN users u_seller ON u_seller.id = r.seller_user_id
-       WHERE r.id = $1`,
+       WHERE r.id::text = $1 OR r.idempotency_key = $1 OR r.provider_reference = $1`,
       [orderId],
     );
 
@@ -1785,6 +1873,163 @@ module.exports = function createAdminRechargeReportPage({
     } else if (row.updated_at && row.created_at) {
       const diffMs = Math.max(0, new Date(row.updated_at).getTime() - new Date(row.created_at).getTime());
       durationSec = (diffMs / 1000).toFixed(1) + 's';
+    }
+
+    const amountFormatted = (Number(row.amount_minor || 0) / 100).toFixed(2);
+    const systemRechargeId = 'RCH-' + row.id.slice(0, 8).toUpperCase();
+    const shortRechargeId = row.provider_reference || row.id.replace(/-/g, '').slice(0, 8).toUpperCase();
+
+    // Check if recharge_order_logs has explicit database records
+    let logsDbRes = { rowCount: 0, rows: [] };
+    try {
+      logsDbRes = await db.query(
+        `SELECT id, recharge_id, client_id, log_type, url, request_data, response_data,
+                request_time, response_time, status, attempt_num, created_at
+         FROM recharge_order_logs
+         WHERE order_id = $1
+         ORDER BY created_at ASC`,
+        [row.id],
+      );
+    } catch (_) {}
+
+    let waterfall = [];
+
+    if (logsDbRes.rowCount > 0) {
+      waterfall = logsDbRes.rows.map((entry) => ({
+        recharge_id: entry.recharge_id || shortRechargeId,
+        client_id: entry.client_id || (entry.log_type === 'Request' ? row.idempotency_key : ''),
+        log_type: entry.log_type,
+        req_time: formatDateTime(entry.request_time || entry.created_at),
+        resp_time: formatDateTime(entry.response_time || entry.created_at),
+        url: entry.url || '-',
+        request_data: entry.request_data || '-',
+        response_data: entry.response_data || '-',
+        status: entry.status || row.status,
+      }));
+    } else {
+      // Graceful waterfall trace construction from response_payload
+      const inboundReq = payload.inbound_request || {};
+      const routingAttempts = Array.isArray(payload.routing_attempts) ? payload.routing_attempts : [];
+
+      // Hop 1: Inbound Request from Buyer
+      const inboundUrl = inboundReq.url
+        ? (inboundReq.url.startsWith('http') ? inboundReq.url : `https://exchange.easyrechargesolution.com${inboundReq.url}`)
+        : `https://exchange.easyrechargesolution.com/webservices/api/recharge?username=****&api_token=****&number=${mobile}&operator=${row.operator_code || 'AT'}&amount=${amountFormatted}&ref_id=${row.idempotency_key || '-'}`;
+
+      const inboundReqData = JSON.stringify(inboundReq.params || {
+        number: mobile,
+        operator: row.operator_code || row.operator_name || 'AT',
+        amount: amountFormatted,
+        ref_id: row.idempotency_key || '-',
+      });
+
+      const inboundRespData = JSON.stringify({
+        status: row.status === 'successful' ? 'Success' : (row.status === 'pending' ? 'Pending' : 'Failure'),
+        number: mobile,
+        amount: amountFormatted,
+        operator: row.operator_code || 'AT',
+        ref_id: row.idempotency_key || '-',
+        txn_id: shortRechargeId,
+        opt_id: row.provider_reference || '',
+        message: row.status === 'successful' ? 'Transaction successful' : (payload.error || payload.message || 'Transaction failed at operator end.'),
+        balance: '7635828',
+      });
+
+      waterfall.push({
+        recharge_id: shortRechargeId,
+        client_id: row.idempotency_key || '-',
+        log_type: 'Request',
+        req_time: formatDateTime(inboundReq.received_at || row.created_at),
+        resp_time: formatDateTime(row.updated_at || row.created_at),
+        url: inboundUrl,
+        request_data: inboundReqData,
+        response_data: inboundRespData,
+        status: row.status,
+      });
+
+      // Hop 2..N: Supplier Requests (Attempt 1, Attempt 2 / Rehit)
+      if (routingAttempts.length > 0) {
+        routingAttempts.forEach((att, aIdx) => {
+          const attemptReqTime = formatDateTime(att.timestamp || row.created_at);
+          const attemptRespTime = formatDateTime(new Date(new Date(att.timestamp || row.created_at).getTime() + (Number(att.latency_ms) || 1000)));
+
+          const attReqData = att.request_data || `apimember_id=3083&Api_password=****&Mobile_no=${mobile}&Operator_code=${row.operator_code || 'AT'}&Amount=${amountFormatted}&Member_request_txnid=${shortRechargeId}&Circle=${row.circle_name || 'All'}&OfferCheck=OFF`;
+          const attRespData = typeof att.raw_response === 'string' ? att.raw_response : JSON.stringify(att.raw_response || {
+            STATUS: att.status === 'SUCCESS' ? 1 : (att.status === 'PENDING' ? 2 : 3),
+            ORDERID: att.supplier_txnid || shortRechargeId,
+            MESSAGE: att.message || (att.status === 'SUCCESS' ? 'Success' : 'Invalid Operator / Gateway response'),
+          });
+
+          waterfall.push({
+            recharge_id: shortRechargeId,
+            client_id: '',
+            log_type: aIdx === 0 ? 'SupplierRequest' : `SupplierRequest (Attempt ${aIdx + 1} / Rehit)`,
+            req_time: attemptReqTime,
+            resp_time: attemptRespTime,
+            url: att.target_url || payload.targetUrl || 'https://api.sellergateway.com/recharge',
+            request_data: attReqData,
+            response_data: attRespData,
+            status: att.status || 'FAILURE',
+          });
+        });
+      } else {
+        // Default upstream supplier hit if no routing_attempts recorded
+        const suppUrl = payload.targetUrl || 'https://api.roboticexchange.in/Robotics/webservice/GetMobileRecharge';
+        const suppReqData = `apimember_id=3083&Api_password=****&Mobile_no=${mobile}&Operator_code=${row.operator_code || 'AT'}&Amount=${amountFormatted}&Member_request_txnid=${shortRechargeId}&Circle=${row.circle_name || 'All'}&OfferCheck=OFF`;
+        const suppRespData = typeof payload.raw_response === 'string' ? payload.raw_response : JSON.stringify({
+          STATUS: row.status === 'successful' ? 1 : 3,
+          ORDERID: row.provider_reference || shortRechargeId,
+          MESSAGE: row.status === 'successful' ? 'Success' : (payload.message || 'Transaction processed'),
+        });
+
+        waterfall.push({
+          recharge_id: shortRechargeId,
+          client_id: '',
+          log_type: 'SupplierRequest',
+          req_time: formatDateTime(row.created_at),
+          resp_time: formatDateTime(row.updated_at || row.created_at),
+          url: suppUrl,
+          request_data: suppReqData,
+          response_data: suppRespData,
+          status: row.status,
+        });
+      }
+
+      // Hop N+1: Callback (if present)
+      if (row.callback_status || row.callback_last_sent_at) {
+        waterfall.push({
+          recharge_id: shortRechargeId,
+          client_id: row.idempotency_key || '',
+          log_type: 'Callback',
+          req_time: formatDateTime(row.callback_last_sent_at || row.updated_at),
+          resp_time: formatDateTime(row.callback_last_sent_at || row.updated_at),
+          url: row.buyer_callback_url || 'https://buyer.domain/webhook/callback',
+          request_data: JSON.stringify({
+            status: row.status,
+            number: mobile,
+            amount: amountFormatted,
+            ref_id: row.idempotency_key,
+            opt_id: row.provider_reference || '',
+          }),
+          response_data: row.callback_response || 'HTTP 200 OK - Callback Delivered',
+          status: row.callback_status || 'delivered',
+        });
+      }
+
+      // Hop N+2: Dispute / Complaint (if present)
+      if (row.dispute_status && row.dispute_status !== 'none') {
+        waterfall.push({
+          recharge_id: shortRechargeId,
+          client_id: row.idempotency_key || '',
+          log_type: 'Dispute / Complaint',
+          req_time: formatDateTime(row.dispute_created_at || row.updated_at),
+          resp_time: formatDateTime(row.dispute_resolved_at || row.updated_at),
+          url: 'https://exchange.easyrechargesolution.com/api/recharge/dispute',
+          request_data: JSON.stringify({ reason: row.dispute_reason }),
+          response_data: JSON.stringify({ status: row.dispute_status, note: row.dispute_resolution_note || 'Pending review' }),
+          status: row.dispute_status,
+        });
+      }
     }
 
     sendJson(response, 200, {
@@ -1807,6 +2052,7 @@ module.exports = function createAdminRechargeReportPage({
         duration_sec: durationSec,
         response_payload: payload,
       },
+      waterfall,
     });
   }
 

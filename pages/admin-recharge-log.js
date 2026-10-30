@@ -143,6 +143,7 @@ module.exports = function createAdminRechargeLogPage({
    * Main Page Renderer: GET /admin/reports/recharge-log
    */
   async function sendAdminRechargeLogPage(admin, response, searchParams) {
+    const directRechargeId = String(searchParams.get('rechargeId') || searchParams.get('orderId') || searchParams.get('id') || '').trim();
     const filters = {
       fromDate: String(searchParams.get('fromDate') || '').trim(),
       toDate: String(searchParams.get('toDate') || '').trim(),
@@ -150,7 +151,7 @@ module.exports = function createAdminRechargeLogPage({
       operatorId: String(searchParams.get('operatorId') || '').trim(),
       rehitOnly: String(searchParams.get('rehitOnly') || 'all').trim().toLowerCase(), // all, rehit, single
       disputeOnly: String(searchParams.get('disputeOnly') || 'all').trim().toLowerCase(), // all, yes, no
-      search: String(searchParams.get('search') || '').trim().slice(0, 80),
+      search: (directRechargeId || String(searchParams.get('search') || '')).trim().slice(0, 80),
       limit: Math.min(Math.max(parseInt(searchParams.get('limit') || '150', 10), 10), 1000),
     };
 

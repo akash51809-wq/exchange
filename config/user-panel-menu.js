@@ -31,6 +31,7 @@ const USER_PANEL_MENU = [
   { label: 'User Report', path: '/report', items: [
     { label: 'Account Statement', path: '/report/account-statement' },
     { label: 'Fund Order', path: '/report/fund-order' },
+    { label: 'Login & IP Log', path: '/report/ip-log' },
   ] },
   { label: 'Alerts Setting', path: '/alerts-setting' },
   { label: 'Invoice', path: '/invoice', items: [
@@ -90,6 +91,7 @@ function getUserPanelMenu(walletMode = 'single') {
     { label: 'User Report', path: '/report', items: [
       { label: 'Account Statement', path: '/report/account-statement' },
       { label: 'Fund Order', path: '/report/fund-order' },
+      { label: 'Login & IP Log', path: '/report/ip-log' },
     ] },
     { label: 'Alerts Setting', path: '/alerts-setting' },
     { label: 'Invoice', path: '/invoice', items: [

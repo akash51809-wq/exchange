@@ -94,6 +94,7 @@ const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
 const createAdminWalletRedeemPage = require('./pages/admin-wallet-redeem');
 const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
 const createAdminUserLoginHistoryPage = require('./pages/admin-user-login-history');
+const createUserIpLogPage = require('./pages/user-ip-log');
 const createAdminWebsiteSettingsPage = require('./pages/admin-website-settings');
 const createAdminWalletSettingsPage = require('./pages/admin-wallet-settings');
 const createAdminNotificationsPage = require('./pages/admin-notifications');
@@ -384,6 +385,11 @@ const { sendAdminWalletExchangePage } = createAdminWalletExchangePage({
   httpError,
 });
 const { sendAdminUserLoginHistoryPage } = createAdminUserLoginHistoryPage({
+  db,
+  sendJson,
+  httpError,
+});
+const { sendUserIpLogPage } = createUserIpLogPage({
   db,
   sendJson,
   httpError,
@@ -4691,6 +4697,8 @@ async function handleRequest(request, response) {
           await sendUserFundStatementPage(session, response, url.searchParams);
         } else if (url.pathname === '/report/account-statement') {
           await sendUserReportAccountStatementPage(session, response, url.searchParams);
+        } else if (url.pathname === '/report/ip-log' || url.pathname === '/report/login-log' || url.pathname === '/user/ip-log' || url.pathname === '/setting/ip-log') {
+          await sendUserIpLogPage(session, response, url.searchParams);
         } else if (url.pathname === '/invoice/buyer-gst-invoice' || url.pathname === '/invoice/buyer-invoice') {
           await sendUserInvoicePage(session, 'buyer-gst', response, url.searchParams);
         } else if (url.pathname === '/invoice/seller-gst-invoice' || url.pathname === '/invoice/seller-invoice') {
@@ -4858,7 +4866,13 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
-      if (url.pathname === '/admin/reports/recharge-log' || url.pathname === '/admin/recharge-log' || url.pathname === '/admin/reports/recharge-logs') {
+      if (
+        url.pathname === '/admin/reports/recharge-log' ||
+        url.pathname === '/admin/recharge-log' ||
+        url.pathname === '/admin/reports/recharge-logs' ||
+        url.pathname === '/reports/recharge_logs_report' ||
+        url.pathname === '/admin/reports/recharge_logs_report'
+      ) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
@@ -5136,7 +5150,9 @@ async function handleRequest(request, response) {
         url.pathname === '/admin/reports/user-log-history' ||
         url.pathname === '/admin/reports/login-history' ||
         url.pathname === '/admin/reports/user-login-log' ||
-        url.pathname === '/admin/user-login-log'
+        url.pathname === '/admin/user-login-log' ||
+        url.pathname === '/admin/reports/ip-log' ||
+        url.pathname === '/admin/ip-log'
       ) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
