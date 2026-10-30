@@ -731,7 +731,7 @@ module.exports = function createAdminInvoicePage({ db, formatMinorUnits }) {
       printWindow.document.write('<style>body{padding:20px;font-family:-apple-system,sans-serif;}</style>');
       printWindow.document.write('</head><body>');
       printWindow.document.write(content);
-      printWindow.document.write('</body></html>');
+      printWindow.document.write('</' + 'body></html>');
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => {

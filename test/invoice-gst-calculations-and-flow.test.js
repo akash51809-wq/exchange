@@ -126,6 +126,23 @@ test('Admin Invoice Page - Color Contrast & Table Column Structure', async () =>
     end: (html) => { sellerHtml = html; },
   }, new URLSearchParams('tab=seller&year=2026&month=09'));
 
+  // Check Top Black Box Strip (Logo & Logout Button) & Horizontal Menu Bar
+  assert.ok(sellerHtml.includes('id="exchange-fixed-strip"'), 'Must render top fixed black strip');
+  assert.ok(sellerHtml.includes('exchange-brand-img'), 'Must include brand logo in top strip');
+  assert.ok(sellerHtml.includes('id="logout-button"'), 'Must include Logout button in top strip');
+  assert.ok(sellerHtml.includes('class="horizontalMenu'), 'Must include horizontal menu bar');
+  assert.ok(sellerHtml.indexOf('id="exchange-fixed-strip"') < sellerHtml.lastIndexOf('</body>'), 'Top strip must be injected into HTML body, not inside script');
+
+  // Verify scripts compile with zero syntax errors
+  const scriptRegex = /<script(?:\s+[^>]*)?>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = scriptRegex.exec(sellerHtml)) !== null) {
+    const code = match[1].trim();
+    if (code) {
+      assert.doesNotThrow(() => new Function(code), 'All inline scripts must compile without syntax errors');
+    }
+  }
+
   // Check Tab Contrast Styling
   assert.ok(sellerHtml.includes('invoice-tab-btn'), 'Should use modern invoice-tab-btn classes');
   assert.ok(sellerHtml.includes('background: #1e3a8a !important;') && sellerHtml.includes('color: #ffffff !important;'), 'Active tab button must have high-contrast deep blue background and white text');
