@@ -1970,6 +1970,32 @@ function readSessionToken(request, cookieName = SESSION_COOKIE) {
   return entry ? decodeURIComponent(entry.slice(cookieName.length + 1)) : null;
 }
 
+const SESSION_CACHE = new Map();
+const SESSION_CACHE_TTL_MS = 15_000; // 15 seconds high-performance in-memory cache
+
+function getCachedSession(key) {
+  const item = SESSION_CACHE.get(key);
+  if (item && Date.now() - item.cachedAt < SESSION_CACHE_TTL_MS) {
+    return item.session;
+  }
+  if (item) SESSION_CACHE.delete(key);
+  return null;
+}
+
+function setCachedSession(key, session) {
+  if (SESSION_CACHE.size > 10_000) {
+    const now = Date.now();
+    for (const [k, v] of SESSION_CACHE.entries()) {
+      if (now - v.cachedAt >= SESSION_CACHE_TTL_MS) SESSION_CACHE.delete(k);
+    }
+  }
+  SESSION_CACHE.set(key, { session, cachedAt: Date.now() });
+}
+
+function invalidateSessionCache(key) {
+  if (key) SESSION_CACHE.delete(key);
+}
+
 async function getSession(request) {
   const urlPath = String(request.url || '').split('?')[0];
   const isAdminRoute = urlPath.startsWith('/admin') || urlPath.startsWith('/api/admin');
@@ -1978,26 +2004,40 @@ async function getSession(request) {
     const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE);
     if (adminToken && adminToken.length <= 128) {
       const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest();
+      const adminKey = 'admin:' + adminTokenHash.toString('hex');
+      const cachedAdmin = getCachedSession(adminKey);
+      if (cachedAdmin) return cachedAdmin;
       const adminRes = await db.query(
         `SELECT u.id, u.username, u.name, u.role, s.impersonated_by FROM user_sessions s
          JOIN users u ON u.id = s.user_id
          WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND u.status = 'active' AND u.deleted_at IS NULL AND u.role = 'admin'`,
         [adminTokenHash],
       );
-      if (adminRes.rows[0]) return adminRes.rows[0];
+      if (adminRes.rows[0]) {
+        setCachedSession(adminKey, adminRes.rows[0]);
+        return adminRes.rows[0];
+      }
     }
   }
 
   const token = readSessionToken(request, SESSION_COOKIE);
   if (!token || token.length > 128) return null;
   const tokenHash = crypto.createHash('sha256').update(token).digest();
+  const userKey = 'user:' + tokenHash.toString('hex');
+  const cachedUser = getCachedSession(userKey);
+  if (cachedUser) return cachedUser;
+
   const result = await db.query(
     `SELECT u.id, u.username, u.name, u.role, s.impersonated_by FROM user_sessions s
      JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now() AND (u.status = 'active' OR s.impersonated_by IS NOT NULL) AND u.deleted_at IS NULL`,
     [tokenHash],
   );
-  return result.rows[0] || null;
+  if (result.rows[0]) {
+    setCachedSession(userKey, result.rows[0]);
+    return result.rows[0];
+  }
+  return null;
 }
 
 function sessionCookie(token, maxAge) {
@@ -2206,11 +2246,16 @@ async function loginUser(request, response) {
     console.warn('[user_login_logs error]', err.message);
   }
 
+  const cookieHeaders = [sessionCookie(token, SESSION_DURATION_SECONDS)];
+  if (user.role === 'admin') {
+    cookieHeaders.push(adminSessionCookie(token, SESSION_DURATION_SECONDS));
+  }
+
   sendJson(response, 200, {
     message: 'Login successful.',
     redirect: user.role === 'admin' ? '/admin/' : '/dashboard',
     user: { userId: user.username, name: user.name, role: user.role },
-  }, { 'set-cookie': sessionCookie(token, SESSION_DURATION_SECONDS) });
+  }, { 'set-cookie': user.role === 'admin' ? cookieHeaders : sessionCookie(token, SESSION_DURATION_SECONDS) });
 }
 
 async function logoutUser(request, response) {
@@ -2219,10 +2264,14 @@ async function logoutUser(request, response) {
   const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE);
   if (token) {
     const tokenHash = crypto.createHash('sha256').update(token).digest();
+    invalidateSessionCache('user:' + tokenHash.toString('hex'));
+    invalidateSessionCache('admin:' + tokenHash.toString('hex'));
     await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
     await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
   }
   if (adminToken) {
+    const adminTokenHash = crypto.createHash('sha256').update(adminToken).digest();
+    invalidateSessionCache('admin:' + adminTokenHash.toString('hex'));
     sendJson(response, 200, { message: 'Exited user view.', redirect: '/admin/users/list' }, {
       'set-cookie': [
         sessionCookie(adminToken, SESSION_DURATION_SECONDS),
@@ -2324,17 +2373,28 @@ async function seedPlanApiConfig() {
   }
 }
 
+let cachedGeneralSettings = null;
+let cachedGeneralSettingsAt = 0;
+const GENERAL_SETTINGS_CACHE_TTL_MS = 10_000; // 10s fast in-memory cache
+
 async function getGeneralSettings() {
+  const now = Date.now();
+  if (cachedGeneralSettings && (now - cachedGeneralSettingsAt < GENERAL_SETTINGS_CACHE_TTL_MS)) {
+    return cachedGeneralSettings;
+  }
   try {
     const row = await db.query("SELECT is_enabled, config_ciphertext FROM admin_service_settings WHERE service_key = 'general'");
     if (row.rowCount > 0 && decryptServiceConfig) {
       const config = decryptServiceConfig(row.rows[0].config_ciphertext);
-      return { isEnabled: row.rows[0].is_enabled, ...config };
+      const res = { isEnabled: row.rows[0].is_enabled, ...config };
+      cachedGeneralSettings = res;
+      cachedGeneralSettingsAt = now;
+      return res;
     }
   } catch (err) {
     console.warn('[General Settings] Query error:', err.message);
   }
-  return {
+  const fallback = {
     loginOtpEnabled: false,
     instantResponseEnabled: true,
     instantResponseSeconds: 15,
@@ -2359,6 +2419,9 @@ async function getGeneralSettings() {
     apiSuspendRefundPercentEnabled: true,
     apiSuspendRefundPercent: 25,
   };
+  cachedGeneralSettings = fallback;
+  cachedGeneralSettingsAt = now;
+  return fallback;
 }
 
 async function quoteTransactionMargin(request, response) {
@@ -7673,7 +7736,7 @@ async function handleRequest(request, response) {
 
         if (!username) throw httpError('Username or User ID is required.', 400);
         if (!['credit', 'debit'].includes(actionType)) throw httpError('Action type must be credit or debit.', 400);
-        if (isNaN(amount) || amount <= 0) throw httpError('A valid positive amount is required.', 400);
+        if (!Number.isFinite(amount) || amount <= 0 || amount > 10000000) throw httpError('A valid positive amount is required (up to 1,00,00,000).', 400);
         const amountMinor = BigInt(Math.round(amount * 100));
 
         const userRes = await db.query(
