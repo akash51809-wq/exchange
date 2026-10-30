@@ -100,6 +100,8 @@ const createAdminNotificationsPage = require('./pages/admin-notifications');
 const createAdminSendBulkWhatsappPage = require('./pages/admin-send-bulk-whatsapp');
 const createAdminSendBulkEmailPage = require('./pages/admin-send-bulk-email');
 const createAdminIncomingSmsPage = require('./pages/admin-incoming-sms');
+const createAdminAllSellerMarginPage = require('./pages/admin-all-seller-margin');
+const createAdminAllBuyerMarginPage = require('./pages/admin-all-buyer-margin');
 const {
   processIncomingSms,
   parseIncomingBankSms,
@@ -337,6 +339,20 @@ const { sendAdminUserSendMsgLogPage } = createAdminUserSendMsgLogPage({
   httpError,
 });
 const { sendAdminDailySalesReportPage } = createAdminDailySalesReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminAllSellerMarginPage } = createAdminAllSellerMarginPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminAllBuyerMarginPage } = createAdminAllBuyerMarginPage({
   db,
   formatMinorUnits,
   decryptMobile,
@@ -643,6 +659,8 @@ const DATABASE_SCHEMA = `
   ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
   ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS logo_data BYTEA;
   ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS logo_mime TEXT;
+  ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS minimum_margin_percent NUMERIC(5,2) DEFAULT 0.00;
+  ALTER TABLE operator_definitions ADD COLUMN IF NOT EXISTS maximum_margin_percent NUMERIC(5,2) DEFAULT 100.00;
   CREATE UNIQUE INDEX IF NOT EXISTS operator_definitions_code_lower_unique ON operator_definitions (lower(operator_code));
 
   CREATE UNIQUE INDEX IF NOT EXISTS wallet_fund_requests_txn_hash_unique ON wallet_fund_requests (transaction_id_hash) WHERE transaction_id_hash IS NOT NULL;
@@ -1165,6 +1183,14 @@ function parsePort(value, fallback) {
 }
 
 // 2) Shared response and security headers. Untrusted HTML never rendered in JSON responses.
+function redirectTo(response, location, statusCode = 302) {
+  response.writeHead(statusCode, {
+    location,
+    'cache-control': 'no-store',
+  });
+  response.end();
+}
+
 function sendJson(response, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
@@ -2750,16 +2776,27 @@ async function createOperator(request, response) {
     if (logoData.length > 2 * 1024 * 1024) throw httpError('Operator logo must be under 2 MB.', 400);
   }
 
+  const marginPercentToNumber = (value, defaultVal, label) => {
+    if (value === undefined || value === null || String(value).trim() === '') return defaultVal;
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0 || num > 100) throw httpError(`${label} must be a number between 0 and 100%.`, 400);
+    return Math.round(num * 100) / 100;
+  };
+  const minMarginPercent = marginPercentToNumber(input.minimumMarginPercent ?? input.minimum_margin_percent, 0.00, 'Minimum Margin %');
+  const maxMarginPercent = marginPercentToNumber(input.maximumMarginPercent ?? input.maximum_margin_percent, 100.00, 'Maximum Margin %');
+  if (maxMarginPercent < minMarginPercent) throw httpError('Maximum Margin % cannot be less than Minimum Margin %.', 400);
+
   const client = await db.connect();
   try {
     await client.query('BEGIN');
     const saved = await client.query(
       `INSERT INTO operator_definitions
        (operator_name, service_type, operator_code, minimum_amount_minor, maximum_amount_minor,
-        stop_amounts_minor, operator_number_length, bill_payment_parameters, logo_data, logo_mime, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6::bigint[], $7, $8::jsonb, $9, $10, $11)
+        stop_amounts_minor, operator_number_length, bill_payment_parameters, logo_data, logo_mime, created_by,
+        minimum_margin_percent, maximum_margin_percent)
+       VALUES ($1, $2, $3, $4, $5, $6::bigint[], $7, $8::jsonb, $9, $10, $11, $12, $13)
        RETURNING id, operator_name, operator_code, created_at`,
-      [operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), operatorNumberLength, JSON.stringify(parameters), logoData, logoMime, admin.id],
+      [operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), operatorNumberLength, JSON.stringify(parameters), logoData, logoMime, admin.id, minMarginPercent, maxMarginPercent],
     );
     await client.query(
       'INSERT INTO admin_audit_logs (admin_user_id, action, target_type, target_id, details) VALUES ($1, $2, $3, $4, $5)',
@@ -2811,6 +2848,16 @@ async function updateOperator(request, response, operatorId) {
     if (!Number.isInteger(numberLength) || numberLength < 1 || numberLength > 30) throw httpError('Operator Number Length must be between 1 and 30.', 400);
   }
 
+  const marginPercentToNumber = (value, defaultVal, label) => {
+    if (value === undefined || value === null || String(value).trim() === '') return defaultVal;
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0 || num > 100) throw httpError(`${label} must be a number between 0 and 100%.`, 400);
+    return Math.round(num * 100) / 100;
+  };
+  const minMarginPercent = marginPercentToNumber(input.minimumMarginPercent ?? input.minimum_margin_percent, 0.00, 'Minimum Margin %');
+  const maxMarginPercent = marginPercentToNumber(input.maximumMarginPercent ?? input.maximum_margin_percent, 100.00, 'Maximum Margin %');
+  if (maxMarginPercent < minMarginPercent) throw httpError('Maximum Margin % cannot be less than Minimum Margin %.', 400);
+
   let logoData = null;
   let logoMime = null;
   if (input.logoData || input.logo_data_b64) {
@@ -2820,7 +2867,7 @@ async function updateOperator(request, response, operatorId) {
   }
   const resetLogo = Boolean(input.resetLogo || input.reset_logo);
   let logoUpdateClause = '';
-  const updateValues = [operatorId, operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), numberLength];
+  const updateValues = [operatorId, operatorName, serviceType, operatorCode, minimumMinor.toString(), maximumMinor.toString(), stopAmounts.map(String), numberLength, minMarginPercent, maxMarginPercent];
   if (resetLogo) {
     logoUpdateClause = ', logo_data = NULL, logo_mime = NULL';
   } else if (logoData) {
@@ -2835,7 +2882,7 @@ async function updateOperator(request, response, operatorId) {
       const updated = await client.query(
         `UPDATE operator_definitions SET operator_name=$2, service_type=$3, operator_code=$4,
            minimum_amount_minor=$5, maximum_amount_minor=$6, stop_amounts_minor=$7::bigint[],
-           operator_number_length=$8, updated_at=now()${logoUpdateClause}
+           operator_number_length=$8, minimum_margin_percent=$9, maximum_margin_percent=$10, updated_at=now()${logoUpdateClause}
          WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
         updateValues,
       );
@@ -4813,12 +4860,39 @@ async function handleRequest(request, response) {
       if (url.pathname === '/admin/reports/incoming-sms' || url.pathname === '/admin/incoming-sms' || url.pathname === '/admin/settings/incoming-sms') {
         const admin = await getSession(request);
         if (!admin) {
-          redirectTo(response, '/admin/login');
+          response.writeHead(302, { location: '/admin/login' });
+          response.end();
           statusCode = 302;
           return;
         }
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminIncomingSmsPage(admin, response, url);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/all-seller-margin' || url.pathname === '/admin/all-seller-margin') {
+        const admin = await getSession(request);
+        if (!admin) {
+          response.writeHead(302, { location: '/admin/login' });
+          response.end();
+          statusCode = 302;
+          return;
+        }
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminAllSellerMarginPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/all-buyer-margin' || url.pathname === '/admin/all-buyer-margin') {
+        const admin = await getSession(request);
+        if (!admin) {
+          response.writeHead(302, { location: '/admin/login' });
+          response.end();
+          statusCode = 302;
+          return;
+        }
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminAllBuyerMarginPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
@@ -5027,7 +5101,9 @@ async function handleRequest(request, response) {
         url.pathname === '/admin/user/login-history' ||
         url.pathname === '/admin/user/log-history' ||
         url.pathname === '/admin/reports/user-log-history' ||
-        url.pathname === '/admin/reports/login-history'
+        url.pathname === '/admin/reports/login-history' ||
+        url.pathname === '/admin/reports/user-login-log' ||
+        url.pathname === '/admin/user-login-log'
       ) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -5773,6 +5849,64 @@ async function handleRequest(request, response) {
         else if (action === 'active') await setBuyerMarginActive(request, response, marginId);
         else await deleteBuyerMargin(request, response, marginId);
         statusCode = response.statusCode || 200;
+        return;
+      }
+      const adminSellerMarginMatch = url.pathname.match(/^\/api\/admin\/seller-margins\/([0-9a-f-]{36})\/(toggle-status|delete)$/i);
+      if (adminSellerMarginMatch) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const [, marginId, action] = adminSellerMarginMatch;
+        if (action === 'toggle-status') {
+          const body = await readJson(request);
+          const active = Boolean(body.active);
+          const result = await db.query(
+            `UPDATE seller_margin_settings SET is_active=$2, updated_at=now()
+             WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_active`,
+            [marginId, active]
+          );
+          if (!result.rowCount) throw httpError('Seller margin not found.', 404);
+          sendJson(response, 200, { success: true, is_active: result.rows[0].is_active });
+        } else {
+          const result = await db.query(
+            `UPDATE seller_margin_settings SET deleted_at=now(), is_active=false, updated_at=now()
+             WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
+            [marginId]
+          );
+          if (!result.rowCount) throw httpError('Seller margin not found.', 404);
+          sendJson(response, 200, { success: true, message: 'Seller margin deleted.' });
+        }
+        statusCode = 200;
+        return;
+      }
+      const adminBuyerMarginMatch = url.pathname.match(/^\/api\/admin\/buyer-margins\/([0-9a-f-]{36})\/(toggle-status|delete)$/i);
+      if (adminBuyerMarginMatch) {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const [, marginId, action] = adminBuyerMarginMatch;
+        if (action === 'toggle-status') {
+          const body = await readJson(request);
+          const active = Boolean(body.active);
+          const result = await db.query(
+            `UPDATE buyer_margin_settings SET is_active=$2, updated_at=now()
+             WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_active`,
+            [marginId, active]
+          );
+          if (!result.rowCount) throw httpError('Buyer margin not found.', 404);
+          sendJson(response, 200, { success: true, is_active: result.rows[0].is_active });
+        } else {
+          const result = await db.query(
+            `UPDATE buyer_margin_settings SET deleted_at=now(), is_active=false, updated_at=now()
+             WHERE id=$1 AND deleted_at IS NULL RETURNING id`,
+            [marginId]
+          );
+          if (!result.rowCount) throw httpError('Buyer margin not found.', 404);
+          sendJson(response, 200, { success: true, message: 'Buyer margin deleted.' });
+        }
+        statusCode = 200;
         return;
       }
       if (url.pathname === '/api/admin/operators') {
@@ -8170,7 +8304,10 @@ async function handleRequest(request, response) {
     }
     if (!response.headersSent && !response.destroyed) {
       const message = statusCode === 500 ? 'Internal server error occurred.' : error.message;
-      if (statusCode === 404 && !isApiRequest(request, url)) {
+      if (statusCode === 401 && !isApiRequest(request, url)) {
+        statusCode = 302;
+        redirectTo(response, '/admin/login');
+      } else if (statusCode === 404 && !isApiRequest(request, url)) {
         const session = await getSession(request).catch(() => null);
         sendNotFoundPage(response, { requestedUrl: url?.pathname, session });
       } else {
