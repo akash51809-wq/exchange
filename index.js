@@ -103,6 +103,11 @@ const createAdminIncomingSmsPage = require('./pages/admin-incoming-sms');
 const createAdminAllSellerMarginPage = require('./pages/admin-all-seller-margin');
 const createAdminAllBuyerMarginPage = require('./pages/admin-all-buyer-margin');
 const {
+  calculateGstAmounts,
+  syncMonthlyInvoices,
+  getLastMonthYear,
+} = require('./lib/invoice-utils');
+const {
   processIncomingSms,
   parseIncomingBankSms,
   autoMatchPendingFundRequestOnSubmission,
@@ -940,15 +945,43 @@ const DATABASE_SCHEMA = `
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     month_year TEXT NOT NULL,
     redeem_amount_minor BIGINT NOT NULL DEFAULT 0,
+    taxable_amount_minor BIGINT NOT NULL DEFAULT 0,
+    cgst_amount_minor BIGINT NOT NULL DEFAULT 0,
+    sgst_amount_minor BIGINT NOT NULL DEFAULT 0,
+    igst_amount_minor BIGINT NOT NULL DEFAULT 0,
     file_name TEXT,
     file_mime TEXT,
     file_data BYTEA,
-    status TEXT NOT NULL DEFAULT 'uploaded' CHECK (status IN ('uploaded', 'verified', 'rejected')),
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, month_year)
   );
   CREATE INDEX IF NOT EXISTS seller_gst_invoices_user_idx ON seller_gst_invoices (user_id, month_year);
+  ALTER TABLE seller_gst_invoices ADD COLUMN IF NOT EXISTS taxable_amount_minor BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE seller_gst_invoices ADD COLUMN IF NOT EXISTS cgst_amount_minor BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE seller_gst_invoices ADD COLUMN IF NOT EXISTS sgst_amount_minor BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE seller_gst_invoices ADD COLUMN IF NOT EXISTS igst_amount_minor BIGINT NOT NULL DEFAULT 0;
+  ALTER TABLE seller_gst_invoices ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+
+  CREATE TABLE IF NOT EXISTS buyer_gst_invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    month_year TEXT NOT NULL,
+    topup_amount_minor BIGINT NOT NULL DEFAULT 0,
+    taxable_amount_minor BIGINT NOT NULL DEFAULT 0,
+    cgst_amount_minor BIGINT NOT NULL DEFAULT 0,
+    sgst_amount_minor BIGINT NOT NULL DEFAULT 0,
+    igst_amount_minor BIGINT NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    approved_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, month_year)
+  );
+  CREATE INDEX IF NOT EXISTS buyer_gst_invoices_user_idx ON buyer_gst_invoices (user_id, month_year);
+  ALTER TABLE users ADD COLUMN IF NOT EXISTS gst_number TEXT;
 
   CREATE TABLE IF NOT EXISTS user_login_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -5909,6 +5942,47 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+
+      if (url.pathname === '/api/admin/invoices/seller/approve' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const body = await readJson(request);
+        const id = String(body.id || '').trim();
+        if (!id) throw httpError('Invoice ID is required.', 400);
+
+        const updated = await db.query(
+          `UPDATE seller_gst_invoices
+           SET status = 'approved', approved_at = now(), updated_at = now()
+           WHERE id = $1 RETURNING id, status`,
+          [id]
+        );
+        if (!updated.rowCount) throw httpError('Invoice record not found.', 404);
+        sendJson(response, 200, { success: true, message: 'Seller invoice approved successfully.' });
+        statusCode = 200;
+        return;
+      }
+
+      if (url.pathname === '/api/admin/invoices/buyer/approve' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const body = await readJson(request);
+        const ids = Array.isArray(body.ids) ? body.ids : (body.id ? [body.id] : []);
+        if (!ids.length) throw httpError('Please select at least one invoice to approve.', 400);
+
+        const updated = await db.query(
+          `UPDATE buyer_gst_invoices
+           SET status = 'approved', approved_at = now(), updated_at = now()
+           WHERE id = ANY($1::uuid[]) RETURNING id, status`,
+          [ids]
+        );
+        sendJson(response, 200, { success: true, count: updated.rowCount, message: `${updated.rowCount} buyer invoice(s) approved successfully.` });
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/api/admin/operators') {
         await createOperator(request, response);
         statusCode = response.statusCode || 201;
@@ -8032,20 +8106,40 @@ async function handleRequest(request, response) {
         );
         const redeemAmountMinor = BigInt(redeemRes.rows[0]?.total_redeem_minor || 0);
 
+        const gst = calculateGstAmounts(redeemAmountMinor, session.state);
         await db.query(
-          `INSERT INTO seller_gst_invoices (user_id, month_year, redeem_amount_minor, file_name, file_mime, file_data, status)
-           VALUES ($1, $2, $3, $4, $5, $6, 'uploaded')
+          `INSERT INTO seller_gst_invoices (
+             user_id, month_year, redeem_amount_minor, taxable_amount_minor,
+             cgst_amount_minor, sgst_amount_minor, igst_amount_minor,
+             file_name, file_mime, file_data, status, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'waiting_for_approval', now())
            ON CONFLICT (user_id, month_year) DO UPDATE SET
              redeem_amount_minor = EXCLUDED.redeem_amount_minor,
+             taxable_amount_minor = EXCLUDED.taxable_amount_minor,
+             cgst_amount_minor = EXCLUDED.cgst_amount_minor,
+             sgst_amount_minor = EXCLUDED.sgst_amount_minor,
+             igst_amount_minor = EXCLUDED.igst_amount_minor,
              file_name = EXCLUDED.file_name,
              file_mime = EXCLUDED.file_mime,
              file_data = EXCLUDED.file_data,
-             status = 'uploaded',
+             status = 'waiting_for_approval',
              updated_at = now()`,
-          [session.id, month, redeemAmountMinor, fileName, fileMime, fileBuffer],
+          [
+            session.id,
+            month,
+            redeemAmountMinor.toString(),
+            gst.taxableMinor.toString(),
+            gst.cgstMinor.toString(),
+            gst.sgstMinor.toString(),
+            gst.igstMinor.toString(),
+            fileName,
+            fileMime,
+            fileBuffer,
+          ],
         );
 
-        sendJson(response, 200, { ok: true, message: 'GST Invoice uploaded successfully.' });
+        sendJson(response, 200, { ok: true, message: 'GST Invoice uploaded successfully. Sent to Admin for approval.' });
         statusCode = 200;
         return;
       }
