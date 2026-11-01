@@ -868,6 +868,175 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
                     </div>
 
+                    <!-- ============================================== -->
+                    <!-- PAYOUT & FUND REQUEST SETTINGS SECTION -->
+                    <!-- ============================================== -->
+                    <div class="px-4 py-2 bg-light border-top border-bottom d-flex align-items-center">
+                      <h6 class="mb-0 font-weight-bold text-dark">
+                        <i class="fa fa-money text-success mr-2"></i> Payout &amp; Fund Request Rules
+                      </h6>
+                      <span class="badge badge-success ml-2 px-2 py-1">Payout &amp; Fund Controls</span>
+                    </div>
+
+                    <!-- 10. Set Minimum & Maximum Payout Time Limit -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Payout Request Time Window">
+                            <input type="checkbox" id="payoutTimeWindowEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="payoutTimeWindowEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-clock-o text-primary"></i> Set Minimum &amp; Maximum Payout Time Limit (Time Window)
+                          </h6>
+                          <p class="general-item-desc">
+                            Admin morning aur night ka time set karega. User sirf isi time ke beech payout request laga sakta hai. Uske alawa request lagane par user ko error popup show hoga: <code>Plz make payment request between [Start Time] to [End Time]</code>.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="d-flex align-items-center">
+                          <div class="mr-2">
+                            <label class="small text-muted font-weight-bold mb-0 d-block">Start Time (Morning)</label>
+                            <input type="time" id="payoutStartTime" class="form-control form-control-sm font-weight-bold" value="09:00">
+                          </div>
+                          <div>
+                            <label class="small text-muted font-weight-bold mb-0 d-block">End Time (Night)</label>
+                            <input type="time" id="payoutEndTime" class="form-control form-control-sm font-weight-bold" value="22:00">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 11. Payout Amount List (Min & Max Payout Amount) -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Payout Amount Limits">
+                            <input type="checkbox" id="payoutAmountLimitEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="payoutAmountLimitEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-inr text-success"></i> Payout Amount Limit (Minimum &amp; Maximum)
+                          </h6>
+                          <p class="general-item-desc">
+                            User sirf is minimum aur maximum amount ke beech hi payout request laga sakta hai. Ye amount limit user ko payout request page par show hogi.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="d-flex align-items-center">
+                          <div class="input-group input-group-sm mr-2" style="max-width: 140px;">
+                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold">Min ₹</span></div>
+                            <input type="number" id="payoutMinAmount" class="form-control font-weight-bold text-center" value="100" min="1" step="1">
+                          </div>
+                          <div class="input-group input-group-sm" style="max-width: 150px;">
+                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold">Max ₹</span></div>
+                            <input type="number" id="payoutMaxAmount" class="form-control font-weight-bold text-center" value="50000" min="1" step="1">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 12. Set Minimum Fund Request Amount -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Minimum Fund Request Amount">
+                            <input type="checkbox" id="fundRequestMinAmountEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="fundRequestMinAmountEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-plus-circle text-info"></i> Set Minimum Fund Request Amount
+                          </h6>
+                          <p class="general-item-desc">
+                            Admin jo minimum amount set karega user usse kam amount ka fund request nahi add kar sakta. Maximum ka koi limit nahi hoga. User fund request page me ye minimum amount show hoga.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <div class="input-group-prepend"><span class="input-group-text font-weight-bold">Min ₹</span></div>
+                          <input type="number" id="fundRequestMinAmount" class="form-control font-weight-bold text-center" value="100" min="1" step="1">
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 13. Set Charges for Payout (IMPS, NEFT, RTGS) -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Payout Charges">
+                            <input type="checkbox" id="payoutChargesEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="payoutChargesEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-percent text-danger"></i> Set Charges for Payout (IMPS, NEFT, RTGS)
+                          </h6>
+                          <p class="general-item-desc">
+                            Admin IMPS, NEFT aur RTGS ke liye payout transaction charges add karega. Ye user redeem request me show hoga aur user is limit ko minus karke hi payment request laga sakega (jaise IMPS charge ₹5 aur fund balance ₹8000 hai, to user max ₹7995 ki request laga sakega aur wallet se total ₹8000 debit hoga).
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="d-flex align-items-center flex-wrap">
+                          <div class="input-group input-group-sm mr-2 mb-1" style="max-width: 130px;">
+                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold">IMPS ₹</span></div>
+                            <input type="number" id="payoutChargeImps" class="form-control font-weight-bold text-center" value="5.00" min="0" step="0.01">
+                          </div>
+                          <div class="input-group input-group-sm mr-2 mb-1" style="max-width: 130px;">
+                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold">NEFT ₹</span></div>
+                            <input type="number" id="payoutChargeNeft" class="form-control font-weight-bold text-center" value="3.00" min="0" step="0.01">
+                          </div>
+                          <div class="input-group input-group-sm mb-1" style="max-width: 130px;">
+                            <div class="input-group-prepend"><span class="input-group-text font-weight-bold">RTGS ₹</span></div>
+                            <input type="number" id="payoutChargeRtgs" class="form-control font-weight-bold text-center" value="10.00" min="0" step="0.01">
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 14. Gap Time Between 2 Payout Requests -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Payout Request Cooldown Gap">
+                            <input type="checkbox" id="payoutCooldownEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="payoutCooldownEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-hourglass-half text-warning"></i> Gap Time Between 2 Payout Requests
+                          </h6>
+                          <p class="general-item-desc">
+                            Do payout requests ke beech ka cooldown time (minutes me). User is time gap ke andar doosra payout request add nahi kar sakta.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="input-group input-group-sm" style="max-width: 175px;">
+                          <input type="number" id="payoutCooldownMinutes" class="form-control font-weight-bold text-center" value="30" min="1" max="1440">
+                          <div class="input-group-append">
+                            <span class="input-group-text font-weight-bold">Minutes</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1943,6 +2112,20 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('apiDisablePendingTxnCount', g.apiDisablePendingTxnCount ?? 5);
           setSwitch('apiSuspendRefundPercentEnabled', g.apiSuspendRefundPercentEnabled !== false);
           setVal('apiSuspendRefundPercent', g.apiSuspendRefundPercent ?? 25);
+          setSwitch('payoutTimeWindowEnabled', Boolean(g.payoutTimeWindowEnabled));
+          setVal('payoutStartTime', g.payoutStartTime || '09:00');
+          setVal('payoutEndTime', g.payoutEndTime || '22:00');
+          setSwitch('payoutAmountLimitEnabled', Boolean(g.payoutAmountLimitEnabled));
+          setVal('payoutMinAmount', g.payoutMinAmount ?? 100);
+          setVal('payoutMaxAmount', g.payoutMaxAmount ?? 50000);
+          setSwitch('fundRequestMinAmountEnabled', Boolean(g.fundRequestMinAmountEnabled));
+          setVal('fundRequestMinAmount', g.fundRequestMinAmount ?? 100);
+          setSwitch('payoutChargesEnabled', Boolean(g.payoutChargesEnabled));
+          setVal('payoutChargeImps', g.payoutChargeImps ?? 5.00);
+          setVal('payoutChargeNeft', g.payoutChargeNeft ?? 3.00);
+          setVal('payoutChargeRtgs', g.payoutChargeRtgs ?? 10.00);
+          setSwitch('payoutCooldownEnabled', Boolean(g.payoutCooldownEnabled));
+          setVal('payoutCooldownMinutes', g.payoutCooldownMinutes ?? 30);
           updateComplainDelayVisibility();
         }
 
@@ -2673,7 +2856,12 @@ module.exports = function createAdminServiceSettingsPage({
       'stopSameNumberAmountEnabled',
       'apiDisableFailTxnEnabled',
       'apiDisablePendingTxnEnabled',
-      'apiSuspendRefundPercentEnabled'
+      'apiSuspendRefundPercentEnabled',
+      'payoutTimeWindowEnabled',
+      'payoutAmountLimitEnabled',
+      'fundRequestMinAmountEnabled',
+      'payoutChargesEnabled',
+      'payoutCooldownEnabled'
     ];
 
     function updateToggleBadge(id) {
@@ -2780,6 +2968,20 @@ module.exports = function createAdminServiceSettingsPage({
           apiDisablePendingTxnCount: Math.max(1, parseInt(document.getElementById('apiDisablePendingTxnCount').value, 10) || 5),
           apiSuspendRefundPercentEnabled: document.getElementById('apiSuspendRefundPercentEnabled').checked,
           apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(document.getElementById('apiSuspendRefundPercent').value) || 25)),
+          payoutTimeWindowEnabled: document.getElementById('payoutTimeWindowEnabled').checked,
+          payoutStartTime: document.getElementById('payoutStartTime').value || '09:00',
+          payoutEndTime: document.getElementById('payoutEndTime').value || '22:00',
+          payoutAmountLimitEnabled: document.getElementById('payoutAmountLimitEnabled').checked,
+          payoutMinAmount: Math.max(1, parseFloat(document.getElementById('payoutMinAmount').value) || 100),
+          payoutMaxAmount: Math.max(1, parseFloat(document.getElementById('payoutMaxAmount').value) || 50000),
+          fundRequestMinAmountEnabled: document.getElementById('fundRequestMinAmountEnabled').checked,
+          fundRequestMinAmount: Math.max(1, parseFloat(document.getElementById('fundRequestMinAmount').value) || 100),
+          payoutChargesEnabled: document.getElementById('payoutChargesEnabled').checked,
+          payoutChargeImps: Math.max(0, parseFloat(document.getElementById('payoutChargeImps').value) || 0),
+          payoutChargeNeft: Math.max(0, parseFloat(document.getElementById('payoutChargeNeft').value) || 0),
+          payoutChargeRtgs: Math.max(0, parseFloat(document.getElementById('payoutChargeRtgs').value) || 0),
+          payoutCooldownEnabled: document.getElementById('payoutCooldownEnabled').checked,
+          payoutCooldownMinutes: Math.max(1, parseInt(document.getElementById('payoutCooldownMinutes').value, 10) || 30),
         };
 
         try {
@@ -2867,6 +3069,20 @@ module.exports = function createAdminServiceSettingsPage({
         apiDisablePendingTxnCount: 5,
         apiSuspendRefundPercentEnabled: true,
         apiSuspendRefundPercent: 25,
+        payoutTimeWindowEnabled: false,
+        payoutStartTime: '09:00',
+        payoutEndTime: '22:00',
+        payoutAmountLimitEnabled: false,
+        payoutMinAmount: 100,
+        payoutMaxAmount: 50000,
+        fundRequestMinAmountEnabled: false,
+        fundRequestMinAmount: 100,
+        payoutChargesEnabled: false,
+        payoutChargeImps: 5.00,
+        payoutChargeNeft: 3.00,
+        payoutChargeRtgs: 10.00,
+        payoutCooldownEnabled: false,
+        payoutCooldownMinutes: 30,
         sellerWalletRedeemDelayMinutes: 0,
         sellerWalletExchangeDelayMinutes: 0,
       };
@@ -2953,6 +3169,20 @@ module.exports = function createAdminServiceSettingsPage({
       apiDisablePendingTxnCount: Math.max(1, parseInt(input.apiDisablePendingTxnCount, 10) || 5),
       apiSuspendRefundPercentEnabled: Boolean(input.apiSuspendRefundPercentEnabled),
       apiSuspendRefundPercent: Math.max(1, Math.min(100, parseFloat(input.apiSuspendRefundPercent) || 25)),
+      payoutTimeWindowEnabled: Boolean(input.payoutTimeWindowEnabled),
+      payoutStartTime: String(input.payoutStartTime || '09:00').trim(),
+      payoutEndTime: String(input.payoutEndTime || '22:00').trim(),
+      payoutAmountLimitEnabled: Boolean(input.payoutAmountLimitEnabled),
+      payoutMinAmount: Math.max(1, parseFloat(input.payoutMinAmount) || 100),
+      payoutMaxAmount: Math.max(1, parseFloat(input.payoutMaxAmount) || 50000),
+      fundRequestMinAmountEnabled: Boolean(input.fundRequestMinAmountEnabled),
+      fundRequestMinAmount: Math.max(1, parseFloat(input.fundRequestMinAmount) || 100),
+      payoutChargesEnabled: Boolean(input.payoutChargesEnabled),
+      payoutChargeImps: Math.max(0, parseFloat(input.payoutChargeImps) || 0),
+      payoutChargeNeft: Math.max(0, parseFloat(input.payoutChargeNeft) || 0),
+      payoutChargeRtgs: Math.max(0, parseFloat(input.payoutChargeRtgs) || 0),
+      payoutCooldownEnabled: Boolean(input.payoutCooldownEnabled),
+      payoutCooldownMinutes: Math.max(1, parseInt(input.payoutCooldownMinutes, 10) || 30),
       sellerWalletRedeemDelayMinutes: Math.max(0, parseInt(input.sellerWalletRedeemDelayMinutes, 10) || 0),
       sellerWalletExchangeDelayMinutes: Math.max(0, parseInt(input.sellerWalletExchangeDelayMinutes, 10) || 0),
     };

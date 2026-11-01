@@ -48,7 +48,7 @@ module.exports = function createAdminPayoutRequestsPage({ db, formatMinorUnits }
     const result = await db.query(
       `SELECT p.id, p.user_id, p.bank_name, p.account_holder_name, p.account_number,
               p.ifsc_code, p.amount_minor, p.status, p.utr_number, p.admin_remark,
-              p.created_at, p.processed_at,
+              p.created_at, p.processed_at, p.payout_mode, p.charge_minor,
               u.username, u.name AS user_name, u.email
        FROM payout_requests p
        JOIN users u ON u.id = p.user_id
@@ -98,7 +98,13 @@ module.exports = function createAdminPayoutRequestsPage({ db, formatMinorUnits }
             <div class="small font-monospace text-dark">A/C: ${escapeHtml(row.account_number)}</div>
             <div class="small text-muted">${escapeHtml(row.account_holder_name)} | IFSC: ${escapeHtml(row.ifsc_code)}</div>
           </td>
-          <td class="text-right font-weight-bold text-danger font-monospace">₹${formatMinorUnits(row.amount_minor)}</td>
+          <td class="text-right font-weight-bold text-danger font-monospace">
+            ₹${formatMinorUnits(row.amount_minor)}
+            <div class="small font-weight-normal text-muted">
+              <span class="badge badge-light border text-dark font-monospace">${escapeHtml(row.payout_mode || 'IMPS')}</span>
+              ${row.charge_minor ? ` <span class="text-secondary">(Fee: ₹${formatMinorUnits(row.charge_minor)})</span>` : ''}
+            </div>
+          </td>
           <td class="text-center">${statusBadge}</td>
           <td class="font-monospace small text-dark">${escapeHtml(row.utr_number || '-')}</td>
           <td class="small text-muted">${escapeHtml(row.admin_remark || '-')}</td>

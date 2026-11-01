@@ -144,8 +144,13 @@ module.exports = function createUserSalesMarginPage({ db, formatMinorUnits, getS
         limit: formatMinorUnits(row.limit_minor), limitType: row.limit_type, withGst: row.with_gst,
         isRoffer: row.is_roffer, operatorCode: row.operator_code || '',
       };
-      const approved = row.is_admin_approved ? '<span class="sm-badge approved">Approved</span>' : '<span class="sm-badge pending">Pending</span>';
-      const toggle = `<label class="sm-switch" title="${row.is_active ? 'Setting On' : 'Setting Off'}"><input type="checkbox" data-active="${row.id}"${row.is_active ? ' checked' : ''}><span class="sm-slider"></span></label><small class="sm-toggle-label ${row.is_active ? 'on' : ''}">${row.is_active ? 'On' : 'Off'}</small>`;
+      const isBlockedByAdmin = row.is_admin_approved === false;
+      const approved = isBlockedByAdmin
+        ? '<span class="sm-badge pending" style="background:#fee2e2;color:#dc2626;" title="Admin has disabled this margin"><i class="fa fa-ban mr-1"></i>Disabled by Admin</span>'
+        : '<span class="sm-badge approved"><i class="fa fa-check mr-1"></i>Approved</span>';
+      const toggle = isBlockedByAdmin
+        ? `<label class="sm-switch" style="opacity:0.55;cursor:not-allowed;" title="Admin has turned this margin OFF. Only Admin can turn it ON."><input type="checkbox" data-active="${row.id}" data-admin-blocked="true"${row.is_active ? ' checked' : ''} disabled><span class="sm-slider" style="background:#dc2626;"></span></label><small class="sm-toggle-label" style="color:#dc2626;font-weight:700;">Locked Off</small>`
+        : `<label class="sm-switch" title="${row.is_active ? 'Setting On' : 'Setting Off'}"><input type="checkbox" data-active="${row.id}"${row.is_active ? ' checked' : ''}><span class="sm-slider"></span></label><small class="sm-toggle-label ${row.is_active ? 'on' : ''}">${row.is_active ? 'On' : 'Off'}</small>`;
       const encoded = escapeHtml(JSON.stringify(margin));
       return `<tr><td>${index + 1}</td><td><span class="badge badge-info" style="font-size:12px;padding:4px 8px;">${escapeHtml(row.api_name || 'Exchange API')}</span></td><td><div class="sm-operator"><span class="sm-operator-icon">${escapeHtml(row.operator_name.slice(0, 1).toUpperCase())}</span><span><b>${escapeHtml(row.operator_name)}</b><small>${escapeHtml(row.service_type)}</small></span></div></td><td>${escapeHtml(row.circle_name)}</td><td><span class="sm-amount">${amount}</span></td><td><span class="sm-commission">${escapeHtml(row.commission_percent)}%</span></td><td>₹${formatMinorUnits(row.required_min_roffer_minor)}</td><td><b>₹${formatMinorUnits(row.limit_minor)}</b><small class="sm-subline">${escapeHtml(row.limit_type)}</small></td><td>₹${formatMinorUnits(row.limit_used_minor)}</td><td><span class="sm-gst ${row.with_gst ? 'yes' : 'no'}">${row.with_gst ? 'Yes' : 'No'}</span></td><td>${toggle}</td><td>${approved}</td><td>${row.is_roffer === 'all' ? 'All' : row.is_roffer === 'roffer_only' ? 'Roffer Only' : 'No Roffer'}</td><td>${escapeHtml(row.operator_code || row.admin_operator_code)}</td><td><div class="sm-actions"><button type="button" class="sm-action edit" data-edit="${encoded}" aria-label="Edit"><i class="fa fa-pencil"></i></button><button type="button" class="sm-action delete" data-delete="${row.id}" aria-label="Delete"><i class="fa fa-trash"></i></button></div></td></tr>`;
     }).join('');
@@ -208,6 +213,18 @@ module.exports = function createUserSalesMarginPage({ db, formatMinorUnits, getS
     const input = await readJson(request);
     if (typeof input.active !== 'boolean') throw httpError('Please select On or Off status.', 400);
     if (!allowRate(`seller-margin:${user.id}`, 60, 60 * 60_000)) throw httpError('Too many requests; please try again later.', 429);
+    const checkRes = await db.query(
+      `SELECT id, is_active, is_admin_approved FROM seller_margin_settings WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL`,
+      [marginId, user.id]
+    );
+    if (!checkRes.rowCount) throw httpError('Margin setting not found.', 404);
+    const currentMargin = checkRes.rows[0];
+
+    // If Admin has turned this OFF (is_admin_approved = false), user CANNOT turn it ON
+    if (input.active && currentMargin.is_admin_approved === false) {
+      throw httpError('Admin has turned this margin OFF. Only Admin can turn it ON.', 403);
+    }
+
     const result = await db.query(
       `UPDATE seller_margin_settings SET is_active=$3, updated_at=now()
        WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL RETURNING id, is_active`, [marginId, user.id, input.active],

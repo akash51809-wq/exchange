@@ -5,7 +5,18 @@ const { renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { getWalletMode, getSellerAvailableBalances } = require('../lib/wallet-helper');
 
-module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
+module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGeneralSettings }) {
+
+  function formatTime12Hour(timeStr) {
+    if (!timeStr) return '';
+    const [hStr, mStr] = String(timeStr).split(':');
+    let h = parseInt(hStr, 10) || 0;
+    const m = parseInt(mStr, 10) || 0;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12;
+    if (h === 0) h = 12;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
+  }
 
   function getTodayString() {
     const d = new Date();
@@ -55,6 +66,79 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
     const heldRedeemMinor = balanceData.heldForRedeemMinor;
     const activeLienMinor = balanceData.activeLienMinor;
 
+    // 1b. Fetch General Settings for Payout Rules
+    const genSettings = typeof getGeneralSettings === 'function' ? await getGeneralSettings() : {};
+
+    // Payout Time Window
+    let timeWindowInfo = null;
+    let isTimeAllowed = true;
+    if (genSettings.payoutTimeWindowEnabled) {
+      const startTime = genSettings.payoutStartTime || '09:00';
+      const endTime = genSettings.payoutEndTime || '22:00';
+      const [startH, startM] = startTime.split(':').map(n => parseInt(n, 10) || 0);
+      const [endH, endM] = endTime.split(':').map(n => parseInt(n, 10) || 0);
+      const startMins = startH * 60 + startM;
+      const endMins = endH * 60 + endM;
+
+      const nowIst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const currentMins = nowIst.getHours() * 60 + nowIst.getMinutes();
+
+      if (startMins <= endMins) {
+        isTimeAllowed = (currentMins >= startMins && currentMins <= endMins);
+      } else {
+        isTimeAllowed = (currentMins >= startMins || currentMins <= endMins);
+      }
+      timeWindowInfo = {
+        enabled: true,
+        startTime,
+        endTime,
+        displayStart: formatTime12Hour(startTime),
+        displayEnd: formatTime12Hour(endTime),
+        isAllowed: isTimeAllowed,
+      };
+    }
+
+    // Payout Amount Limits
+    let amountLimitInfo = null;
+    if (genSettings.payoutAmountLimitEnabled) {
+      const minPayout = Math.max(1, parseFloat(genSettings.payoutMinAmount) || 100);
+      const maxPayout = Math.max(minPayout, parseFloat(genSettings.payoutMaxAmount) || 50000);
+      amountLimitInfo = {
+        enabled: true,
+        min: minPayout,
+        max: maxPayout,
+      };
+    }
+
+    // Payout Charges
+    const chargesInfo = {
+      enabled: Boolean(genSettings.payoutChargesEnabled),
+      imps: genSettings.payoutChargesEnabled ? Math.max(0, parseFloat(genSettings.payoutChargeImps) || 0) : 0,
+      neft: genSettings.payoutChargesEnabled ? Math.max(0, parseFloat(genSettings.payoutChargeNeft) || 0) : 0,
+      rtgs: genSettings.payoutChargesEnabled ? Math.max(0, parseFloat(genSettings.payoutChargeRtgs) || 0) : 0,
+    };
+
+    // Payout Cooldown
+    let cooldownInfo = null;
+    if (genSettings.payoutCooldownEnabled) {
+      const cooldownMins = Math.max(1, parseInt(genSettings.payoutCooldownMinutes, 10) || 30);
+      const lastPayoutRes = await db.query(
+        `SELECT created_at FROM payout_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+        [user.id],
+      );
+      if (lastPayoutRes.rowCount > 0) {
+        const lastCreated = new Date(lastPayoutRes.rows[0].created_at).getTime();
+        const elapsedMins = (Date.now() - lastCreated) / (1000 * 60);
+        if (elapsedMins < cooldownMins) {
+          cooldownInfo = {
+            enabled: true,
+            cooldownMins,
+            remainingMins: Math.ceil(cooldownMins - elapsedMins),
+          };
+        }
+      }
+    }
+
     // 2. Fetch user bank accounts
     const banksRes = await db.query(
       `SELECT id, bank_name, account_holder_name, account_number, ifsc_code, status, admin_note, created_at, approved_at
@@ -92,7 +176,8 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
 
     const payoutsRes = await db.query(
       `SELECT p.id, p.bank_name, p.account_holder_name, p.account_number, p.ifsc_code,
-              p.amount_minor, p.status, p.utr_number, p.admin_remark, p.created_at, p.processed_at
+              p.amount_minor, p.status, p.utr_number, p.admin_remark, p.created_at, p.processed_at,
+              p.payout_mode, p.charge_minor
        FROM payout_requests p
        WHERE ${conditions.join(' AND ')}
        ORDER BY p.created_at DESC
@@ -146,7 +231,13 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
             <div class="small font-monospace text-muted">A/C: ${escapeHtml(p.account_number)} | IFSC: ${escapeHtml(p.ifsc_code)}</div>
             <div class="small text-muted">${escapeHtml(p.account_holder_name)}</div>
           </td>
-          <td class="text-right font-weight-bold text-danger font-monospace">₹${formatMinorUnits(p.amount_minor)}</td>
+          <td class="text-right font-weight-bold text-danger font-monospace">
+            ₹${formatMinorUnits(p.amount_minor)}
+            <div class="small font-weight-normal text-muted">
+              <span class="badge badge-light border text-dark">${escapeHtml(p.payout_mode || 'IMPS')}</span>
+              ${p.charge_minor ? ` <span class="text-secondary">(Fee ₹${formatMinorUnits(p.charge_minor)})</span>` : ''}
+            </div>
+          </td>
           <td class="text-center">${statusBadge}</td>
           <td class="font-monospace small text-dark">${escapeHtml(p.utr_number || '-')}</td>
           <td class="small text-muted">${escapeHtml(p.admin_remark || '-')}</td>
@@ -247,6 +338,28 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
                     <i class="fa fa-info-circle mr-1"></i> <strong>No Approved Bank Account:</strong> Please add your bank details first using the <strong>"Add Bank Account"</strong> button. Once approved by Admin, you can request payout here.
                   </div>
                 ` : `
+                  ${timeWindowInfo && !timeWindowInfo.isAllowed ? `
+                    <div class="alert alert-danger py-2 small mb-3">
+                      <i class="fa fa-clock-o mr-1"></i> <strong>Payout Closed:</strong> Payout requests are only allowed between <strong>${timeWindowInfo.displayStart}</strong> and <strong>${timeWindowInfo.displayEnd}</strong>. Currently payout requests cannot be submitted.
+                    </div>
+                  ` : (timeWindowInfo ? `
+                    <div class="alert alert-light border py-1 px-2 small mb-2 text-dark">
+                      <i class="fa fa-clock-o text-primary mr-1"></i> <strong>Payout Hours:</strong> ${timeWindowInfo.displayStart} to ${timeWindowInfo.displayEnd}
+                    </div>
+                  ` : '')}
+
+                  ${amountLimitInfo ? `
+                    <div class="alert alert-light border py-1 px-2 small mb-2 text-dark">
+                      <i class="fa fa-inr text-success mr-1"></i> <strong>Allowed Amount Limit:</strong> Min ₹${amountLimitInfo.min.toFixed(2)} - Max ₹${amountLimitInfo.max.toFixed(2)}
+                    </div>
+                  ` : ''}
+
+                  ${cooldownInfo ? `
+                    <div class="alert alert-warning py-2 small mb-3">
+                      <i class="fa fa-hourglass-half mr-1"></i> <strong>Payout Cooldown:</strong> Please wait <strong>${cooldownInfo.remainingMins} minute(s)</strong> before submitting another payout request (${cooldownInfo.cooldownMins} minutes gap between requests).
+                    </div>
+                  ` : ''}
+
                   <form id="payoutForm">
                     <div class="form-group mb-3">
                       <label class="font-weight-bold text-dark small">Select Approved Bank Account <span class="text-danger">*</span></label>
@@ -257,19 +370,34 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
                     </div>
 
                     <div class="form-group mb-3">
+                      <label class="font-weight-bold text-dark small">Transfer Mode <span class="text-danger">*</span></label>
+                      <select class="form-control form-control-sm" id="payoutMode" required>
+                        <option value="IMPS">IMPS ${chargesInfo.enabled ? `(Fee: ₹${chargesInfo.imps.toFixed(2)})` : ''}</option>
+                        <option value="NEFT">NEFT ${chargesInfo.enabled ? `(Fee: ₹${chargesInfo.neft.toFixed(2)})` : ''}</option>
+                        <option value="RTGS">RTGS ${chargesInfo.enabled ? `(Fee: ₹${chargesInfo.rtgs.toFixed(2)})` : ''}</option>
+                      </select>
+                      ${chargesInfo.enabled ? `
+                        <small class="text-muted d-block mt-1">
+                          <i class="fa fa-info-circle text-info mr-1"></i> Transfer fee of ₹<span id="dispCurrentFee">${chargesInfo.imps.toFixed(2)}</span> will be debited with withdrawal. Max withdrawable: <strong class="text-primary" id="dispEffectiveMax">₹${(Math.max(0, parseFloat(balanceRupees) - chargesInfo.imps)).toFixed(2)}</strong>
+                        </small>
+                      ` : ''}
+                    </div>
+
+                    <div class="form-group mb-3">
                       <label class="font-weight-bold text-dark small">Withdrawal Amount (₹) <span class="text-danger">*</span></label>
                       <div class="input-group input-group-sm">
                         <div class="input-group-prepend"><span class="input-group-text">₹</span></div>
-                        <input type="number" step="0.01" min="1" max="${balanceRupees}" class="form-control" id="payoutAmount" placeholder="Enter amount" required>
+                        <input type="number" step="0.01" min="${amountLimitInfo ? amountLimitInfo.min : 1}" max="${balanceRupees}" class="form-control" id="payoutAmount" placeholder="Enter amount" required>
                         <div class="input-group-append">
                           <button class="btn btn-outline-secondary" type="button" id="btnMaxBalance">Full Balance</button>
                         </div>
                       </div>
-                      <small class="text-muted">Max withdrawable: ${formattedBalance}</small>
+                      <small class="text-muted">Total Available Balance: ${formattedBalance}</small>
                     </div>
 
-                    <button type="submit" class="btn btn-primary btn-block font-weight-bold" id="btnSubmitPayout" ${(!isKycApproved || balanceMinor <= 0n) ? 'disabled' : ''}>
-                      <i class="fa ${!isKycApproved ? 'fa-lock' : 'fa-check-circle'} mr-1"></i> ${!isKycApproved ? 'KYC Approval Required to Payout' : 'Submit Payout Request'}
+                    <button type="submit" class="btn btn-primary btn-block font-weight-bold" id="btnSubmitPayout" ${(!isKycApproved || balanceMinor <= 0n || (timeWindowInfo && !timeWindowInfo.isAllowed) || cooldownInfo) ? 'disabled' : ''}>
+                      <i class="fa ${!isKycApproved ? 'fa-lock' : (timeWindowInfo && !timeWindowInfo.isAllowed ? 'fa-clock-o' : (cooldownInfo ? 'fa-hourglass-half' : 'fa-check-circle'))} mr-1"></i>
+                      ${!isKycApproved ? 'KYC Approval Required to Payout' : (timeWindowInfo && !timeWindowInfo.isAllowed ? 'Payout Closed (Outside Hours)' : (cooldownInfo ? `Cooldown Active (Wait ${cooldownInfo.remainingMins}m)` : 'Submit Payout Request'))}
                     </button>
                   </form>
                 `}
@@ -440,14 +568,58 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
   <script>
   (function() {
     const maxBalRupees = ${JSON.stringify(balanceRupees)};
+    const timeWindowConfig = ${JSON.stringify(timeWindowInfo)};
+    const amountLimitConfig = ${JSON.stringify(amountLimitInfo)};
+    const chargesConfig = ${JSON.stringify(chargesInfo)};
+    const cooldownConfig = ${JSON.stringify(cooldownInfo)};
+
     const btnMax = document.getElementById('btnMaxBalance');
     const payoutAmountInput = document.getElementById('payoutAmount');
+    const payoutModeSelect = document.getElementById('payoutMode');
+    const dispCurrentFee = document.getElementById('dispCurrentFee');
+    const dispEffectiveMax = document.getElementById('dispEffectiveMax');
     const topAlert = document.getElementById('topAlert');
     const topError = document.getElementById('topError');
 
+    function getCurrentFee() {
+      if (!chargesConfig || !chargesConfig.enabled || !payoutModeSelect) return 0;
+      const mode = payoutModeSelect.value;
+      if (mode === 'NEFT') return chargesConfig.neft || 0;
+      if (mode === 'RTGS') return chargesConfig.rtgs || 0;
+      return chargesConfig.imps || 0;
+    }
+
+    function getEffectiveMaxAmount() {
+      const fee = getCurrentFee();
+      let maxReq = Math.max(0, parseFloat(maxBalRupees) - fee);
+      if (amountLimitConfig && amountLimitConfig.enabled) {
+        maxReq = Math.min(maxReq, amountLimitConfig.max);
+      }
+      return maxReq;
+    }
+
+    function updateFeeAndLimitsDisplay() {
+      const fee = getCurrentFee();
+      const effectiveMax = getEffectiveMaxAmount();
+      if (dispCurrentFee) dispCurrentFee.textContent = fee.toFixed(2);
+      if (dispEffectiveMax) dispEffectiveMax.textContent = '₹' + effectiveMax.toFixed(2);
+      if (payoutAmountInput) {
+        payoutAmountInput.max = effectiveMax.toFixed(2);
+        if (amountLimitConfig && amountLimitConfig.enabled) {
+          payoutAmountInput.min = amountLimitConfig.min.toFixed(2);
+        }
+      }
+    }
+
+    if (payoutModeSelect) {
+      payoutModeSelect.addEventListener('change', updateFeeAndLimitsDisplay);
+      updateFeeAndLimitsDisplay();
+    }
+
     if (btnMax && payoutAmountInput) {
       btnMax.addEventListener('click', function() {
-        payoutAmountInput.value = maxBalRupees;
+        const effectiveMax = getEffectiveMaxAmount();
+        payoutAmountInput.value = effectiveMax > 0 ? effectiveMax.toFixed(2) : '0.00';
       });
     }
 
@@ -527,8 +699,26 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
         topError.style.display = 'none';
         topAlert.style.display = 'none';
 
+        if (timeWindowConfig && timeWindowConfig.enabled && !timeWindowConfig.isAllowed) {
+          const msg = 'Plz make payment request between ' + timeWindowConfig.displayStart + ' to ' + timeWindowConfig.displayEnd;
+          alert(msg);
+          topError.textContent = msg;
+          topError.style.display = 'block';
+          return;
+        }
+
+        if (cooldownConfig && cooldownConfig.enabled && cooldownConfig.remainingMins > 0) {
+          const msg = 'Please wait ' + cooldownConfig.remainingMins + ' minute(s) before submitting another payout request.';
+          alert(msg);
+          topError.textContent = msg;
+          topError.style.display = 'block';
+          return;
+        }
+
         const bankId = document.getElementById('payoutBankId').value;
         const amount = parseFloat(payoutAmountInput.value);
+        const mode = payoutModeSelect ? payoutModeSelect.value : 'IMPS';
+        const fee = getCurrentFee();
 
         if (!bankId) {
           topError.textContent = 'Please select an approved bank account.';
@@ -540,13 +730,25 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
           topError.style.display = 'block';
           return;
         }
-        if (amount > parseFloat(maxBalRupees)) {
-          topError.textContent = 'Withdrawal amount cannot exceed available balance.';
+
+        if (amountLimitConfig && amountLimitConfig.enabled) {
+          if (amount < amountLimitConfig.min || amount > amountLimitConfig.max) {
+            topError.textContent = 'Payout request amount must be between ₹' + amountLimitConfig.min.toFixed(2) + ' and ₹' + amountLimitConfig.max.toFixed(2) + '.';
+            topError.style.display = 'block';
+            return;
+          }
+        }
+
+        if (amount + fee > parseFloat(maxBalRupees)) {
+          topError.textContent = 'Withdrawal amount ₹' + amount.toFixed(2) + ' + ' + mode + ' fee ₹' + fee.toFixed(2) + ' (Total ₹' + (amount + fee).toFixed(2) + ') exceeds available balance ₹' + parseFloat(maxBalRupees).toFixed(2) + '. Max requestable: ₹' + Math.max(0, parseFloat(maxBalRupees) - fee).toFixed(2);
           topError.style.display = 'block';
           return;
         }
 
-        if (!confirm('Are you sure you want to withdraw ₹' + amount.toFixed(2) + '? This amount will be debited from your wallet immediately.')) {
+        const confirmMsg = 'Are you sure you want to withdraw ₹' + amount.toFixed(2) +
+          (fee > 0 ? ' (' + mode + ' fee: ₹' + fee.toFixed(2) + ')' : '') +
+          '? Total ₹' + (amount + fee).toFixed(2) + ' will be debited from your wallet immediately.';
+        if (!confirm(confirmMsg)) {
           return;
         }
 
@@ -558,12 +760,18 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits }) {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ bankAccountId: bankId, amount }),
+            body: JSON.stringify({ bankAccountId: bankId, amount, mode }),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || data.message || 'Failed to submit payout request.');
+          if (!res.ok) {
+            const errMsg = data.error || data.message || 'Failed to submit payout request.';
+            if (errMsg.toLowerCase().includes('plz make payment request between')) {
+              alert(errMsg);
+            }
+            throw new Error(errMsg);
+          }
 
-          topAlert.textContent = '✓ Payout request of ₹' + amount.toFixed(2) + ' submitted successfully! Amount debited from wallet and sent for Admin processing.';
+          topAlert.textContent = '✓ Payout request of ₹' + amount.toFixed(2) + ' submitted successfully (' + mode + ')! Amount debited from wallet and sent for Admin processing.';
           topAlert.style.display = 'block';
           setTimeout(() => window.location.reload(), 1500);
         } catch (err) {

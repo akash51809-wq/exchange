@@ -30,6 +30,7 @@ const ADMIN_PANEL_MENU = [
     { label: 'Refund Report', path: '/admin/reports/refund-report' },
     { label: 'Seller Refund Ratio', path: '/admin/reports/seller-refund-ratio' },
     { label: 'Fake Complaint Ratio', path: '/admin/reports/fake-complaint-ratio' },
+    { label: 'Complaint Report', path: '/admin/reports/complaint' },
     { label: 'Show All Seller Margin', path: '/admin/reports/all-seller-margin' },
     { label: 'Show All Buyer Margin', path: '/admin/reports/all-buyer-margin' },
     { label: 'User Login Log', path: '/admin/reports/user-login-log' },

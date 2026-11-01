@@ -8,12 +8,16 @@ const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { getWalletMode } = require('../lib/wallet-helper');
 
-module.exports = function createPageModule({ db, formatMinorUnits }) {
+module.exports = function createPageModule({ db, formatMinorUnits, getGeneralSettings }) {
 async function sendWalletTopupRequestPage(user, response) {
   const userName = escapeHtml(user.name);
   const userId = escapeHtml(user.username);
   const walletMode = await getWalletMode(db);
   const isSeparate = (walletMode === 'separate');
+
+  const genSettings = typeof getGeneralSettings === 'function' ? await getGeneralSettings() : {};
+  const isMinFundEnabled = Boolean(genSettings.fundRequestMinAmountEnabled);
+  const minFundAmount = isMinFundEnabled ? Math.max(1, parseFloat(genSettings.fundRequestMinAmount) || 100) : 0.01;
 
   // Fetch active bank accounts configured by admin
   const bankResult = await db.query(
@@ -237,8 +241,12 @@ async function sendWalletTopupRequestPage(user, response) {
               </select>
             </div>
             <div class="form-group col-md-6">
-              <label for="topup-amount" class="font-weight-bold">Requested Amount (₹) <span class="text-danger">*</span></label>
-              <input id="topup-amount" type="number" class="form-control" min="0.01" max="10000000" step="0.01" placeholder="Enter amount manually, e.g. 5000" required>
+              <label for="topup-amount" class="font-weight-bold">
+                Requested Amount (₹) <span class="text-danger">*</span>
+                ${isMinFundEnabled ? `<span class="badge badge-info ml-1 font-weight-normal">Min ₹${minFundAmount.toFixed(2)}</span>` : ''}
+              </label>
+              <input id="topup-amount" type="number" class="form-control" min="${minFundAmount}" max="10000000" step="0.01" placeholder="${isMinFundEnabled ? `Min ₹${minFundAmount.toFixed(2)}, e.g. ${Math.max(500, Math.ceil(minFundAmount))}` : 'Enter amount manually, e.g. 5000'}" required>
+              ${isMinFundEnabled ? `<small class="form-text text-muted">Minimum fund request limit is <strong>₹${minFundAmount.toFixed(2)}</strong>. Maximum has no limit.</small>` : ''}
             </div>
             <div class="form-group col-md-12">
               <label for="topup-wallet-type" class="font-weight-bold">Wallet Type <span class="text-danger">*</span></label>
@@ -293,11 +301,27 @@ document.getElementById('topup-bank').addEventListener('change', function() {
 
 const form = document.getElementById('wallet-topup-form');
 const submitBtn = document.getElementById('submitTopupBtn');
+const minFundAmount = ${JSON.stringify(minFundAmount)};
+const isMinFundEnabled = ${JSON.stringify(isMinFundEnabled)};
 
 form.addEventListener('submit', async function(event) {
   event.preventDefault();
   const message = document.getElementById('topup-message');
   message.textContent = '';
+
+  const amountVal = parseFloat(document.getElementById('topup-amount').value);
+  if (isNaN(amountVal) || amountVal <= 0) {
+    message.className = 'mb-0 font-weight-bold text-danger';
+    message.textContent = 'Please enter a valid requested amount.';
+    return;
+  }
+
+  if (isMinFundEnabled && amountVal < minFundAmount) {
+    message.className = 'mb-0 font-weight-bold text-danger';
+    message.textContent = 'Minimum fund request amount is ₹' + minFundAmount.toFixed(2) + '.';
+    return;
+  }
+
   message.className = 'mb-0 font-weight-bold text-info';
   message.textContent = 'Submitting request...';
   submitBtn.disabled = true;

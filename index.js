@@ -87,6 +87,7 @@ const createAdminEarningPage = require('./pages/admin-earning');
 const createAdminRefundReportPage = require('./pages/admin-refund-report');
 const createAdminSellerRefundRatioReportPage = require('./pages/admin-seller-refund-ratio-report');
 const createAdminFakeComplaintRatioReportPage = require('./pages/admin-fake-complaint-ratio-report');
+const createAdminComplaintReportPage = require('./pages/admin-complaint-report');
 const createAdminUserSendMsgLogPage = require('./pages/admin-user-send-msg-log');
 const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
 const createAdminDailySalesReportPage = require('./pages/admin-daily-sales-report');
@@ -223,7 +224,7 @@ const supabase = createSupabaseClientInstance();
 const { sendUserDashboard } = createUserDashboardPage({ db, adminUiRoot: ADMIN_UI_ROOT });
 const { sendUserPanelPage } = createUserPlaceholderPage({ db });
 const { sendUserFundOrderPage } = createUserFundOrderPage({ db, formatMinorUnits, fundFieldHash, decryptFundField, httpError });
-const { sendWalletTopupRequestPage } = createUserWalletTopupPage({ db, formatMinorUnits });
+const { sendWalletTopupRequestPage } = createUserWalletTopupPage({ db, formatMinorUnits, getGeneralSettings });
 const {
   sendUserSalesMarginPage,
   createSellerMargin,
@@ -276,9 +277,9 @@ const {
 const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
 const { sendUserKycPage } = createUserKycPage({ db });
 const { sendAdminKycListPage } = createAdminKycListPage({ db, decryptMobile });
-const { sendUserFundRedeemPage } = createUserFundRedeemPage({ db, formatMinorUnits });
+const { sendUserFundRedeemPage } = createUserFundRedeemPage({ db, formatMinorUnits, getGeneralSettings });
 const { sendUserFundStatementPage } = createUserFundStatementPage({ db, formatMinorUnits });
-const { sendAdminBankApprovalPage } = createAdminBankApprovalPage({ db });
+const { sendAdminBankApprovalPage } = createAdminBankApprovalPage({ db, decryptMobile });
 const { sendAdminPayoutRequestsPage } = createAdminPayoutRequestsPage({ db, formatMinorUnits });
 const { sendUserBuyerRechargeDisputePage } = createUserBuyerRechargeDisputePage({ db, formatMinorUnits, decryptMobile });
 const { sendUserBuyerPurchaseRefundPage } = createUserBuyerPurchaseRefundPage({ db, formatMinorUnits, decryptMobile });
@@ -336,6 +337,13 @@ const { sendAdminSellerRefundRatioReportPage } = createAdminSellerRefundRatioRep
 const { sendAdminFakeComplaintRatioReportPage } = createAdminFakeComplaintRatioReportPage({
   db,
   formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminComplaintReportPage } = createAdminComplaintReportPage({
+  db,
+  formatMinorUnits,
+  decryptMobile,
   sendJson,
   httpError,
 });
@@ -2418,10 +2426,35 @@ async function getGeneralSettings() {
     apiDisablePendingTxnCount: 5,
     apiSuspendRefundPercentEnabled: true,
     apiSuspendRefundPercent: 25,
+    payoutTimeWindowEnabled: false,
+    payoutStartTime: '09:00',
+    payoutEndTime: '22:00',
+    payoutAmountLimitEnabled: false,
+    payoutMinAmount: 100,
+    payoutMaxAmount: 50000,
+    fundRequestMinAmountEnabled: false,
+    fundRequestMinAmount: 100,
+    payoutChargesEnabled: false,
+    payoutChargeImps: 5.00,
+    payoutChargeNeft: 3.00,
+    payoutChargeRtgs: 10.00,
+    payoutCooldownEnabled: false,
+    payoutCooldownMinutes: 30,
   };
   cachedGeneralSettings = fallback;
   cachedGeneralSettingsAt = now;
   return fallback;
+}
+
+function formatTime12Hour(timeStr) {
+  if (!timeStr) return '';
+  const [hStr, mStr] = String(timeStr).split(':');
+  let h = parseInt(hStr, 10) || 0;
+  const m = parseInt(mStr, 10) || 0;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
 async function quoteTransactionMargin(request, response) {
@@ -2447,6 +2480,15 @@ async function createFundRequest(request, response) {
   const [whole, fraction = ''] = amount.split('.');
   const amountMinor = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, '0'));
   if (amountMinor < 1n || amountMinor > 1_000_000_000n) throw httpError('Amount must be between 0.01 and 10,000,000.', 400);
+
+  const genSettings = await getGeneralSettings();
+  if (genSettings.fundRequestMinAmountEnabled) {
+    const minFund = Math.max(1, parseFloat(genSettings.fundRequestMinAmount) || 100);
+    const minFundMinor = BigInt(Math.round(minFund * 100));
+    if (amountMinor < minFundMinor) {
+      throw httpError(`Minimum fund request amount is ₹${minFund.toFixed(2)}.`, 400);
+    }
+  }
   const bankId = String(input.bankId || '').trim();
   const bankCode = String(input.bankCode || '').trim();
   let bankRow = null;
@@ -4959,6 +5001,19 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
+      if (
+        url.pathname === '/admin/reports/complaint' ||
+        url.pathname === '/admin/reports/complaints' ||
+        url.pathname === '/admin/reports/complain' ||
+        url.pathname === '/admin/complain'
+      ) {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminComplaintReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
       if (url.pathname === '/admin/reports/user-send-msg-log' || url.pathname === '/admin/users/send-msg-log' || url.pathname === '/admin/reports/send-msg-log') {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
@@ -5963,23 +6018,44 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
-      const adminSellerMarginMatch = url.pathname.match(/^\/api\/admin\/seller-margins\/([0-9a-f-]{36})\/(toggle-status|delete)$/i);
+      const adminSellerMarginMatch = url.pathname.match(/^\/api\/admin\/seller-margins\/([0-9a-f-]{36})\/(toggle-status|toggle-admin-status|toggle-user-status|delete)$/i);
       if (adminSellerMarginMatch) {
         checkSameOrigin(request);
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         const [, marginId, action] = adminSellerMarginMatch;
-        if (action === 'toggle-status') {
+        if (action === 'toggle-admin-status') {
           const body = await readJson(request);
           const active = Boolean(body.active);
           const result = await db.query(
-            `UPDATE seller_margin_settings SET is_active=$2, updated_at=now()
-             WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_active`,
+            `UPDATE seller_margin_settings SET is_admin_approved=$2, updated_at=now()
+             WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_admin_approved, is_active`,
             [marginId, active]
           );
           if (!result.rowCount) throw httpError('Seller margin not found.', 404);
-          sendJson(response, 200, { success: true, is_active: result.rows[0].is_active });
+          sendJson(response, 200, { success: true, is_admin_approved: result.rows[0].is_admin_approved, is_active: result.rows[0].is_active });
+        } else if (action === 'toggle-user-status' || action === 'toggle-status') {
+          const body = await readJson(request);
+          if (body.target === 'admin') {
+            const active = Boolean(body.active);
+            const result = await db.query(
+              `UPDATE seller_margin_settings SET is_admin_approved=$2, updated_at=now()
+               WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_admin_approved, is_active`,
+              [marginId, active]
+            );
+            if (!result.rowCount) throw httpError('Seller margin not found.', 404);
+            sendJson(response, 200, { success: true, is_admin_approved: result.rows[0].is_admin_approved, is_active: result.rows[0].is_active });
+          } else {
+            const active = Boolean(body.active);
+            const result = await db.query(
+              `UPDATE seller_margin_settings SET is_active=$2, updated_at=now()
+               WHERE id=$1 AND deleted_at IS NULL RETURNING id, is_active, is_admin_approved`,
+              [marginId, active]
+            );
+            if (!result.rowCount) throw httpError('Seller margin not found.', 404);
+            sendJson(response, 200, { success: true, is_active: result.rows[0].is_active, is_admin_approved: result.rows[0].is_admin_approved });
+          }
         } else {
           const result = await db.query(
             `UPDATE seller_margin_settings SET deleted_at=now(), is_active=false, updated_at=now()
@@ -7350,6 +7426,74 @@ async function handleRequest(request, response) {
         const amountMinor = BigInt(Math.round(amount * 100));
         if (amountMinor <= 0n) throw httpError('Invalid payout amount.', 400);
 
+        const genSettings = await getGeneralSettings();
+
+        // 1. Enforce Payout Request Time Window
+        if (genSettings.payoutTimeWindowEnabled) {
+          const startTimeStr = genSettings.payoutStartTime || '09:00';
+          const endTimeStr = genSettings.payoutEndTime || '22:00';
+          const [startH, startM] = startTimeStr.split(':').map(n => parseInt(n, 10) || 0);
+          const [endH, endM] = endTimeStr.split(':').map(n => parseInt(n, 10) || 0);
+          const startMins = startH * 60 + startM;
+          const endMins = endH * 60 + endM;
+
+          const nowIst = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const currentMins = nowIst.getHours() * 60 + nowIst.getMinutes();
+
+          let isAllowed = false;
+          if (startMins <= endMins) {
+            isAllowed = (currentMins >= startMins && currentMins <= endMins);
+          } else {
+            isAllowed = (currentMins >= startMins || currentMins <= endMins);
+          }
+
+          if (!isAllowed) {
+            const displayStart = formatTime12Hour(startTimeStr);
+            const displayEnd = formatTime12Hour(endTimeStr);
+            throw httpError(`Plz make payment request between ${displayStart} to ${displayEnd}`, 400);
+          }
+        }
+
+        // 2. Enforce Payout Amount Limits (Min & Max)
+        if (genSettings.payoutAmountLimitEnabled) {
+          const minPayout = Math.max(1, parseFloat(genSettings.payoutMinAmount) || 100);
+          const maxPayout = Math.max(minPayout, parseFloat(genSettings.payoutMaxAmount) || 50000);
+          if (amount < minPayout || amount > maxPayout) {
+            throw httpError(`Payout request amount must be between ₹${minPayout.toFixed(2)} and ₹${maxPayout.toFixed(2)}.`, 400);
+          }
+        }
+
+        // 3. Enforce Cooldown Gap Between 2 Payout Requests
+        if (genSettings.payoutCooldownEnabled) {
+          const cooldownMins = Math.max(1, parseInt(genSettings.payoutCooldownMinutes, 10) || 30);
+          const lastPayoutRes = await db.query(
+            `SELECT created_at FROM payout_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
+            [user.id],
+          );
+          if (lastPayoutRes.rowCount > 0) {
+            const lastCreated = new Date(lastPayoutRes.rows[0].created_at).getTime();
+            const elapsedMins = (Date.now() - lastCreated) / (1000 * 60);
+            if (elapsedMins < cooldownMins) {
+              const remainingMins = Math.ceil(cooldownMins - elapsedMins);
+              throw httpError(`Please wait ${remainingMins} minute(s) before submitting another payout request. (Allowed gap: ${cooldownMins} minutes between requests).`, 400);
+            }
+          }
+        }
+
+        // 4. Calculate Payout Transfer Mode and Charges
+        let mode = String(input.mode || 'IMPS').trim().toUpperCase();
+        if (!['IMPS', 'NEFT', 'RTGS'].includes(mode)) {
+          mode = 'IMPS';
+        }
+        let chargeRupees = 0;
+        if (genSettings.payoutChargesEnabled) {
+          if (mode === 'NEFT') chargeRupees = Math.max(0, parseFloat(genSettings.payoutChargeNeft) || 0);
+          else if (mode === 'RTGS') chargeRupees = Math.max(0, parseFloat(genSettings.payoutChargeRtgs) || 0);
+          else chargeRupees = Math.max(0, parseFloat(genSettings.payoutChargeImps) || 0);
+        }
+        const chargeMinor = BigInt(Math.round(chargeRupees * 100));
+        const totalDebitMinor = amountMinor + chargeMinor;
+
         // Enforce Approved KYC for Seller Payout Requests (Buyers unaffected)
         const kycCheck = await db.query(
           'SELECT status, rejection_reason FROM user_kyc WHERE user_id = $1',
@@ -7390,8 +7534,16 @@ async function handleRequest(request, response) {
             ? BigInt(wallet.seller_balance_minor || 0)
             : BigInt(wallet.balance_minor || 0);
 
-          if (amountMinor > balanceInfo.availableForRedeemMinor) {
-            let errorMsg = `Insufficient redeemable balance. Available balance for redeem: ₹${balanceInfo.formatted.availableForRedeem}.`;
+          if (totalDebitMinor > balanceInfo.availableForRedeemMinor) {
+            let errorMsg = `Insufficient redeemable balance. Payout amount ₹${(Number(amountMinor) / 100).toFixed(2)}`;
+            if (chargeMinor > 0n) {
+              errorMsg += ` + ${mode} charge ₹${chargeRupees.toFixed(2)} (Total debit ₹${(Number(totalDebitMinor) / 100).toFixed(2)})`;
+            }
+            errorMsg += ` exceeds available balance for redeem: ₹${balanceInfo.formatted.availableForRedeem}.`;
+            if (chargeMinor > 0n) {
+              const maxReqMinor = balanceInfo.availableForRedeemMinor > chargeMinor ? balanceInfo.availableForRedeemMinor - chargeMinor : 0n;
+              errorMsg += ` Maximum payout you can request after subtracting ${mode} charge is ₹${(Number(maxReqMinor) / 100).toFixed(2)}.`;
+            }
             if (balanceInfo.heldForRedeemMinor > 0n) {
               errorMsg += ` (Recent sales hold: ₹${balanceInfo.formatted.heldForRedeem} - Policy: ${balanceInfo.policy.sellerSaleRedeemHoldMinutes} minutes hold)`;
             }
@@ -7402,30 +7554,31 @@ async function handleRequest(request, response) {
           }
 
           if (isSeparate) {
-            const newSellerBal = currentBalance - amountMinor;
+            const newSellerBal = currentBalance - totalDebitMinor;
             await client.query(
               `UPDATE wallets SET seller_balance_minor = $1, balance_minor = GREATEST(0, balance_minor - $2), updated_at = now() WHERE id = $3`,
-              [newSellerBal, amountMinor, wallet.id],
+              [newSellerBal, totalDebitMinor, wallet.id],
             );
           } else {
-            const newBalance = currentBalance - amountMinor;
+            const newBalance = currentBalance - totalDebitMinor;
             await client.query(
               `UPDATE wallets SET balance_minor = $1, seller_balance_minor = GREATEST(0, seller_balance_minor - $2), updated_at = now() WHERE id = $3`,
-              [newBalance, amountMinor, wallet.id],
+              [newBalance, totalDebitMinor, wallet.id],
             );
           }
 
           const payoutRes = await client.query(
             `INSERT INTO payout_requests (
                user_id, bank_account_id, bank_name, account_holder_name,
-               account_number, ifsc_code, amount_minor, status
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+               account_number, ifsc_code, amount_minor, payout_mode, charge_minor, status
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
              RETURNING id`,
-            [user.id, bank.id, bank.bank_name, bank.account_holder_name, bank.account_number, bank.ifsc_code, amountMinor],
+            [user.id, bank.id, bank.bank_name, bank.account_holder_name, bank.account_number, bank.ifsc_code, amountMinor, mode, chargeMinor],
           );
           const payoutId = payoutRes.rows[0].id;
 
           const refKey = `payout_req_${payoutId}`;
+          const feeDesc = chargeMinor > 0n ? ` (includes ₹${chargeRupees.toFixed(2)} ${mode} fee)` : '';
           await client.query(
             `INSERT INTO wallet_entries (
                wallet_id, user_id, amount_minor, entry_type, reference_type,
@@ -7434,10 +7587,10 @@ async function handleRequest(request, response) {
             [
               wallet.id,
               user.id,
-              amountMinor,
+              totalDebitMinor,
               payoutId,
               refKey,
-              `Payout redeem to ${bank.bank_name} (${bank.account_number})`,
+              `Payout redeem [${mode}] to ${bank.bank_name} (${bank.account_number})${feeDesc}`,
             ],
           );
 
@@ -7532,18 +7685,18 @@ async function handleRequest(request, response) {
           const res = await db.query(
             `UPDATE user_bank_accounts
              SET status = 'approved', admin_note = $1, approved_at = now(), updated_at = now()
-             WHERE id = $2 AND status = 'pending'`,
+             WHERE id = $2`,
             [note || 'Approved by Admin', bankId],
           );
-          if (!res.rowCount) throw httpError('Bank account not found or already reviewed.', 404);
+          if (!res.rowCount) throw httpError('Bank account not found.', 404);
         } else {
           const res = await db.query(
             `UPDATE user_bank_accounts
              SET status = 'rejected', admin_note = $1, updated_at = now()
-             WHERE id = $2 AND status = 'pending'`,
+             WHERE id = $2`,
             [note || 'Rejected by Admin', bankId],
           );
-          if (!res.rowCount) throw httpError('Bank account not found or already reviewed.', 404);
+          if (!res.rowCount) throw httpError('Bank account not found.', 404);
         }
 
         // Dispatch bank_approved_redeem notification (WhatsApp & Email)
@@ -7628,7 +7781,7 @@ async function handleRequest(request, response) {
             const payoutWalletMode = await getWalletMode(client);
             const isPayoutSeparate = (payoutWalletMode === 'separate');
 
-            const refundAmountMinor = BigInt(payout.amount_minor);
+            const refundAmountMinor = BigInt(payout.amount_minor) + BigInt(payout.charge_minor || 0);
             const walletRes = await client.query(
               `SELECT id, balance_minor, buyer_balance_minor, seller_balance_minor FROM wallets WHERE user_id = $1 AND currency = 'INR' FOR UPDATE`,
               [payout.user_id],

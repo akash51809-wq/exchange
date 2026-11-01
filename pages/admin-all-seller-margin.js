@@ -43,7 +43,8 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
     const operatorId = String(params.get('operatorId') || '').trim();
     const circle = String(params.get('circle') || '').trim();
     const serviceType = String(params.get('serviceType') || '').trim();
-    const status = String(params.get('status') || '').trim().toLowerCase();
+    const userStatus = String(params.get('userStatus') || params.get('status') || '').trim().toLowerCase();
+    const adminStatus = String(params.get('adminStatus') || '').trim().toLowerCase();
     const search = String(params.get('search') || '').trim();
 
     const conditions = ['m.deleted_at IS NULL'];
@@ -69,8 +70,11 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
     if (serviceType && serviceType !== 'all') {
       conditions.push(`o.service_type ILIKE ${add(serviceType)}`);
     }
-    if (status && status !== 'all') {
-      conditions.push(`m.is_active = ${add(status === 'active')}`);
+    if (userStatus && userStatus !== 'all') {
+      conditions.push(`m.is_active = ${add(userStatus === 'active' || userStatus === 'on')}`);
+    }
+    if (adminStatus && adminStatus !== 'all') {
+      conditions.push(`m.is_admin_approved = ${add(adminStatus === 'active' || adminStatus === 'on' || adminStatus === 'approved')}`);
     }
     if (search) {
       const q = add(`%${search}%`);
@@ -86,7 +90,8 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
       operatorId,
       circle,
       serviceType,
-      status,
+      userStatus,
+      adminStatus,
       search,
     };
   }
@@ -98,7 +103,7 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
              o.operator_name, o.service_type, o.operator_code as admin_op_code,
              m.circle_name, m.amount_type, m.amount_min_minor, m.amount_max_minor,
              m.commission_percent, m.limit_minor, m.limit_used_minor, m.limit_type,
-             m.with_gst, m.is_active, m.is_roffer, m.operator_code, m.created_at, m.updated_at
+             m.with_gst, m.is_active, m.is_admin_approved, m.is_roffer, m.operator_code, m.created_at, m.updated_at
       FROM seller_margin_settings m
       JOIN users u ON u.id = m.user_id
       JOIN operator_definitions o ON o.id = m.operator_id
@@ -134,7 +139,8 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
       'Limit Type',
       'GST Included',
       'R-Offer',
-      'Status',
+      'User Status',
+      'Admin Status',
       'Created At (IST)',
     ].join(',') + '\r\n';
 
@@ -170,7 +176,8 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
         `"${row.limit_type || 'daily'}"`,
         `"${row.with_gst ? 'Yes' : 'No'}"`,
         `"${row.is_roffer || 'all'}"`,
-        `"${row.is_active ? 'Active' : 'Inactive'}"`,
+        `"${row.is_active ? 'ON' : 'OFF'}"`,
+        `"${row.is_admin_approved ? 'ON (Allowed)' : 'OFF (Blocked)'}"`,
         `"${formatDateTime(row.created_at)}"`,
       ].join(',') + '\r\n';
       lines.push(line);
@@ -197,7 +204,7 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
              o.id as operator_id, o.operator_name, o.service_type, o.operator_code as admin_op_code,
              m.circle_name, m.amount_type, m.amount_min_minor, m.amount_max_minor,
              m.commission_percent, m.limit_minor, m.limit_used_minor, m.limit_type,
-             m.with_gst, m.is_active, m.is_roffer, m.operator_code, m.created_at, m.updated_at
+             m.with_gst, m.is_active, m.is_admin_approved, m.is_roffer, m.operator_code, m.created_at, m.updated_at
       FROM seller_margin_settings m
       JOIN users u ON u.id = m.user_id
       JOIN operator_definitions o ON o.id = m.operator_id
@@ -210,14 +217,18 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
 
     // Calculate KPI summaries
     const totalCount = result.rowCount !== undefined ? result.rowCount : (result.rows ? result.rows.length : 0);
-    let activeCount = 0;
-    let inactiveCount = 0;
+    let userActiveCount = 0;
+    let userInactiveCount = 0;
+    let adminApprovedCount = 0;
+    let adminBlockedCount = 0;
     const uniqueSellers = new Set();
     let totalCommission = 0;
 
     for (const r of result.rows) {
-      if (r.is_active) activeCount++;
-      else inactiveCount++;
+      if (r.is_active) userActiveCount++;
+      else userInactiveCount++;
+      if (r.is_admin_approved) adminApprovedCount++;
+      else adminBlockedCount++;
       uniqueSellers.add(r.user_id);
       totalCommission += Number(r.commission_percent || 0);
     }
@@ -237,9 +248,13 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
         amountDisplay = `<span class="badge badge-primary">₹${formatMinorUnits(row.amount_min_minor || 0)} - ₹${formatMinorUnits(row.amount_max_minor || 0)}</span>`;
       }
 
-      const activeBadge = row.is_active
-        ? '<span class="badge badge-success px-2 py-1"><i class="fa fa-check-circle mr-1"></i> Active</span>'
-        : '<span class="badge badge-secondary px-2 py-1"><i class="fa fa-ban mr-1"></i> Inactive</span>';
+      const userStatusBadge = row.is_active
+        ? '<span class="badge badge-success px-2 py-1"><i class="fa fa-check-circle mr-1"></i> ON</span>'
+        : '<span class="badge badge-secondary px-2 py-1"><i class="fa fa-ban mr-1"></i> OFF</span>';
+
+      const adminStatusBtn = row.is_admin_approved
+        ? `<button type="button" class="btn btn-xs btn-success font-weight-bold btn-toggle-admin-status" data-id="${row.id}" data-current="on" title="Admin Status: ON. Click to Turn OFF (Block)"><i class="fa fa-toggle-on mr-1"></i> ON (Allowed)</button>`
+        : `<button type="button" class="btn btn-xs btn-danger font-weight-bold btn-toggle-admin-status" data-id="${row.id}" data-current="off" title="Admin Status: OFF. Click to Turn ON (Allow)"><i class="fa fa-toggle-off mr-1"></i> OFF (Blocked)</button>`;
 
       return `
         <tr>
@@ -273,16 +288,19 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
             <div class="small text-muted">GST: ${row.with_gst ? '<span class="text-success font-weight-bold">Yes</span>' : 'No'}</div>
           </td>
           <td class="text-center">
-            ${activeBadge}
+            ${userStatusBadge}
+          </td>
+          <td class="text-center" style="white-space:nowrap;">
+            ${adminStatusBtn}
           </td>
           <td class="small text-muted" style="white-space:nowrap;">
             ${formatDateTime(row.created_at)}
           </td>
           <td class="text-center" style="white-space:nowrap;">
-            <button type="button" class="btn btn-xs ${row.is_active ? 'btn-outline-danger' : 'btn-outline-success'} btn-toggle-active" data-id="${row.id}" data-current="${row.is_active ? 'active' : 'inactive'}">
-              <i class="fa ${row.is_active ? 'fa-pause' : 'fa-play'} mr-1"></i>${row.is_active ? 'Deactivate' : 'Activate'}
+            <button type="button" class="btn btn-xs ${row.is_active ? 'btn-outline-warning' : 'btn-outline-success'} btn-toggle-active btn-toggle-user-status" data-id="${row.id}" data-current="${row.is_active ? 'on' : 'off'}" title="Toggle User Status">
+              <i class="fa ${row.is_active ? 'fa-pause' : 'fa-play'} mr-1"></i>User ${row.is_active ? 'Off' : 'On'}
             </button>
-            <button type="button" class="btn btn-xs btn-outline-danger ml-1 btn-delete-margin" data-id="${row.id}" data-op="${escapeHtml(row.operator_name)}">
+            <button type="button" class="btn btn-xs btn-outline-danger ml-1 btn-delete-margin" data-id="${row.id}" data-op="${escapeHtml(row.operator_name)}" title="Delete Margin">
               <i class="fa fa-trash"></i>
             </button>
           </td>
@@ -321,7 +339,7 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
     .kpi-val { font-size: 20px; font-weight: 800; color: #1e293b; }
     .filter-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 18px; }
     .table td, .table th { vertical-align: middle; font-size: 13px; }
-    .btn-xs { padding: 2px 7px; font-size: 11px; border-radius: 4px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
   </style>
 </head>
 <body class="app sidebar-mini">
@@ -336,7 +354,7 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
               <h4 class="page-title mb-0 font-weight-bold text-dark">
                 <i class="fa fa-percent text-primary mr-2"></i>Show All Seller Margin
               </h4>
-              <p class="text-muted small mb-0">Sabhi sellers dwara set kiye gaye sales margins ki comprehensive report aur status control.</p>
+              <p class="text-muted small mb-0">User Status (User dwara set ON/OFF) aur Admin Status (Admin control) ki complete report.</p>
             </div>
             <div>
               <a href="${csvUrl}" class="btn btn-sm btn-outline-success font-weight-bold">
@@ -355,23 +373,29 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
             </div>
             <div class="col-xl-2 col-md-4 col-6 mb-2">
               <div class="kpi-card border-left border-success" style="border-left-width: 4px !important;">
-                <div class="kpi-title">Active Margins</div>
-                <div class="kpi-val text-success">${activeCount}</div>
+                <div class="kpi-title">User ON</div>
+                <div class="kpi-val text-success">${userActiveCount}</div>
+              </div>
+            </div>
+            <div class="col-xl-2 col-md-4 col-6 mb-2">
+              <div class="kpi-card border-left border-info" style="border-left-width: 4px !important;">
+                <div class="kpi-title">Admin ON (Allowed)</div>
+                <div class="kpi-val text-info">${adminApprovedCount}</div>
+              </div>
+            </div>
+            <div class="col-xl-2 col-md-4 col-6 mb-2">
+              <div class="kpi-card border-left border-danger" style="border-left-width: 4px !important;">
+                <div class="kpi-title">Admin OFF (Blocked)</div>
+                <div class="kpi-val text-danger">${adminBlockedCount}</div>
               </div>
             </div>
             <div class="col-xl-2 col-md-4 col-6 mb-2">
               <div class="kpi-card border-left border-secondary" style="border-left-width: 4px !important;">
-                <div class="kpi-title">Inactive Margins</div>
-                <div class="kpi-val text-secondary">${inactiveCount}</div>
-              </div>
-            </div>
-            <div class="col-xl-3 col-md-4 col-6 mb-2">
-              <div class="kpi-card border-left border-info" style="border-left-width: 4px !important;">
                 <div class="kpi-title">Unique Sellers</div>
-                <div class="kpi-val text-info">${uniqueSellers.size}</div>
+                <div class="kpi-val text-secondary">${uniqueSellers.size}</div>
               </div>
             </div>
-            <div class="col-xl-3 col-md-4 col-6 mb-2">
+            <div class="col-xl-2 col-md-4 col-6 mb-2">
               <div class="kpi-card border-left border-warning" style="border-left-width: 4px !important;">
                 <div class="kpi-title">Average Margin %</div>
                 <div class="kpi-val text-warning">${avgCommission}%</div>
@@ -409,16 +433,20 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
                   </select>
                 </div>
                 <div class="form-group col-md-2 col-6 mb-2">
-                  <label class="small font-weight-bold text-dark">Status</label>
-                  <select class="form-control form-control-sm" name="status">
-                    <option value="all" ${filterInfo.status === 'all' ? 'selected' : ''}>All Status</option>
-                    <option value="active" ${filterInfo.status === 'active' ? 'selected' : ''}>Active Only</option>
-                    <option value="inactive" ${filterInfo.status === 'inactive' ? 'selected' : ''}>Inactive Only</option>
+                  <label class="small font-weight-bold text-dark">User Status</label>
+                  <select class="form-control form-control-sm" name="userStatus">
+                    <option value="all" ${filterInfo.userStatus === 'all' || !filterInfo.userStatus ? 'selected' : ''}>All User Status</option>
+                    <option value="on" ${filterInfo.userStatus === 'on' || filterInfo.userStatus === 'active' ? 'selected' : ''}>User ON Only</option>
+                    <option value="off" ${filterInfo.userStatus === 'off' || filterInfo.userStatus === 'inactive' ? 'selected' : ''}>User OFF Only</option>
                   </select>
                 </div>
                 <div class="form-group col-md-2 col-6 mb-2">
-                  <label class="small font-weight-bold text-dark">Keyword Search</label>
-                  <input type="text" class="form-control form-control-sm" name="search" value="${escapeHtml(filterInfo.search)}" placeholder="Search anything...">
+                  <label class="small font-weight-bold text-dark">Admin Status</label>
+                  <select class="form-control form-control-sm" name="adminStatus">
+                    <option value="all" ${filterInfo.adminStatus === 'all' || !filterInfo.adminStatus ? 'selected' : ''}>All Admin Status</option>
+                    <option value="on" ${filterInfo.adminStatus === 'on' || filterInfo.adminStatus === 'active' ? 'selected' : ''}>Admin ON (Allowed)</option>
+                    <option value="off" ${filterInfo.adminStatus === 'off' || filterInfo.adminStatus === 'inactive' ? 'selected' : ''}>Admin OFF (Blocked)</option>
+                  </select>
                 </div>
               </div>
               <div class="form-row align-items-center">
@@ -430,14 +458,18 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
                   <label class="small font-weight-bold text-dark">To Date</label>
                   <input type="date" class="form-control form-control-sm" id="toDate" name="toDate" value="${escapeHtml(filterInfo.toDate)}">
                 </div>
-                <div class="form-group col-md-6 col-12 mb-2 d-flex align-items-end gap-1 flex-wrap">
+                <div class="form-group col-md-3 col-6 mb-2">
+                  <label class="small font-weight-bold text-dark">Keyword Search</label>
+                  <input type="text" class="form-control form-control-sm" name="search" value="${escapeHtml(filterInfo.search)}" placeholder="Search operator, code, seller...">
+                </div>
+                <div class="form-group col-md-3 col-6 mb-2 d-flex align-items-end gap-1 flex-wrap">
                   <button type="submit" class="btn btn-sm btn-primary px-3 mr-2 font-weight-bold">
                     <i class="fa fa-filter mr-1"></i> Apply Filter
                   </button>
                   <a href="/admin/reports/all-seller-margin" class="btn btn-sm btn-light border mr-2">
                     <i class="fa fa-refresh mr-1"></i> Reset
                   </a>
-                  <div class="btn-group btn-group-sm">
+                  <div class="btn-group btn-group-sm mt-1">
                     <button type="button" class="btn btn-outline-secondary" onclick="setQuickDate('today')">Today</button>
                     <button type="button" class="btn btn-outline-secondary" onclick="setQuickDate('yesterday')">Yesterday</button>
                     <button type="button" class="btn btn-outline-secondary" onclick="setQuickDate('last7')">Last 7D</button>
@@ -454,6 +486,10 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
               <h6 class="mb-0 font-weight-bold text-dark">
                 Seller Margins List (${totalCount} records)
               </h6>
+              <div class="small text-muted">
+                <span class="mr-3"><i class="fa fa-circle text-success mr-1"></i>Admin ON: User can toggle freely</span>
+                <span><i class="fa fa-circle text-danger mr-1"></i>Admin OFF: User cannot turn ON (Admin locked)</span>
+              </div>
             </div>
             <div class="table-responsive">
               <table class="table table-bordered table-striped table-hover mb-0">
@@ -467,13 +503,14 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
                     <th style="text-align: right;">Margin %</th>
                     <th>Limit & Usage</th>
                     <th>R-Offer / GST</th>
-                    <th style="text-align: center;">Status</th>
+                    <th style="text-align: center;">User Status</th>
+                    <th style="text-align: center;">Admin Status</th>
                     <th>Date Set</th>
                     <th style="text-align: center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${rowsHtml || '<tr><td colspan="11" class="text-center py-4 text-muted font-weight-bold">No seller margins found matching the filters.</td></tr>'}
+                  ${rowsHtml || '<tr><td colspan="12" class="text-center py-4 text-muted font-weight-bold">No seller margins found matching the filters.</td></tr>'}
                 </tbody>
               </table>
             </div>
@@ -514,22 +551,51 @@ module.exports = function createAdminAllSellerMarginPage({ db, formatMinorUnits,
       document.getElementById('filterForm').submit();
     }
 
-    // Toggle status handler
-    document.querySelectorAll('.btn-toggle-active').forEach(btn => {
+    // Toggle Admin Status handler
+    document.querySelectorAll('.btn-toggle-admin-status').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
         const current = btn.dataset.current;
-        const nextActive = current !== 'active';
+        const nextActive = current !== 'on';
+        const msg = nextActive
+          ? 'Turn Admin Status ON? Seller will be allowed to use and enable this margin.'
+          : 'Turn Admin Status OFF? Seller will be BLOCKED and cannot turn this margin ON until you allow it again.';
+        if (!confirm(msg)) return;
+
         btn.disabled = true;
         try {
-          const res = await fetch('/api/admin/seller-margins/' + id + '/toggle-status', {
+          const res = await fetch('/api/admin/seller-margins/' + id + '/toggle-admin-status', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify({ active: nextActive })
           });
           const d = await res.json();
-          if (!res.ok) throw new Error(d.error || 'Failed to update status.');
+          if (!res.ok) throw new Error(d.error || 'Failed to update admin status.');
+          window.location.reload();
+        } catch (err) {
+          alert('Error: ' + err.message);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Toggle User Status handler (admin override)
+    document.querySelectorAll('.btn-toggle-user-status').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const current = btn.dataset.current;
+        const nextActive = current !== 'on';
+        btn.disabled = true;
+        try {
+          const res = await fetch('/api/admin/seller-margins/' + id + '/toggle-user-status', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ active: nextActive })
+          });
+          const d = await res.json();
+          if (!res.ok) throw new Error(d.error || 'Failed to update user status.');
           window.location.reload();
         } catch (err) {
           alert('Error: ' + err.message);
