@@ -51,12 +51,38 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     const usableSingleMinor = totalMinor > activeLienMinor ? totalMinor - activeLienMinor : 0n;
     const usableSingleRupees = formatRupees(usableSingleMinor);
 
-    // 2. Fetch news ticker text from website_settings
+    // 2. Fetch news ticker, banner, and popup settings from website_settings
     let newsTickerText = 'Welcome to Exchange Recharge & LAPU Trading Platform! Fast execution, automated LAPU stock swapping, and 24x7 real-time settlement. Keep your wallet balance updated for uninterrupted recharge transactions.';
+    let newsTickerEnabled = true;
+    let dashboardBannerEnabled = true;
+    let dashboardPopupEnabled = false;
+    let dashboardPopupLink = '';
+    let dashboardPopupFrequency = 'session';
+    let hasDashboardPopup = false;
     try {
-      const wsRes = await db.query('SELECT news_ticker, website_name FROM website_settings WHERE id = 1 LIMIT 1');
-      if (wsRes.rows[0] && wsRes.rows[0].news_ticker && wsRes.rows[0].news_ticker.trim()) {
-        newsTickerText = wsRes.rows[0].news_ticker.trim();
+      const wsRes = await db.query(`
+        SELECT news_ticker, news_ticker_enabled,
+               dashboard_banner_enabled,
+               (dashboard_popup_image_data IS NOT NULL) AS has_dashboard_popup,
+               dashboard_popup_enabled, dashboard_popup_link, dashboard_popup_frequency,
+               website_name
+        FROM website_settings WHERE id = 1 LIMIT 1
+      `);
+      if (wsRes.rowCount > 0) {
+        const row = wsRes.rows[0];
+        if (row.news_ticker && row.news_ticker.trim()) {
+          newsTickerText = row.news_ticker.trim();
+        }
+        if (row.news_ticker_enabled !== null && row.news_ticker_enabled !== undefined) {
+          newsTickerEnabled = Boolean(row.news_ticker_enabled);
+        }
+        if (row.dashboard_banner_enabled !== null && row.dashboard_banner_enabled !== undefined) {
+          dashboardBannerEnabled = Boolean(row.dashboard_banner_enabled);
+        }
+        hasDashboardPopup = Boolean(row.has_dashboard_popup);
+        dashboardPopupEnabled = Boolean(row.dashboard_popup_enabled);
+        dashboardPopupLink = row.dashboard_popup_link || '';
+        dashboardPopupFrequency = row.dashboard_popup_frequency || 'session';
       }
     } catch (_) {}
 
@@ -662,6 +688,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
   <div class="page-main">
     ${navigationHtml}
 
+    ${newsTickerEnabled ? `
     <!-- 1. Running Style News Bar touching directly below Menu Bar -->
     <div class="user-news-ticker-strip">
       <div class="news-badge">
@@ -673,13 +700,14 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
           ${escapeHtml(newsTickerText)}
         </div>
       </div>
-    </div>
+    </div>` : ''}
 
     <div class="user-dashboard-container">
+      ${dashboardBannerEnabled ? `
       <!-- 0. Top Horizontal Dashboard Banner (full width & limited height) -->
       <div class="user-dashboard-banner-container">
         <img src="/api/dashboard-banner" alt="Dashboard Banner" class="user-dashboard-banner-img">
-      </div>
+      </div>` : ''}
 
       <!-- Welcome Header -->
       <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
@@ -1177,6 +1205,38 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
 </div>
 
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
+${(hasDashboardPopup && dashboardPopupEnabled) ? `
+<!-- Dashboard Notice Popup Modal -->
+<div id="dashboardNoticeModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.75);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
+  <div style="position:relative;background:#ffffff;border-radius:12px;max-width:550px;width:100%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);overflow:hidden;animation:dashPopupFadeIn 0.25s ease-out;">
+    <button type="button" id="closeDashboardNoticeModal" style="position:absolute;top:10px;right:10px;z-index:10;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.65);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;transition:background 0.2s;" aria-label="Close">&times;</button>
+    ${dashboardPopupLink ? `<a href="${escapeHtml(dashboardPopupLink)}" target="_blank" rel="noopener noreferrer" style="display:block;cursor:pointer;">` : ''}
+      <img src="/api/dashboard-popup-image" alt="Dashboard Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
+    ${dashboardPopupLink ? `</a>` : ''}
+  </div>
+</div>
+<script>
+  (function(){
+    var m = document.getElementById('dashboardNoticeModal');
+    var c = document.getElementById('closeDashboardNoticeModal');
+    if (!m || !c) return;
+    var freq = ${JSON.stringify(dashboardPopupFrequency || 'session')};
+    if (freq === 'session') {
+      if (sessionStorage.getItem('dashboard_popup_seen')) return;
+      sessionStorage.setItem('dashboard_popup_seen', '1');
+    }
+    m.style.display = 'flex';
+    c.onclick = function() { m.style.display = 'none'; };
+    m.onclick = function(e) { if (e.target === m) m.style.display = 'none'; };
+  })();
+</script>
+<style>
+@keyframes dashPopupFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+</style>
+` : ''}
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script src="/auth-client.js"></script>
 </body>

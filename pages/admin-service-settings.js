@@ -3,8 +3,9 @@
 const nodemailer = require('nodemailer');
 const { escapeHtml } = require('../lib/page-utils');
 const { addPanelChrome } = require('../lib/panel-chrome');
-const { fetchOperatorLookup } = require('../lib/plan-api-service');
+const { fetchOperatorLookup, fetchEzytmRoffer } = require('../lib/plan-api-service');
 const { clearPolicyCache } = require('../lib/wallet-helper');
+const { checkAndDeactivateInactiveUsers } = require('../lib/user-inactivity-service');
 
 module.exports = function createAdminServiceSettingsPage({
   db,
@@ -301,6 +302,50 @@ module.exports = function createAdminServiceSettingsPage({
       margin-top: 20px;
     }
 
+    /* Media Upload & Notifications */
+    .upload-media-box {
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      background: #f8fafc;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .upload-media-box:hover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .upload-media-box input[type="file"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .media-size-pill {
+      display: inline-block;
+      background: #e0f2fe;
+      color: #0369a1;
+      border: 1px solid #bae6fd;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-weight: 700;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .notif-card-section {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 22px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
     .tab-pane {
       display: none;
     }
@@ -395,7 +440,7 @@ module.exports = function createAdminServiceSettingsPage({
                   <i class="fa fa-whatsapp"></i> WhatsApp Gateway
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabPlanApi">
-                  <i class="fa fa-search"></i> Plan API (ezytm plan API)
+                  <i class="fa fa-search"></i> PLAN API
                 </button>
                 <button type="button" class="settings-tab-btn" data-target="#tabMarginDiff">
                   <i class="fa fa-percent"></i> Margin Difference
@@ -412,8 +457,8 @@ module.exports = function createAdminServiceSettingsPage({
                 <button type="button" class="settings-tab-btn" data-target="#tabPayment">
                   <i class="fa fa-credit-card"></i> Payment Gateway <span class="badge-future">Coming Soon</span>
                 </button>
-                <button type="button" class="settings-tab-btn" data-target="#tabPush">
-                  <i class="fa fa-bell-o"></i> Push Notifications <span class="badge-future">Coming Soon</span>
+                <button type="button" class="settings-tab-btn" data-target="#tabNotification">
+                  <i class="fa fa-bell"></i> Notification
                 </button>
               </div>
             </div>
@@ -1037,6 +1082,40 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
                     </div>
 
+                    <!-- 15. Set User Inactive on Inactivity (No Buy / Sale) -->
+                    <div class="general-list-item">
+                      <div class="general-item-left">
+                        <div class="general-toggle-box">
+                          <label class="compact-switch" title="Toggle Auto-Inactive Users">
+                            <input type="checkbox" id="userInactivityAutoDisableEnabled">
+                            <span class="compact-slider"></span>
+                          </label>
+                          <span id="userInactivityAutoDisableEnabledStatus" class="compact-switch-badge badge-off">OFF</span>
+                        </div>
+                        <div class="general-item-content">
+                          <h6 class="general-item-title">
+                            <i class="fa fa-user-times text-danger"></i> Set User Inactive on Inactivity (No Buy / Sale)
+                          </h6>
+                          <p class="general-item-desc">
+                            Isme admin jitne din set karega utne din agar kisi user ka koi Buy ya Sale transaction nahi hota to uski user ID Active se <strong>Inactive (Blocked)</strong> ho jayegi. Phir admin use <code>/admin/users/list</code> me wapas status Active kar sakta hai.
+                          </p>
+                        </div>
+                      </div>
+                      <div class="general-item-controls">
+                        <div class="d-flex align-items-center flex-wrap">
+                          <div class="input-group input-group-sm mr-2" style="max-width: 160px;">
+                            <input type="number" id="userInactivityDays" class="form-control font-weight-bold text-center" value="30" min="1" max="365">
+                            <div class="input-group-append">
+                              <span class="input-group-text font-weight-bold">Days</span>
+                            </div>
+                          </div>
+                          <button type="button" class="btn btn-sm btn-outline-danger font-weight-bold" id="btnRunInactivityCheck" title="Check & Inactivate Users with no Buy/Sale in set days">
+                            <i class="fa fa-bolt mr-1"></i> Check Now
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                   </div>
                 </div>
 
@@ -1310,35 +1389,38 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 3. PLAN API (ezytm plan API) TAB           -->
+            <!-- 3. PLAN API TAB                            -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabPlanApi">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
                   <div>
-                    <h5 class="mb-1"><i class="fa fa-search text-info"></i> Plan API (Operator &amp; Circle Fetch Engine)</h5>
-                    <small class="text-muted">Live HLR operator and circle lookup service (Brand: ezytm plan API)</small>
+                    <h5 class="mb-1"><i class="fa fa-search text-info"></i> PLAN API</h5>
+                    <small class="text-muted">Live HLR Operator, Circle &amp; R-Offer Fetch Engine</small>
                   </div>
                   <div class="custom-control custom-switch custom-switch-lg">
                     <input type="checkbox" class="custom-control-input" id="planApiEnabled" checked>
-                    <label class="custom-control-label" for="planApiEnabled" id="planApiEnabledLabel">Plan API Enabled</label>
+                    <label class="custom-control-label" for="planApiEnabled" id="planApiEnabledLabel">PLAN API Enabled</label>
                   </div>
                 </div>
                 <div class="settings-panel-body">
 
                   <!-- Active Brand & Protocol Ribbon -->
-                  <div class="d-flex align-items-center justify-content-between p-2 mb-3 bg-light rounded border">
+                  <div class="d-flex align-items-center justify-content-between p-2 mb-3 bg-light rounded border flex-wrap" style="gap: 8px;">
                     <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
                       <span class="small font-weight-bold text-dark mr-2"><i class="fa fa-tags text-primary"></i> Active Provider:</span>
                       <span class="badge badge-success px-3 py-2 font-weight-bold" style="font-size: 0.95rem;">
-                        <i class="fa fa-bolt mr-1"></i> ezytm plan API
+                        <i class="fa fa-bolt mr-1"></i> Plan API (EZYTM)
                       </span>
-                      <span class="badge badge-primary px-2 py-2">
-                        <i class="fa fa-exchange mr-1"></i> Type: GET
+                      <span class="badge badge-info px-2 py-2">
+                        <i class="fa fa-globe mr-1"></i> Check Circle (OperatorFetchNew)
+                      </span>
+                      <span class="badge badge-warning px-2 py-2 text-dark">
+                        <i class="fa fa-gift mr-1"></i> Check R-Offer (RofferCheck)
                       </span>
                     </div>
                     <div>
-                      <span class="badge badge-info px-2 py-1"><i class="fa fa-check-circle mr-1"></i> Pre-Routing Auto Fetch</span>
+                      <span class="badge badge-primary px-2 py-1"><i class="fa fa-check-circle mr-1"></i> Backend Auto-Configured</span>
                     </div>
                   </div>
 
@@ -1347,80 +1429,50 @@ module.exports = function createAdminServiceSettingsPage({
                     <div class="d-flex align-items-start">
                       <i class="fa fa-info-circle text-primary fa-lg mr-2 mt-1"></i>
                       <div class="w-100">
-                        <strong>ezytm plan API Configuration &amp; Parameter Specifications:</strong>
-                        <div class="mt-1 font-monospace small bg-white p-2 rounded border text-dark">
-                          <strong>Request:</strong> <code>https://planapi.in/api/Mobile/OperatorFetchNew?ApiUserID=[ApiUserID]&amp;ApiPassword=[ApiPassword]&amp;Mobileno=[Mobileno]</code>
-                        </div>
-
-                        <!-- Parameter Table -->
-                        <div class="table-responsive mt-2 bg-white rounded border">
-                          <table class="table table-sm table-bordered mb-0 small">
-                            <thead class="thead-light">
-                              <tr>
-                                <th>Parameter</th>
-                                <th>Type</th>
-                                <th>Position</th>
-                                <th>#</th>
-                                <th>Description</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              <tr>
-                                <td class="font-weight-bold font-monospace text-primary">ApiUserID</td>
-                                <td>string</td>
-                                <td>URL Query / Body</td>
-                                <td><span class="badge badge-danger">Required</span></td>
-                                <td>Enter Your 4 digit MemberID credentials (Default: <code>5100</code>)</td>
-                              </tr>
-                              <tr>
-                                <td class="font-weight-bold font-monospace text-primary">ApiPassword</td>
-                                <td>string</td>
-                                <td>URL Query / Body</td>
-                                <td><span class="badge badge-danger">Required</span></td>
-                                <td>Enter Your given ApiPassword credentials</td>
-                              </tr>
-                              <tr>
-                                <td class="font-weight-bold font-monospace text-primary">Mobileno</td>
-                                <td>string</td>
-                                <td>URL Query / Body</td>
-                                <td><span class="badge badge-danger">Required</span></td>
-                                <td>Enter Customer Mobile no (auto-populated dynamically per incoming recharge request)</td>
-                              </tr>
-                            </tbody>
-                          </table>
+                        <strong>Plan API (EZYTM) Integration &amp; Backend Endpoint Specifications:</strong>
+                        <div class="mt-2 font-monospace small bg-white p-2 rounded border text-dark">
+                          <div><strong>1. Check Circle:</strong> <code>https://planapi.in/api/Mobile/OperatorFetchNew?ApiUserID=[ApiUserID]&amp;ApiPassword=[ApiPassword]&amp;Mobileno=[Mobileno]</code></div>
+                          <div class="mt-1"><strong>2. Check R-Offer:</strong> <code>https://planapi.in/api/Mobile/RofferCheck?apimember_id=[apimember_id]&amp;api_password=[api_password]&amp;operator_code=[OpCode]&amp;mobile_no=[mobile_no]</code></div>
                         </div>
 
                         <div class="mt-2 text-dark small">
                           <i class="fa fa-arrow-circle-right text-success mr-1"></i>
-                          <strong>Workflow Note:</strong> Ye URL se jab bhi koi buyer koi recharge send karega to sabse pehle us number ka <strong>Operator aur Circle</strong> live fetch hoga aur phir usi operator aur circle ke hisab se <strong>maximum available seller margin</strong> check hoke recharge seller API pe route hoga.
+                          <strong>Configuration Note:</strong> Check Circle aur Check R-Offer dono ke URLs backend se automatically configured hain. Yahan form me sirf <strong>Choose Provider</strong> aur apna <strong>User ID &amp; Password</strong> submit karna hai.
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <form id="planApiForm">
+                  <!-- Provider & Credentials Form (No URL fields shown) -->
+                  <form id="planApiForm" class="bg-light p-3 rounded border mb-4">
+                    <h6 class="font-weight-bold text-dark mb-3">
+                      <i class="fa fa-cogs text-primary mr-1"></i> Provider &amp; Credentials Configuration
+                    </h6>
+
                     <div class="row">
                       <div class="col-md-12 form-group">
-                        <label for="ezytmApiUrl" class="font-weight-bold">
-                          API Endpoint URL <span class="text-danger">*</span>
+                        <label for="planApiProvider" class="font-weight-bold small text-dark">
+                          Choose Provider <span class="text-danger">*</span>
                         </label>
-                        <input type="text" id="ezytmApiUrl" class="form-control font-monospace" value="https://planapi.in/api/Mobile/OperatorFetchNew" required>
-                        <small class="form-text text-muted">Base URL endpoint for ezytm plan API (Type: GET)</small>
+                        <select id="planApiProvider" class="form-control font-weight-bold" required>
+                          <option value="ezytm" selected>Plan API (EZYTM)</option>
+                        </select>
+                        <small class="form-text text-muted">Select active Plan API provider for Circle and R-Offer lookups</small>
                       </div>
                     </div>
 
                     <div class="row">
                       <div class="col-md-6 form-group">
-                        <label for="ezytmApiUserId" class="font-weight-bold">
-                          ApiUserID (MemberID) <span class="text-danger">*</span>
+                        <label for="ezytmApiUserId" class="font-weight-bold small text-dark">
+                          User ID / Member ID <span class="text-danger">*</span>
                         </label>
                         <input type="text" id="ezytmApiUserId" class="form-control font-monospace font-weight-bold" placeholder="e.g. 5100" value="5100" required>
-                        <small class="form-text text-muted">Your registered 4-digit MemberID credentials (e.g. 5100)</small>
+                        <small class="form-text text-muted">Your registered MemberID credentials (apimember_id / ApiUserID)</small>
                       </div>
 
                       <div class="col-md-6 form-group">
-                        <label for="ezytmApiPassword" class="font-weight-bold">
-                          ApiPassword <span class="text-danger">*</span>
+                        <label for="ezytmApiPassword" class="font-weight-bold small text-dark">
+                          Password / API Password <span class="text-danger">*</span>
                         </label>
                         <div class="input-group">
                           <input type="password" id="ezytmApiPassword" class="form-control font-monospace font-weight-bold" placeholder="Enter ApiPassword" value="amart@74" required>
@@ -1430,27 +1482,30 @@ module.exports = function createAdminServiceSettingsPage({
                             </button>
                           </div>
                         </div>
-                        <small class="form-text text-muted">Your registered ezytm plan API security password credentials</small>
+                        <small class="form-text text-muted">Your registered security password credentials (api_password / ApiPassword)</small>
                       </div>
                     </div>
 
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-                      <button type="submit" class="btn btn-primary" id="btnSavePlanApi">
-                        <i class="fa fa-save mr-1"></i> Save ezytm Plan API Settings
+                    <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top">
+                      <button type="submit" class="btn btn-primary font-weight-bold px-4" id="btnSavePlanApi">
+                        <i class="fa fa-save mr-1"></i> Save PLAN API Settings
                       </button>
-                      <span class="text-muted small" id="planApiSaveStatus"></span>
+                      <span class="small font-weight-bold" id="planApiSaveStatus"></span>
                     </div>
                   </form>
 
                   <!-- ============================================== -->
-                  <!-- LIVE TEST & OPERATOR/CIRCLE LOOKUP BOX         -->
+                  <!-- 1. CHECK CIRCLE (OPERATOR & CIRCLE LOOKUP)     -->
                   <!-- ============================================== -->
-                  <div class="test-box-card mt-4">
-                    <h6 class="font-weight-bold text-dark mb-2">
-                      <i class="fa fa-bolt text-warning mr-1"></i> Live Mobile Operator &amp; Circle Fetch Test
-                    </h6>
+                  <div class="test-box-card mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                      <h6 class="font-weight-bold text-dark mb-0">
+                        <i class="fa fa-globe text-primary mr-1"></i> 1. Check Circle &amp; Operator Lookup
+                      </h6>
+                      <span class="badge badge-light border text-muted font-monospace small">OperatorFetchNew</span>
+                    </div>
                     <p class="text-muted small mb-3">
-                      Enter any 10-digit Indian mobile number to fetch live Operator and Circle directly using <strong>ezytm plan API</strong>.
+                      Recharge request aane par customer number ka <strong>Operator aur Circle</strong> live fetch hota hai aur usi ke hisab se highest seller margin check hoke recharge route hota hai.
                     </p>
                     <div class="row align-items-end">
                       <div class="col-md-8 form-group mb-md-0">
@@ -1471,8 +1526,8 @@ module.exports = function createAdminServiceSettingsPage({
                       <div class="lookup-result-card shadow-sm p-3 border rounded bg-white">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                           <h6 class="font-weight-bold text-dark mb-0">
-                            <i class="fa fa-check-circle text-success mr-1"></i> Lookup Result
-                            <span class="badge badge-primary ml-2 py-1 px-2" id="resBrandBadge">Brand: ezytm plan API</span>
+                            <i class="fa fa-check-circle text-success mr-1"></i> Operator Lookup Result
+                            <span class="badge badge-primary ml-2 py-1 px-2" id="resBrandBadge">Plan API (EZYTM)</span>
                           </h6>
                           <span id="planApiLatency" class="badge badge-secondary py-1 px-2"></span>
                         </div>
@@ -1497,6 +1552,81 @@ module.exports = function createAdminServiceSettingsPage({
                           </a>
                           <div class="collapse mt-2" id="rawPlanApiResponse">
                             <pre class="bg-dark text-light p-2 rounded small font-monospace" id="resRawPayload" style="max-height: 180px; overflow-y: auto;"></pre>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- ============================================== -->
+                  <!-- 2. CHECK R-OFFER (ROFFERCHECK) SECTION         -->
+                  <!-- ============================================== -->
+                  <div class="test-box-card border-top pt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                      <h6 class="font-weight-bold text-dark mb-0">
+                        <i class="fa fa-gift text-success mr-1"></i> 2. Check R-Offer (Special Recharge Offers)
+                      </h6>
+                      <span class="badge badge-light border text-muted font-monospace small">RofferCheck</span>
+                    </div>
+                    <p class="text-muted small mb-3">
+                      Plan API (EZYTM) ke live <strong>RofferCheck</strong> engine se kisi bhi mobile number ke live personalized R-Offers (special recharge plans) check karein:
+                      <br><code class="text-muted font-monospace small">https://planapi.in/api/Mobile/RofferCheck?apimember_id=...&amp;api_password=...&amp;operator_code=[OpCode]&amp;mobile_no=...</code>
+                    </p>
+                    <div class="row align-items-end">
+                      <div class="col-md-5 form-group mb-md-0">
+                        <label for="testRofferMobile" class="small font-weight-bold">10-Digit Mobile Number</label>
+                        <input type="tel" id="testRofferMobile" class="form-control font-weight-bold font-monospace" placeholder="e.g. 9335819686" value="9335819686" maxlength="10">
+                      </div>
+                      <div class="col-md-4 form-group mb-md-0">
+                        <label for="testRofferOpCode" class="small font-weight-bold">Operator Code (OpCode)</label>
+                        <select id="testRofferOpCode" class="form-control font-weight-bold">
+                          <option value="2">Airtel (Code: 2)</option>
+                          <option value="1">Idea / Vodafone (Code: 1)</option>
+                          <option value="3">Jio (Code: 3)</option>
+                          <option value="4">BSNL (Code: 4)</option>
+                          <option value="AT">Airtel (AT)</option>
+                          <option value="VI">VI (Vodafone Idea)</option>
+                          <option value="JIO">JIO</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <button type="button" class="btn btn-success btn-block font-weight-bold text-white" id="btnTestRoffer">
+                          <i class="fa fa-gift mr-1"></i> Check R-Offer
+                        </button>
+                      </div>
+                    </div>
+
+                    <div id="testRofferAlert" class="mt-3" style="display: none;"></div>
+
+                    <!-- Dynamic R-Offer Result Box -->
+                    <div id="rofferResultContainer" style="display: none;" class="mt-3">
+                      <div class="lookup-result-card shadow-sm p-3 border rounded bg-white">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                          <h6 class="font-weight-bold text-dark mb-0">
+                            <i class="fa fa-tags text-success mr-1"></i> Available R-Offers
+                            <span class="badge badge-success ml-2 py-1 px-2" id="rofferCountBadge">0 Offers</span>
+                          </h6>
+                          <span id="rofferLatency" class="badge badge-secondary py-1 px-2"></span>
+                        </div>
+
+                        <div id="rofferOffersTableWrap" class="table-responsive" style="max-height: 320px; overflow-y: auto;">
+                          <table class="table table-bordered table-sm table-hover mb-0">
+                            <thead class="thead-light">
+                              <tr>
+                                <th style="width: 100px;">Price (₹)</th>
+                                <th>Offer / Plan Details</th>
+                              </tr>
+                            </thead>
+                            <tbody id="rofferOffersTableBody"></tbody>
+                          </table>
+                        </div>
+
+                        <div class="mt-3">
+                          <a class="small text-primary font-weight-bold" data-toggle="collapse" href="#rawRofferResponse" role="button">
+                            <i class="fa fa-code mr-1"></i> View Raw Server Response
+                          </a>
+                          <div class="collapse mt-2" id="rawRofferResponse">
+                            <pre class="bg-dark text-light p-2 rounded small font-monospace" id="resRofferRawPayload" style="max-height: 180px; overflow-y: auto;"></pre>
                           </div>
                         </div>
                       </div>
@@ -1860,15 +1990,232 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 7. PUSH NOTIFICATIONS TAB (COMING SOON) -->
+            <!-- 7. NOTIFICATION & DISPLAY MEDIA TAB -->
             <!-- ========================================== -->
-            <div class="tab-pane" id="tabPush">
-              <div class="settings-panel-card text-center py-5">
-                <div class="py-4">
-                  <i class="fa fa-bell-o text-muted" style="font-size: 48px;"></i>
-                  <h4 class="mt-3 font-weight-bold">Web Push Notifications</h4>
-                  <p class="text-muted">Firebase Cloud Messaging (FCM) push notification keys.</p>
-                  <button type="button" class="btn btn-outline-secondary" disabled>Module Ready</button>
+            <div class="tab-pane" id="tabNotification">
+              <div class="settings-panel-card">
+                <div class="settings-panel-header">
+                  <h5><i class="fa fa-bell text-warning"></i> Notification &amp; Display Media Management</h5>
+                  <span class="badge badge-light border text-muted px-2 py-1"><i class="fa fa-television mr-1"></i> Announcements &amp; Visuals</span>
+                </div>
+
+                <div class="p-4">
+                  <form id="notificationForm">
+
+                    <!-- ========================================== -->
+                    <!-- 1. LIVE NEWS (RUNNING TICKER)              -->
+                    <!-- ========================================== -->
+                    <div class="notif-card-section">
+                      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                        <h6 class="font-weight-bold text-dark mb-0">
+                          <i class="fa fa-bullhorn text-danger mr-1"></i> 1. Live News (Dashboard Ticker)
+                        </h6>
+                        <div class="custom-control custom-switch">
+                          <input type="checkbox" class="custom-control-input" id="newsTickerEnabled" checked>
+                          <label class="custom-control-label font-weight-bold" for="newsTickerEnabled" id="newsTickerEnabledLabel">Ticker Enabled</label>
+                        </div>
+                      </div>
+                      <p class="text-muted small mb-3">
+                        Admin jo text yahan type karega wo user dashboard ke header ke neeche <strong>LIVE NEWS</strong> running strip (marquee) me user ko live scroll hota hua dikhega.
+                      </p>
+                      <div class="form-group mb-2">
+                        <label for="newsTickerText" class="font-weight-bold small text-dark">Live News Announcement Text:</label>
+                        <textarea id="newsTickerText" class="form-control font-weight-bold" rows="3" placeholder="e.g. Welcome to Exchange Recharge &amp; LAPU Trading Platform! Fast execution, automated LAPU stock swapping, and 24x7 real-time settlement..."></textarea>
+                      </div>
+                      <div class="p-2 bg-light rounded border text-muted small">
+                        <strong>Preview:</strong> <i class="fa fa-bullhorn text-danger mx-1"></i> <span id="newsTickerLivePreview" class="text-dark">Type above to preview...</span>
+                      </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- 2. USER DASHBOARD BANNER (UNDER LIVE NEWS) -->
+                    <!-- ========================================== -->
+                    <div class="notif-card-section">
+                      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                        <h6 class="font-weight-bold text-dark mb-0">
+                          <i class="fa fa-image text-primary mr-1"></i> 2. User Dashboard Banner (Under Live News)
+                        </h6>
+                        <span class="badge badge-secondary" id="banner-status-badge">Default Banner Active</span>
+                      </div>
+                      <span class="media-size-pill">
+                        <i class="fa fa-info-circle mr-1"></i> Proper Size: 1200 &times; 180 px (or 1600 &times; 240 px, Wide Horizontal Banner, Aspect Ratio ~ 7:1)
+                      </span>
+                      <p class="text-muted small mb-3">
+                        Ye banner user dashboard me Live News ticker strip ke theek neeche full-width horizontal header ke roop me show hota hai. Kripya diye gaye sahi size ka banner upload karein taaki dashboard par perfect look aaye.
+                      </p>
+
+                      <div class="upload-media-box mb-3" id="banner-drop-area">
+                        <input type="file" id="dashboard_banner_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <i class="fa fa-cloud-upload fa-2x text-primary mb-2"></i>
+                        <h6 class="font-weight-bold mb-1">Drag &amp; drop dashboard banner ya browse karne ke liye click karein</h6>
+                        <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Max 5MB)</p>
+                      </div>
+
+                      <div class="mb-3">
+                        <small class="font-weight-bold text-muted d-block mb-1">Live Dashboard Banner Preview:</small>
+                        <div class="border rounded p-1 bg-light text-center" style="max-height: 140px; overflow: hidden;">
+                          <img id="banner-preview-img" src="/api/dashboard-banner?t=1" alt="Banner Preview" style="width: 100%; height: 110px; object-fit: cover; border-radius: 6px;">
+                        </div>
+                      </div>
+
+                      <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="reset_dashboard_banner" value="1">
+                        <label class="custom-control-label text-danger font-weight-bold small" for="reset_dashboard_banner">Reset to system default banner</label>
+                      </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- 3. LOGIN PAGE RIGHT-SIDE BLUE BOX IMAGE   -->
+                    <!-- ========================================== -->
+                    <div class="notif-card-section">
+                      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                        <h6 class="font-weight-bold text-dark mb-0">
+                          <i class="fa fa-picture-o text-info mr-1"></i> 3. Login Page Right-Side Box Graphic
+                        </h6>
+                        <div class="d-flex align-items-center">
+                          <span class="badge badge-secondary mr-2" id="login-side-status-badge">Default Gradient Active</span>
+                          <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="loginSideImageEnabled" checked>
+                            <label class="custom-control-label font-weight-bold small" for="loginSideImageEnabled">Show Image</label>
+                          </div>
+                        </div>
+                      </div>
+                      <span class="media-size-pill">
+                        <i class="fa fa-info-circle mr-1"></i> Proper Size: 800 &times; 900 px (or 1000 &times; 1200 px, Portrait Orientation, Aspect Ratio ~ 3:4)
+                      </span>
+                      <p class="text-muted small mb-3">
+                        Login page (<code>/admin/login</code>) ke right side jo blue box/panel hai, wahan ye graphic/illustration background ya side hero banner ke roop me show hoga.
+                      </p>
+
+                      <div class="upload-media-box mb-3" id="login-side-drop-area">
+                        <input type="file" id="login_side_image_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <i class="fa fa-cloud-upload fa-2x text-info mb-2"></i>
+                        <h6 class="font-weight-bold mb-1">Drag &amp; drop login side image ya click karein</h6>
+                        <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Max 5MB)</p>
+                      </div>
+
+                      <div class="mb-3">
+                        <small class="font-weight-bold text-muted d-block mb-1">Login Right-Side Graphic Preview:</small>
+                        <div class="border rounded p-2 bg-light text-center" style="max-height: 180px; overflow: hidden;">
+                          <img id="login-side-preview-img" src="/api/login-side-image?t=1" alt="Login Side Preview" style="max-height: 160px; max-width: 100%; object-fit: contain; border-radius: 6px;">
+                        </div>
+                      </div>
+
+                      <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="reset_login_side_image" value="1">
+                        <label class="custom-control-label text-danger font-weight-bold small" for="reset_login_side_image">Reset to default login blue style</label>
+                      </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- 4. LOGIN PAGE POPUP IMAGE                  -->
+                    <!-- ========================================== -->
+                    <div class="notif-card-section">
+                      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                        <h6 class="font-weight-bold text-dark mb-0">
+                          <i class="fa fa-window-maximize text-warning mr-1"></i> 4. Login Page Popup Notice
+                        </h6>
+                        <div class="custom-control custom-switch">
+                          <input type="checkbox" class="custom-control-input" id="loginPopupEnabled">
+                          <label class="custom-control-label font-weight-bold small" for="loginPopupEnabled" id="loginPopupEnabledLabel">Popup Disabled</label>
+                        </div>
+                      </div>
+                      <span class="media-size-pill">
+                        <i class="fa fa-info-circle mr-1"></i> Proper Size: 600 &times; 600 px (Square) or 600 &times; 750 px (Max 5MB)
+                      </span>
+                      <p class="text-muted small mb-3">
+                        Jab koi bhi user ya admin Login page (<code>/admin/login</code>) open karega, to screen par ye notice / offers / updates popup image show hoga jise user close button se hata sakta hai.
+                      </p>
+
+                      <div class="form-group mb-3">
+                        <label for="loginPopupLink" class="font-weight-bold small text-dark">Popup Click Link (Optional):</label>
+                        <input type="url" id="loginPopupLink" class="form-control form-control-sm font-monospace" placeholder="e.g. https://... or /admin/register">
+                        <small class="form-text text-muted">Agar user popup image par click kare to is URL par redirect hoga (khali chhodne par sirf image dikhegi).</small>
+                      </div>
+
+                      <div class="upload-media-box mb-3" id="login-popup-drop-area">
+                        <input type="file" id="login_popup_image_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <i class="fa fa-cloud-upload fa-2x text-warning mb-2"></i>
+                        <h6 class="font-weight-bold mb-1">Drag &amp; drop login popup image ya click karein</h6>
+                        <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Max 5MB)</p>
+                      </div>
+
+                      <div class="mb-3">
+                        <small class="font-weight-bold text-muted d-block mb-1">Login Popup Image Preview:</small>
+                        <div class="border rounded p-2 bg-light text-center" style="max-height: 180px; overflow: hidden;">
+                          <img id="login-popup-preview-img" src="/api/login-popup-image?t=1" alt="Login Popup Preview" style="max-height: 160px; max-width: 100%; object-fit: contain; border-radius: 6px;">
+                        </div>
+                      </div>
+
+                      <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="reset_login_popup" value="1">
+                        <label class="custom-control-label text-danger font-weight-bold small" for="reset_login_popup">Remove login popup image</label>
+                      </div>
+                    </div>
+
+                    <!-- ========================================== -->
+                    <!-- 5. USER DASHBOARD POPUP IMAGE (POST-LOGIN) -->
+                    <!-- ========================================== -->
+                    <div class="notif-card-section">
+                      <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                        <h6 class="font-weight-bold text-dark mb-0">
+                          <i class="fa fa-bell-o text-success mr-1"></i> 5. User Dashboard Popup (Login Ke Baad)
+                        </h6>
+                        <div class="custom-control custom-switch">
+                          <input type="checkbox" class="custom-control-input" id="dashboardPopupEnabled">
+                          <label class="custom-control-label font-weight-bold small" for="dashboardPopupEnabled" id="dashboardPopupEnabledLabel">Popup Disabled</label>
+                        </div>
+                      </div>
+                      <span class="media-size-pill">
+                        <i class="fa fa-info-circle mr-1"></i> Proper Size: 600 &times; 600 px (Square) or 700 &times; 700 px (Max 5MB)
+                      </span>
+                      <p class="text-muted small mb-3">
+                        User ke login hone ke baad User Dashboard par ye promotional banner / important announcement popup show hoga.
+                      </p>
+
+                      <div class="row">
+                        <div class="col-md-6 form-group mb-3">
+                          <label for="dashboardPopupFrequency" class="font-weight-bold small text-dark">Show Frequency:</label>
+                          <select id="dashboardPopupFrequency" class="form-control form-control-sm font-weight-bold">
+                            <option value="session">Once Per Login Session (Recommended)</option>
+                            <option value="always">Every Time Dashboard Loads</option>
+                          </select>
+                        </div>
+                        <div class="col-md-6 form-group mb-3">
+                          <label for="dashboardPopupLink" class="font-weight-bold small text-dark">Popup Click Link (Optional):</label>
+                          <input type="url" id="dashboardPopupLink" class="form-control form-control-sm font-monospace" placeholder="e.g. /recharge or https://...">
+                        </div>
+                      </div>
+
+                      <div class="upload-media-box mb-3" id="dashboard-popup-drop-area">
+                        <input type="file" id="dashboard_popup_image_file" accept="image/png,image/jpeg,image/svg+xml,image/webp">
+                        <i class="fa fa-cloud-upload fa-2x text-success mb-2"></i>
+                        <h6 class="font-weight-bold mb-1">Drag &amp; drop dashboard popup image ya click karein</h6>
+                        <p class="text-muted small mb-0">PNG, JPG, SVG, WebP (Max 5MB)</p>
+                      </div>
+
+                      <div class="mb-3">
+                        <small class="font-weight-bold text-muted d-block mb-1">Dashboard Popup Image Preview:</small>
+                        <div class="border rounded p-2 bg-light text-center" style="max-height: 180px; overflow: hidden;">
+                          <img id="dashboard-popup-preview-img" src="/api/dashboard-popup-image?t=1" alt="Dashboard Popup Preview" style="max-height: 160px; max-width: 100%; object-fit: contain; border-radius: 6px;">
+                        </div>
+                      </div>
+
+                      <div class="custom-control custom-checkbox">
+                        <input type="checkbox" class="custom-control-input" id="reset_dashboard_popup" value="1">
+                        <label class="custom-control-label text-danger font-weight-bold small" for="reset_dashboard_popup">Remove dashboard popup image</label>
+                      </div>
+                    </div>
+
+                    <!-- Notification Form Save Button -->
+                    <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                      <button type="submit" class="btn btn-primary px-4 font-weight-bold shadow-sm" id="btnSaveNotifications">
+                        <i class="fa fa-save mr-1"></i> Save Notification Settings &amp; Media
+                      </button>
+                      <span id="notificationSaveStatus" class="font-weight-bold"></span>
+                    </div>
+
+                  </form>
                 </div>
               </div>
             </div>
@@ -2126,6 +2473,8 @@ module.exports = function createAdminServiceSettingsPage({
           setVal('payoutChargeRtgs', g.payoutChargeRtgs ?? 10.00);
           setSwitch('payoutCooldownEnabled', Boolean(g.payoutCooldownEnabled));
           setVal('payoutCooldownMinutes', g.payoutCooldownMinutes ?? 30);
+          setSwitch('userInactivityAutoDisableEnabled', Boolean(g.userInactivityAutoDisableEnabled));
+          setVal('userInactivityDays', g.userInactivityDays ?? 30);
           updateComplainDelayVisibility();
         }
 
@@ -2206,21 +2555,21 @@ module.exports = function createAdminServiceSettingsPage({
           document.getElementById('serviceIncomingSmsWebhookUrl').value = window.location.origin + '/api/webhook/incoming-sms';
         }
 
-        // Populate Plan API (ezytm plan API)
+        // Populate Plan API
         if (data.plan_api || data.planApi) {
           const p = data.plan_api || data.planApi;
           planApiSwitch.checked = Boolean(p.isEnabled);
-          planApiLabel.textContent = planApiSwitch.checked ? 'Plan API Enabled' : 'Plan API Disabled';
+          planApiLabel.textContent = planApiSwitch.checked ? 'PLAN API Enabled' : 'PLAN API Disabled';
           planApiLabel.style.color = planApiSwitch.checked ? '#16a34a' : '#64748b';
 
+          if (document.getElementById('planApiProvider')) {
+            document.getElementById('planApiProvider').value = p.provider || 'ezytm';
+          }
           if (document.getElementById('ezytmApiUserId')) {
             document.getElementById('ezytmApiUserId').value = p.apiUserId || '5100';
           }
           if (document.getElementById('ezytmApiPassword')) {
             document.getElementById('ezytmApiPassword').value = p.apiPassword || 'amart@74';
-          }
-          if (document.getElementById('ezytmApiUrl')) {
-            document.getElementById('ezytmApiUrl').value = p.apiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew';
           }
         }
 
@@ -2239,6 +2588,57 @@ module.exports = function createAdminServiceSettingsPage({
           }
           if (m.description !== undefined) {
             document.getElementById('marginDiffDescription').value = m.description;
+          }
+        }
+
+        // Populate Notifications & Display Media
+        if (data.notifications) {
+          const n = data.notifications;
+          const ntSwitch = document.getElementById('newsTickerEnabled');
+          if (ntSwitch) {
+            ntSwitch.checked = Boolean(n.news_ticker_enabled !== false);
+            const ntLabel = document.getElementById('newsTickerEnabledLabel');
+            if (ntLabel) ntLabel.textContent = ntSwitch.checked ? 'Ticker Enabled' : 'Ticker Disabled';
+          }
+          const ntInput = document.getElementById('newsTickerText');
+          if (ntInput) {
+            ntInput.value = n.news_ticker || '';
+            const preview = document.getElementById('newsTickerLivePreview');
+            if (preview) preview.textContent = n.news_ticker || 'No live news set';
+          }
+          if (document.getElementById('banner-status-badge')) {
+            document.getElementById('banner-status-badge').textContent = n.has_dashboard_banner ? 'Custom Banner Active' : 'Default Banner Active';
+            document.getElementById('banner-status-badge').className = n.has_dashboard_banner ? 'badge badge-success' : 'badge badge-secondary';
+          }
+          const lsSwitch = document.getElementById('loginSideImageEnabled');
+          if (lsSwitch) lsSwitch.checked = Boolean(n.login_side_image_enabled !== false);
+          if (document.getElementById('login-side-status-badge')) {
+            document.getElementById('login-side-status-badge').textContent = n.has_login_side_image ? 'Custom Image Active' : 'Default Gradient Active';
+            document.getElementById('login-side-status-badge').className = n.has_login_side_image ? 'badge badge-success mr-2' : 'badge badge-secondary mr-2';
+          }
+          const lpSwitch = document.getElementById('loginPopupEnabled');
+          if (lpSwitch) {
+            lpSwitch.checked = Boolean(n.login_popup_enabled);
+            const lpLabel = document.getElementById('loginPopupEnabledLabel');
+            if (lpLabel) lpLabel.textContent = lpSwitch.checked ? 'Popup Enabled' : 'Popup Disabled';
+          }
+          if (document.getElementById('loginPopupLink')) document.getElementById('loginPopupLink').value = n.login_popup_link || '';
+          if (document.getElementById('login-popup-status-badge')) {
+            document.getElementById('login-popup-status-badge').textContent = n.has_login_popup ? 'Image Uploaded' : 'No Image';
+            document.getElementById('login-popup-status-badge').className = n.has_login_popup ? 'badge badge-success' : 'badge badge-secondary';
+          }
+
+          const dpSwitch = document.getElementById('dashboardPopupEnabled');
+          if (dpSwitch) {
+            dpSwitch.checked = Boolean(n.dashboard_popup_enabled);
+            const dpLabel = document.getElementById('dashboardPopupEnabledLabel');
+            if (dpLabel) dpLabel.textContent = dpSwitch.checked ? 'Popup Enabled' : 'Popup Disabled';
+          }
+          if (document.getElementById('dashboardPopupLink')) document.getElementById('dashboardPopupLink').value = n.dashboard_popup_link || '';
+          if (document.getElementById('dashboardPopupFrequency')) document.getElementById('dashboardPopupFrequency').value = n.dashboard_popup_frequency || 'session';
+          if (document.getElementById('dashboard-popup-status-badge')) {
+            document.getElementById('dashboard-popup-status-badge').textContent = n.has_dashboard_popup ? 'Image Uploaded' : 'No Image';
+            document.getElementById('dashboard-popup-status-badge').className = n.has_dashboard_popup ? 'badge badge-success' : 'badge badge-secondary';
           }
         }
       } catch (err) {
@@ -2693,7 +3093,7 @@ module.exports = function createAdminServiceSettingsPage({
       }
     });
 
-    // Save Plan API Form (ezytm plan API)
+    // Save Plan API Form
     const planApiForm = document.getElementById('planApiForm');
     const planApiSaveBtn = document.getElementById('btnSavePlanApi');
     const planApiSaveStatus = document.getElementById('planApiSaveStatus');
@@ -2706,13 +3106,13 @@ module.exports = function createAdminServiceSettingsPage({
         planApiSaveStatus.textContent = '';
 
         const payload = {
-          isEnabled: planApiSwitch.checked,
-          brandName: 'ezytm plan API',
-          activeBrand: 'ezytm plan API',
+          isEnabled: planApiSwitch ? planApiSwitch.checked : true,
+          provider: document.getElementById('planApiProvider') ? document.getElementById('planApiProvider').value : 'ezytm',
+          brandName: 'Plan API (EZYTM)',
+          activeBrand: 'Plan API (EZYTM)',
           requestType: 'GET',
           apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
           apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
-          apiUrl: document.getElementById('ezytmApiUrl') ? document.getElementById('ezytmApiUrl').value.trim() : 'https://planapi.in/api/Mobile/OperatorFetchNew',
         };
 
         try {
@@ -2732,7 +3132,7 @@ module.exports = function createAdminServiceSettingsPage({
           planApiSaveStatus.className = 'text-danger font-weight-bold ml-2';
         } finally {
           planApiSaveBtn.disabled = false;
-          planApiSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save ezytm Plan API Settings';
+          planApiSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save PLAN API Settings';
         }
       });
     }
@@ -2783,66 +3183,156 @@ module.exports = function createAdminServiceSettingsPage({
     const testPlanApiAlert = document.getElementById('testPlanApiAlert');
     const planApiResultContainer = document.getElementById('planApiResultContainer');
 
-    btnTestPlanApi.addEventListener('click', async () => {
-      const mobile = testPlanApiMobile.value.trim().replace(/\D/g, '');
-      if (!mobile || mobile.length < 10) {
-        alert('Please enter a valid 10-digit mobile number for Operator Look.');
-        testPlanApiMobile.focus();
-        return;
-      }
-
-      btnTestPlanApi.disabled = true;
-      btnTestPlanApi.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Fetching Live Operator...';
-      testPlanApiAlert.style.display = 'none';
-      planApiResultContainer.style.display = 'none';
-
-      const payload = {
-        mobile,
-        brand: 'ezytm plan API',
-        apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
-        apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
-        apiUrl: document.getElementById('ezytmApiUrl') ? document.getElementById('ezytmApiUrl').value.trim() : 'https://planapi.in/api/Mobile/OperatorFetchNew',
-      };
-
-      try {
-        const res = await fetch('/api/admin/settings/services/plan-api/test', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Operator lookup failed.');
-
-        // Show result card
-        document.getElementById('resOperatorName').textContent = data.operator || 'Unknown';
-        document.getElementById('resCircleName').textContent = data.circle || 'All Circle';
-        document.getElementById('planApiLatency').textContent = (data.latencyMs || 0) + ' ms';
-        const brandBadge = document.getElementById('resBrandBadge');
-        if (brandBadge) brandBadge.textContent = 'Brand: ezytm plan API';
-
-        let matchHtml = '';
-        if (data.matchedOperator) {
-          matchHtml = '✓ <strong>Matched Database Operator:</strong> ' + escapeHtml(data.matchedOperator.name) + ' (Code: ' + escapeHtml(data.matchedOperator.code) + ', Status: ' + escapeHtml(data.matchedOperator.status) + ')';
-        } else {
-          matchHtml = '<span class="text-warning"><i class="fa fa-exclamation-triangle mr-1"></i> Note: Operator "' + escapeHtml(data.operator || '') + '" not yet in system Operator Definitions. You can create it in Settings &rarr; Create Operator.</span>';
+    if (btnTestPlanApi) {
+      btnTestPlanApi.addEventListener('click', async () => {
+        const mobile = testPlanApiMobile ? testPlanApiMobile.value.trim().replace(/\D/g, '') : '';
+        if (!mobile || mobile.length < 10) {
+          alert('Please enter a valid 10-digit mobile number for Operator Look.');
+          if (testPlanApiMobile) testPlanApiMobile.focus();
+          return;
         }
-        document.getElementById('resDbMatch').innerHTML = matchHtml;
-        document.getElementById('resRawPayload').textContent = typeof data.rawResponse === 'string' ? data.rawResponse : JSON.stringify(data.rawResponse || data, null, 2);
 
-        planApiResultContainer.style.display = 'block';
-        testPlanApiAlert.className = 'alert alert-success mt-3';
-        testPlanApiAlert.innerHTML = '<strong>✓ Live Operator &amp; Circle Details Fetched Successfully!</strong> Brand: ezytm plan API | Mobile: ' + escapeHtml(data.mobile);
-        testPlanApiAlert.style.display = 'block';
-      } catch (err) {
-        testPlanApiAlert.className = 'alert alert-danger mt-3';
-        testPlanApiAlert.innerHTML = '<strong>✗ Operator Lookup Failed:</strong> ' + escapeHtml(err.message);
-        testPlanApiAlert.style.display = 'block';
-      } finally {
-        btnTestPlanApi.disabled = false;
-        btnTestPlanApi.innerHTML = '<i class="fa fa-search mr-1"></i> Fetch Operator &amp; Circle';
-      }
-    });
+        btnTestPlanApi.disabled = true;
+        btnTestPlanApi.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Fetching Live Operator...';
+        if (testPlanApiAlert) testPlanApiAlert.style.display = 'none';
+        if (planApiResultContainer) planApiResultContainer.style.display = 'none';
+
+        const payload = {
+          mobile,
+          brand: 'Plan API (EZYTM)',
+          provider: 'ezytm',
+          apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
+          apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/plan-api/test', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Operator lookup failed.');
+
+          // Show result card
+          if (document.getElementById('resOperatorName')) document.getElementById('resOperatorName').textContent = data.operator || 'Unknown';
+          if (document.getElementById('resCircleName')) document.getElementById('resCircleName').textContent = data.circle || 'All Circle';
+          if (document.getElementById('planApiLatency')) document.getElementById('planApiLatency').textContent = (data.latencyMs || 0) + ' ms';
+          const brandBadge = document.getElementById('resBrandBadge');
+          if (brandBadge) brandBadge.textContent = 'Brand: Plan API (EZYTM)';
+
+          let matchHtml = '';
+          if (data.matchedOperator) {
+            matchHtml = '✓ <strong>Matched Database Operator:</strong> ' + escapeHtml(data.matchedOperator.name) + ' (Code: ' + escapeHtml(data.matchedOperator.code) + ', Status: ' + escapeHtml(data.matchedOperator.status) + ')';
+          } else {
+            matchHtml = '<span class="text-warning"><i class="fa fa-exclamation-triangle mr-1"></i> Note: Operator "' + escapeHtml(data.operator || '') + '" not yet in system Operator Definitions. You can create it in Settings &rarr; Create Operator.</span>';
+          }
+          if (document.getElementById('resDbMatch')) document.getElementById('resDbMatch').innerHTML = matchHtml;
+          if (document.getElementById('resRawPayload')) document.getElementById('resRawPayload').textContent = typeof data.rawResponse === 'string' ? data.rawResponse : JSON.stringify(data.rawResponse || data, null, 2);
+
+          if (planApiResultContainer) planApiResultContainer.style.display = 'block';
+          if (testPlanApiAlert) {
+            testPlanApiAlert.className = 'alert alert-success mt-3';
+            testPlanApiAlert.innerHTML = '<strong>✓ Live Operator &amp; Circle Details Fetched Successfully!</strong> Brand: Plan API (EZYTM) | Mobile: ' + escapeHtml(data.mobile);
+            testPlanApiAlert.style.display = 'block';
+          }
+        } catch (err) {
+          if (testPlanApiAlert) {
+            testPlanApiAlert.className = 'alert alert-danger mt-3';
+            testPlanApiAlert.innerHTML = '<strong>✗ Operator Lookup Failed:</strong> ' + escapeHtml(err.message);
+            testPlanApiAlert.style.display = 'block';
+          }
+        } finally {
+          btnTestPlanApi.disabled = false;
+          btnTestPlanApi.innerHTML = '<i class="fa fa-search mr-1"></i> Fetch Operator &amp; Circle';
+        }
+      });
+    }
+
+    // Test Plan API R-Offer Check
+    const btnTestRoffer = document.getElementById('btnTestRoffer');
+    const testRofferMobile = document.getElementById('testRofferMobile');
+    const testRofferOpCode = document.getElementById('testRofferOpCode');
+    const testRofferAlert = document.getElementById('testRofferAlert');
+    const rofferResultContainer = document.getElementById('rofferResultContainer');
+    const rofferCountBadge = document.getElementById('rofferCountBadge');
+    const rofferLatency = document.getElementById('rofferLatency');
+    const rofferOffersTableBody = document.getElementById('rofferOffersTableBody');
+    const resRofferRawPayload = document.getElementById('resRofferRawPayload');
+
+    if (btnTestRoffer) {
+      btnTestRoffer.addEventListener('click', async () => {
+        const mobile = testRofferMobile ? testRofferMobile.value.trim().replace(/\D/g, '') : '';
+        if (!mobile || mobile.length < 10) {
+          alert('Please enter a valid 10-digit mobile number for R-Offer lookup.');
+          if (testRofferMobile) testRofferMobile.focus();
+          return;
+        }
+
+        const operatorCode = testRofferOpCode ? testRofferOpCode.value : '2';
+
+        btnTestRoffer.disabled = true;
+        btnTestRoffer.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Fetching Live R-Offers...';
+        if (testRofferAlert) testRofferAlert.style.display = 'none';
+        if (rofferResultContainer) rofferResultContainer.style.display = 'none';
+
+        const payload = {
+          mobile,
+          operatorCode,
+          provider: 'ezytm',
+          apiUserId: document.getElementById('ezytmApiUserId') ? document.getElementById('ezytmApiUserId').value.trim() : '5100',
+          apiPassword: document.getElementById('ezytmApiPassword') ? document.getElementById('ezytmApiPassword').value.trim() : 'amart@74',
+        };
+
+        try {
+          const res = await fetch('/api/admin/settings/services/plan-api/roffer-test', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || data.message || 'R-Offer lookup failed.');
+
+          const offers = Array.isArray(data.offers) ? data.offers : [];
+          if (rofferCountBadge) rofferCountBadge.textContent = offers.length + ' Offer' + (offers.length === 1 ? '' : 's');
+          if (rofferLatency) rofferLatency.textContent = (data.latencyMs || 0) + ' ms';
+
+          if (rofferOffersTableBody) {
+            if (offers.length === 0) {
+              rofferOffersTableBody.innerHTML = '<tr><td colspan="2" class="text-center text-muted p-3">No specific R-Offers available for this mobile and operator.</td></tr>';
+            } else {
+              rofferOffersTableBody.innerHTML = offers.map(o => {
+                const price = escapeHtml(String(o.Price || o.rs || o.price || o.amount || ''));
+                const desc = escapeHtml(String(o.LogDescription || o.desc || o.Offer || o.plan || o.detail || ''));
+                return '<tr><td class="font-weight-bold text-success font-monospace">₹ ' + (price || '-') + '</td><td>' + (desc || '-') + '</td></tr>';
+              }).join('');
+            }
+          }
+
+          if (resRofferRawPayload) {
+            resRofferRawPayload.textContent = typeof data.raw === 'string' ? data.raw : JSON.stringify(data.raw || data, null, 2);
+          }
+
+          if (rofferResultContainer) rofferResultContainer.style.display = 'block';
+          if (testRofferAlert) {
+            testRofferAlert.className = 'alert alert-success mt-3';
+            testRofferAlert.innerHTML = '<strong>✓ R-Offer Data Received:</strong> Found ' + offers.length + ' offer(s) for ' + escapeHtml(data.mobile || mobile) + ' (OpCode: ' + escapeHtml(data.operatorCode || operatorCode) + ')';
+            testRofferAlert.style.display = 'block';
+          }
+        } catch (err) {
+          if (testRofferAlert) {
+            testRofferAlert.className = 'alert alert-danger mt-3';
+            testRofferAlert.innerHTML = '<strong>✗ R-Offer Lookup Failed:</strong> ' + escapeHtml(err.message);
+            testRofferAlert.style.display = 'block';
+          }
+        } finally {
+          btnTestRoffer.disabled = false;
+          btnTestRoffer.innerHTML = '<i class="fa fa-gift mr-1"></i> Check R-Offer';
+        }
+      });
+    }
 
     // General Settings Toggle Badges & Logic
     const generalToggles = [
@@ -2861,7 +3351,8 @@ module.exports = function createAdminServiceSettingsPage({
       'payoutAmountLimitEnabled',
       'fundRequestMinAmountEnabled',
       'payoutChargesEnabled',
-      'payoutCooldownEnabled'
+      'payoutCooldownEnabled',
+      'userInactivityAutoDisableEnabled'
     ];
 
     function updateToggleBadge(id) {
@@ -2982,6 +3473,8 @@ module.exports = function createAdminServiceSettingsPage({
           payoutChargeRtgs: Math.max(0, parseFloat(document.getElementById('payoutChargeRtgs').value) || 0),
           payoutCooldownEnabled: document.getElementById('payoutCooldownEnabled').checked,
           payoutCooldownMinutes: Math.max(1, parseInt(document.getElementById('payoutCooldownMinutes').value, 10) || 30),
+          userInactivityAutoDisableEnabled: document.getElementById('userInactivityAutoDisableEnabled') ? document.getElementById('userInactivityAutoDisableEnabled').checked : false,
+          userInactivityDays: Math.max(1, parseInt(document.getElementById('userInactivityDays')?.value || 30, 10)),
         };
 
         try {
@@ -3003,6 +3496,165 @@ module.exports = function createAdminServiceSettingsPage({
           btnSaveGeneral.disabled = false;
           btnSaveGeneral.innerHTML = '<i class="fa fa-save mr-1"></i> Save General Settings';
         }
+      });
+    }
+
+    // Run User Inactivity Check Button
+    const btnRunInactivity = document.getElementById('btnRunInactivityCheck');
+    if (btnRunInactivity) {
+      btnRunInactivity.addEventListener('click', async () => {
+        const days = Math.max(1, parseInt(document.getElementById('userInactivityDays')?.value || 30, 10));
+        if (!confirm('Kya aap sach me un sabhi users ko Inactive (Blocked) karna chahte hain jinka pichle ' + days + ' dino se koi Buy ya Sale txn nahi hua hai?')) {
+          return;
+        }
+        btnRunInactivity.disabled = true;
+        btnRunInactivity.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Checking...';
+        try {
+          const res = await fetch('/api/admin/settings/services/run-inactivity-check', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ inactiveDays: days }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to run inactivity check.');
+          alert('Inactivity check completed! ' + (data.inactivatedCount || 0) + ' user(s) set to Inactive (threshold: ' + days + ' days).');
+        } catch (err) {
+          alert('Error running check: ' + err.message);
+        } finally {
+          btnRunInactivity.disabled = false;
+          btnRunInactivity.innerHTML = '<i class="fa fa-bolt mr-1"></i> Check Now';
+        }
+      });
+    }
+
+    // Dynamic Live News ticker preview
+    const newsTickerInput = document.getElementById('newsTickerText');
+    const newsTickerPreview = document.getElementById('newsTickerLivePreview');
+    if (newsTickerInput && newsTickerPreview) {
+      newsTickerInput.addEventListener('input', () => {
+        newsTickerPreview.textContent = newsTickerInput.value.trim() || 'Type above to preview...';
+      });
+    }
+
+    // Setup media file preview
+    function setupFilePreview(inputId, imgId, resetBoxId) {
+      const input = document.getElementById(inputId);
+      const img = document.getElementById(imgId);
+      if (input && img) {
+        input.addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+              img.src = evt.target.result;
+              if (resetBoxId) {
+                const resetBox = document.getElementById(resetBoxId);
+                if (resetBox) resetBox.checked = false;
+              }
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+    }
+
+    setupFilePreview('dashboard_banner_file', 'banner-preview-img', 'reset_dashboard_banner');
+    setupFilePreview('login_side_image_file', 'login-side-preview-img', 'reset_login_side_image');
+    setupFilePreview('login_popup_image_file', 'login-popup-preview-img', 'reset_login_popup');
+    setupFilePreview('dashboard_popup_image_file', 'dashboard-popup-preview-img', 'reset_dashboard_popup');
+
+    // Save Notifications Form
+    const notificationForm = document.getElementById('notificationForm');
+    const btnSaveNotifications = document.getElementById('btnSaveNotifications');
+    const notificationSaveStatus = document.getElementById('notificationSaveStatus');
+
+    if (notificationForm) {
+      notificationForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        btnSaveNotifications.disabled = true;
+        btnSaveNotifications.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving Notifications...';
+        notificationSaveStatus.textContent = '';
+
+        try {
+          const payload = {
+            newsTickerEnabled: document.getElementById('newsTickerEnabled').checked,
+            newsTickerText: document.getElementById('newsTickerText').value.trim(),
+            reset_dashboard_banner: document.getElementById('reset_dashboard_banner')?.checked || false,
+            loginSideImageEnabled: document.getElementById('loginSideImageEnabled').checked,
+            reset_login_side_image: document.getElementById('reset_login_side_image')?.checked || false,
+            loginPopupEnabled: document.getElementById('loginPopupEnabled').checked,
+            loginPopupLink: document.getElementById('loginPopupLink').value.trim(),
+            reset_login_popup: document.getElementById('reset_login_popup')?.checked || false,
+            dashboardPopupEnabled: document.getElementById('dashboardPopupEnabled').checked,
+            dashboardPopupFrequency: document.getElementById('dashboardPopupFrequency').value,
+            dashboardPopupLink: document.getElementById('dashboardPopupLink').value.trim(),
+            reset_dashboard_popup: document.getElementById('reset_dashboard_popup')?.checked || false,
+          };
+
+          const bannerFile = document.getElementById('dashboard_banner_file')?.files[0];
+          if (bannerFile) {
+            payload.dashboard_banner_data_b64 = await readFileAsBase64(bannerFile);
+            payload.dashboard_banner_mime = bannerFile.type || 'image/png';
+          }
+
+          const loginSideFile = document.getElementById('login_side_image_file')?.files[0];
+          if (loginSideFile) {
+            payload.login_side_image_data_b64 = await readFileAsBase64(loginSideFile);
+            payload.login_side_image_mime = loginSideFile.type || 'image/png';
+          }
+
+          const loginPopupFile = document.getElementById('login_popup_image_file')?.files[0];
+          if (loginPopupFile) {
+            payload.login_popup_image_data_b64 = await readFileAsBase64(loginPopupFile);
+            payload.login_popup_image_mime = loginPopupFile.type || 'image/png';
+          }
+
+          const dashPopupFile = document.getElementById('dashboard_popup_image_file')?.files[0];
+          if (dashPopupFile) {
+            payload.dashboard_popup_image_data_b64 = await readFileAsBase64(dashPopupFile);
+            payload.dashboard_popup_image_mime = dashPopupFile.type || 'image/png';
+          }
+
+          const res = await fetch('/api/admin/settings/services/notifications', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Failed to save notification settings.');
+
+          notificationSaveStatus.textContent = '✓ Saved successfully!';
+          notificationSaveStatus.className = 'text-success font-weight-bold ml-2';
+          setTimeout(() => { notificationSaveStatus.textContent = ''; }, 3500);
+
+          // Update cache-busted preview URLs
+          const t = Date.now();
+          if (document.getElementById('banner-preview-img')) document.getElementById('banner-preview-img').src = '/api/dashboard-banner?t=' + t;
+          if (document.getElementById('login-side-preview-img')) document.getElementById('login-side-preview-img').src = '/api/login-side-image?t=' + t;
+          if (document.getElementById('login-popup-preview-img')) document.getElementById('login-popup-preview-img').src = '/api/login-popup-image?t=' + t;
+          if (document.getElementById('dashboard-popup-preview-img')) document.getElementById('dashboard-popup-preview-img').src = '/api/dashboard-popup-image?t=' + t;
+        } catch (err) {
+          notificationSaveStatus.textContent = '✗ ' + err.message;
+          notificationSaveStatus.className = 'text-danger font-weight-bold ml-2';
+        } finally {
+          btnSaveNotifications.disabled = false;
+          btnSaveNotifications.innerHTML = '<i class="fa fa-save mr-1"></i> Save Notification Settings &amp; Media';
+        }
+      });
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          const b64 = result.split(',')[1] || '';
+          resolve(b64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
       });
     }
 
@@ -3083,6 +3735,8 @@ module.exports = function createAdminServiceSettingsPage({
         payoutChargeRtgs: 10.00,
         payoutCooldownEnabled: false,
         payoutCooldownMinutes: 30,
+        userInactivityAutoDisableEnabled: false,
+        userInactivityDays: 30,
         sellerWalletRedeemDelayMinutes: 0,
         sellerWalletExchangeDelayMinutes: 0,
       };
@@ -3101,6 +3755,23 @@ module.exports = function createAdminServiceSettingsPage({
         }
       }
     } catch (_) {}
+
+    try {
+      const notifRes = await db.query(
+        `SELECT news_ticker, news_ticker_enabled,
+                (dashboard_banner_data IS NOT NULL) AS has_dashboard_banner,
+                (login_side_image_data IS NOT NULL) AS has_login_side_image,
+                login_side_image_enabled,
+                (login_popup_image_data IS NOT NULL) AS has_login_popup,
+                login_popup_enabled, login_popup_link,
+                (dashboard_popup_image_data IS NOT NULL) AS has_dashboard_popup,
+                dashboard_popup_enabled, dashboard_popup_link, dashboard_popup_frequency
+         FROM website_settings WHERE id = 1`
+      );
+      if (notifRes.rowCount > 0) {
+        result.notifications = notifRes.rows[0];
+      }
+    } catch (_) {}
     if (!result.sms) {
       result.sms = {
         isEnabled: false,
@@ -3114,17 +3785,23 @@ module.exports = function createAdminServiceSettingsPage({
     if (!result.plan_api) {
       result.plan_api = {
         isEnabled: true,
-        brandName: 'ezytm plan API',
-        activeBrand: 'ezytm plan API',
+        provider: 'ezytm',
+        brandName: 'Plan API (EZYTM)',
+        activeBrand: 'Plan API (EZYTM)',
         apiUserId: '5100',
         apiPassword: 'amart@74',
+        circleUrl: 'https://planapi.in/api/Mobile/OperatorFetchNew',
+        rofferUrl: 'https://planapi.in/api/Mobile/RofferCheck',
         apiUrl: 'https://planapi.in/api/Mobile/OperatorFetchNew',
         requestType: 'GET',
       };
     } else {
-      result.plan_api.brandName = 'ezytm plan API';
-      result.plan_api.activeBrand = 'ezytm plan API';
+      result.plan_api.provider = result.plan_api.provider || 'ezytm';
+      result.plan_api.brandName = 'Plan API (EZYTM)';
+      result.plan_api.activeBrand = 'Plan API (EZYTM)';
       result.plan_api.requestType = 'GET';
+      result.plan_api.circleUrl = 'https://planapi.in/api/Mobile/OperatorFetchNew';
+      result.plan_api.rofferUrl = 'https://planapi.in/api/Mobile/RofferCheck';
       if (!result.plan_api.apiUserId || result.plan_api.apiUserId === '9335819686') {
         result.plan_api.apiUserId = '5100';
       }
@@ -3183,6 +3860,8 @@ module.exports = function createAdminServiceSettingsPage({
       payoutChargeRtgs: Math.max(0, parseFloat(input.payoutChargeRtgs) || 0),
       payoutCooldownEnabled: Boolean(input.payoutCooldownEnabled),
       payoutCooldownMinutes: Math.max(1, parseInt(input.payoutCooldownMinutes, 10) || 30),
+      userInactivityAutoDisableEnabled: Boolean(input.userInactivityAutoDisableEnabled),
+      userInactivityDays: Math.max(1, parseInt(input.userInactivityDays, 10) || 30),
       sellerWalletRedeemDelayMinutes: Math.max(0, parseInt(input.sellerWalletRedeemDelayMinutes, 10) || 0),
       sellerWalletExchangeDelayMinutes: Math.max(0, parseInt(input.sellerWalletExchangeDelayMinutes, 10) || 0),
     };
@@ -3779,27 +4458,32 @@ module.exports = function createAdminServiceSettingsPage({
   }
 
   /**
-   * POST /api/admin/settings/services/plan-api - Save Plan API (ezytm plan API) configuration
+   * POST /api/admin/settings/services/plan-api - Save PLAN API configuration
    */
   async function handleSavePlanApiSettings(request, response, input) {
     const isEnabled = input.isEnabled !== false;
-    const brandName = 'ezytm plan API';
-    const activeBrand = 'ezytm plan API';
+    const provider = String(input.provider || 'ezytm').trim();
+    const brandName = 'Plan API (EZYTM)';
+    const activeBrand = 'Plan API (EZYTM)';
     const requestType = 'GET';
-    const apiUrl = String(input.apiUrl || input.ezytmApiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew').trim();
+    const circleUrl = 'https://planapi.in/api/Mobile/OperatorFetchNew';
+    const rofferUrl = 'https://planapi.in/api/Mobile/RofferCheck';
     const apiUserId = String(input.apiUserId || input.ezytmApiUserId || '5100').trim();
     const apiPassword = String(input.apiPassword || input.ezytmApiPassword || 'amart@74').trim();
 
     if (isEnabled && (!apiUserId || !apiPassword)) {
-      throw httpError('ezytm plan API credentials (ApiUserID and ApiPassword) are required.', 400);
+      throw httpError('Plan API (EZYTM) credentials (User ID and Password) are required.', 400);
     }
 
     const config = {
       isEnabled,
+      provider,
       brandName,
       activeBrand,
       requestType,
-      apiUrl,
+      apiUrl: circleUrl, // backward compatibility
+      circleUrl,
+      rofferUrl,
       apiUserId,
       apiPassword,
     };
@@ -3814,11 +4498,11 @@ module.exports = function createAdminServiceSettingsPage({
       [isEnabled, ciphertext],
     );
 
-    sendJson(response, 200, { ok: true, message: 'ezytm plan API settings saved successfully.', planApi: config });
+    sendJson(response, 200, { ok: true, message: 'PLAN API settings saved successfully.', planApi: config });
   }
 
   /**
-   * POST /api/admin/settings/services/plan-api/test - Test live operator lookup with ezytm plan API
+   * POST /api/admin/settings/services/plan-api/test - Test live operator lookup with Plan API (EZYTM)
    */
   async function handleTestPlanApi(request, response, input) {
     const mobile = String(input.mobile || '').trim().replace(/\D/g, '');
@@ -3828,11 +4512,12 @@ module.exports = function createAdminServiceSettingsPage({
 
     const apiUserId = String(input.apiUserId || input.ezytmApiUserId || '5100').trim();
     const apiPassword = String(input.apiPassword || input.ezytmApiPassword || 'amart@74').trim();
-    const apiUrl = String(input.apiUrl || input.ezytmApiUrl || 'https://planapi.in/api/Mobile/OperatorFetchNew').trim();
+    const apiUrl = 'https://planapi.in/api/Mobile/OperatorFetchNew';
 
     const overrideConfig = {
-      brandName: 'ezytm plan API',
-      activeBrand: 'ezytm plan API',
+      provider: 'ezytm',
+      brandName: 'Plan API (EZYTM)',
+      activeBrand: 'Plan API (EZYTM)',
       requestType: 'GET',
       apiUserId,
       apiPassword,
@@ -3849,7 +4534,7 @@ module.exports = function createAdminServiceSettingsPage({
 
       sendJson(response, 200, {
         ok: result.ok,
-        brand: 'ezytm plan API',
+        brand: 'Plan API (EZYTM)',
         mobile: result.mobile,
         operator: result.operator,
         circle: result.circle,
@@ -3862,8 +4547,48 @@ module.exports = function createAdminServiceSettingsPage({
         rawResponse: result.rawResponse,
       });
     } catch (err) {
-      console.error('[ezytm Plan API Test Error]:', err);
+      console.error('[Plan API Test Error]:', err);
       throw httpError(err.message || 'Operator Lookup request failed.', 400);
+    }
+  }
+
+  /**
+   * POST /api/admin/settings/services/plan-api/roffer-test - Test live R-Offer lookup with Plan API (EZYTM)
+   */
+  async function handleTestPlanApiRoffer(request, response, input) {
+    const mobile = String(input.mobile || '').trim().replace(/\D/g, '');
+    if (!mobile || mobile.length < 10) {
+      throw httpError('Valid 10-digit mobile number is required for R-Offer lookup.', 400);
+    }
+
+    const operatorCode = String(input.operatorCode || input.opCode || '2').trim();
+    const apiUserId = String(input.apiUserId || input.ezytmApiUserId || '5100').trim();
+    const apiPassword = String(input.apiPassword || input.ezytmApiPassword || 'amart@74').trim();
+    const apiUrl = 'https://planapi.in/api/Mobile/RofferCheck';
+
+    try {
+      const result = await fetchEzytmRoffer({
+        apiUserId,
+        apiPassword,
+        mobile,
+        operatorCode,
+        apiUrl,
+      });
+
+      sendJson(response, 200, {
+        ok: result.ok,
+        brand: 'Plan API (EZYTM)',
+        mobile: result.mobile,
+        operatorCode: result.operatorCode,
+        status: result.status,
+        message: result.message,
+        offers: result.offers || [],
+        latencyMs: result.latencyMs,
+        raw: result.raw,
+      });
+    } catch (err) {
+      console.error('[Plan API R-Offer Test Error]:', err);
+      throw httpError(err.message || 'R-Offer lookup request failed.', 400);
     }
   }
 
@@ -3925,6 +4650,119 @@ module.exports = function createAdminServiceSettingsPage({
     sendJson(response, 200, { ok: true, message: 'Margin Difference settings saved successfully.', marginDifference: config });
   }
 
+  /**
+   * POST /api/admin/settings/services/notifications - Save live news, dashboard banner, login image & popups
+   */
+  async function handleSaveNotificationSettings(request, response, input) {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS website_settings (id INT PRIMARY KEY DEFAULT 1, updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
+      INSERT INTO website_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker_enabled BOOLEAN DEFAULT TRUE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_data BYTEA;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_mime TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_url TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_data BYTEA;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_mime TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_enabled BOOLEAN DEFAULT TRUE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_data BYTEA;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_mime TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_link TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_data BYTEA;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_mime TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_link TEXT;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_frequency TEXT DEFAULT 'session';
+    `);
+
+    const newsTickerText = String(input.newsTickerText || '').trim();
+    const newsTickerEnabled = input.newsTickerEnabled !== false;
+    const loginSideImageEnabled = input.loginSideImageEnabled !== false;
+    const loginPopupEnabled = Boolean(input.loginPopupEnabled);
+    const loginPopupLink = String(input.loginPopupLink || '').trim();
+    const dashboardPopupEnabled = Boolean(input.dashboardPopupEnabled);
+    const dashboardPopupFrequency = String(input.dashboardPopupFrequency || 'session').trim();
+    const dashboardPopupLink = String(input.dashboardPopupLink || '').trim();
+
+    await db.query(
+      `UPDATE website_settings SET
+         news_ticker = $1,
+         news_ticker_enabled = $2,
+         login_side_image_enabled = $3,
+         login_popup_enabled = $4,
+         login_popup_link = $5,
+         dashboard_popup_enabled = $6,
+         dashboard_popup_frequency = $7,
+         dashboard_popup_link = $8,
+         updated_at = now()
+       WHERE id = 1`,
+      [
+        newsTickerText,
+        newsTickerEnabled,
+        loginSideImageEnabled,
+        loginPopupEnabled,
+        loginPopupLink,
+        dashboardPopupEnabled,
+        dashboardPopupFrequency,
+        dashboardPopupLink,
+      ]
+    );
+
+    // Handle dashboard banner upload or reset
+    if (input.reset_dashboard_banner) {
+      await db.query('UPDATE website_settings SET dashboard_banner_data = NULL, dashboard_banner_mime = NULL, dashboard_banner_url = NULL, updated_at = now() WHERE id = 1');
+    } else if (input.dashboard_banner_data_b64) {
+      const buf = Buffer.from(input.dashboard_banner_data_b64, 'base64');
+      const mime = String(input.dashboard_banner_mime || 'image/png').trim();
+      await db.query('UPDATE website_settings SET dashboard_banner_data = $1, dashboard_banner_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+    }
+
+    // Handle login side image upload or reset
+    if (input.reset_login_side_image) {
+      await db.query('UPDATE website_settings SET login_side_image_data = NULL, login_side_image_mime = NULL, updated_at = now() WHERE id = 1');
+    } else if (input.login_side_image_data_b64) {
+      const buf = Buffer.from(input.login_side_image_data_b64, 'base64');
+      const mime = String(input.login_side_image_mime || 'image/png').trim();
+      await db.query('UPDATE website_settings SET login_side_image_data = $1, login_side_image_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+    }
+
+    // Handle login popup image upload or reset
+    if (input.reset_login_popup) {
+      await db.query('UPDATE website_settings SET login_popup_image_data = NULL, login_popup_image_mime = NULL, updated_at = now() WHERE id = 1');
+    } else if (input.login_popup_image_data_b64) {
+      const buf = Buffer.from(input.login_popup_image_data_b64, 'base64');
+      const mime = String(input.login_popup_image_mime || 'image/png').trim();
+      await db.query('UPDATE website_settings SET login_popup_image_data = $1, login_popup_image_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+    }
+
+    // Handle dashboard popup image upload or reset
+    if (input.reset_dashboard_popup) {
+      await db.query('UPDATE website_settings SET dashboard_popup_image_data = NULL, dashboard_popup_image_mime = NULL, updated_at = now() WHERE id = 1');
+    } else if (input.dashboard_popup_image_data_b64) {
+      const buf = Buffer.from(input.dashboard_popup_image_data_b64, 'base64');
+      const mime = String(input.dashboard_popup_image_mime || 'image/png').trim();
+      await db.query('UPDATE website_settings SET dashboard_popup_image_data = $1, dashboard_popup_image_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+    }
+
+    sendJson(response, 200, { ok: true, message: 'Notification settings and media updated successfully.' });
+  }
+
+  /**
+   * POST /api/admin/settings/services/run-inactivity-check - Run user active-to-inactive check now
+   */
+  async function handleRunInactivityCheck(request, response, input) {
+    const inactiveDays = Math.max(1, parseInt(input.inactiveDays || 30, 10));
+    const result = await checkAndDeactivateInactiveUsers({ db, inactiveDays, dryRun: false });
+    sendJson(response, 200, {
+      ok: true,
+      inactivatedCount: result.count,
+      thresholdDays: result.thresholdDays,
+      users: result.users,
+      message: `Inactivity check completed. ${result.count} inactive user(s) set to Inactive (Blocked) status.`,
+    });
+  }
+
   return {
     sendAdminServiceSettingsPage,
     handleGetServices,
@@ -3937,7 +4775,10 @@ module.exports = function createAdminServiceSettingsPage({
     handleTestWhatsapp,
     handleSavePlanApiSettings,
     handleTestPlanApi,
+    handleTestPlanApiRoffer,
     handleSaveMarginDifferenceSettings,
     handleSaveIncomingSmsSettings,
+    handleSaveNotificationSettings,
+    handleRunInactivityCheck,
   };
 };

@@ -104,6 +104,7 @@ const createAdminSendBulkEmailPage = require('./pages/admin-send-bulk-email');
 const createAdminIncomingSmsPage = require('./pages/admin-incoming-sms');
 const createAdminAllSellerMarginPage = require('./pages/admin-all-seller-margin');
 const createAdminAllBuyerMarginPage = require('./pages/admin-all-buyer-margin');
+const { checkAndDeactivateInactiveUsers } = require('./lib/user-inactivity-service');
 const {
   calculateGstAmounts,
   syncMonthlyInvoices,
@@ -168,7 +169,7 @@ const {
   sendNotificationEvent,
   formatBulkPersonalizedText,
 } = require('./lib/notification-service');
-const { fetchOperatorLookup } = require('./lib/plan-api-service');
+const { fetchOperatorLookup, fetchEzytmRoffer } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
 const { getClientIp } = require('./lib/client-ip');
 
@@ -271,10 +272,13 @@ const {
   handleTestWhatsapp,
   handleSavePlanApiSettings,
   handleTestPlanApi,
+  handleTestPlanApiRoffer,
   handleSaveMarginDifferenceSettings,
   handleSaveIncomingSmsSettings,
+  handleSaveNotificationSettings,
+  handleRunInactivityCheck,
 } = createAdminServiceSettingsPage({ db, encryptServiceConfig, decryptServiceConfig, sendJson, httpError });
-const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson });
+const { serveAdminUi } = createAdminStaticUi({ fs, fsp, path, adminUiRoot: ADMIN_UI_ROOT, adminAssetsRoot: ADMIN_ASSETS_ROOT, sendJson, db });
 const { sendUserKycPage } = createUserKycPage({ db });
 const { sendAdminKycListPage } = createAdminKycListPage({ db, decryptMobile });
 const { sendUserFundRedeemPage } = createUserFundRedeemPage({ db, formatMinorUnits, getGeneralSettings });
@@ -2440,11 +2444,25 @@ async function getGeneralSettings() {
     payoutChargeRtgs: 10.00,
     payoutCooldownEnabled: false,
     payoutCooldownMinutes: 30,
+    userInactivityAutoDisableEnabled: false,
+    userInactivityDays: 30,
   };
   cachedGeneralSettings = fallback;
   cachedGeneralSettingsAt = now;
   return fallback;
 }
+
+// Background periodic runner for user inactivity check
+setInterval(async () => {
+  try {
+    const gen = await getGeneralSettings();
+    if (gen && gen.userInactivityAutoDisableEnabled && gen.userInactivityDays > 0) {
+      await checkAndDeactivateInactiveUsers({ db, inactiveDays: gen.userInactivityDays });
+    }
+  } catch (err) {
+    console.warn('[Inactivity Auto Check] Error:', err.message);
+  }
+}, 3600_000).unref();
 
 function formatTime12Hour(timeStr) {
   if (!timeStr) return '';
@@ -4596,6 +4614,69 @@ async function handleRequest(request, response) {
         return;
       }
 
+      if (url.pathname === '/api/login-side-image') {
+        try {
+          const res = await db.query('SELECT login_side_image_data, login_side_image_mime FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.login_side_image_data) {
+            response.writeHead(200, {
+              'content-type': row.login_side_image_mime || 'image/png',
+              'content-length': row.login_side_image_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.login_side_image_data);
+            statusCode = 200;
+            return;
+          }
+        } catch (_) {}
+        sendJson(response, 404, { error: 'No login side image configured.' });
+        statusCode = 404;
+        return;
+      }
+
+      if (url.pathname === '/api/login-popup-image') {
+        try {
+          const res = await db.query('SELECT login_popup_image_data, login_popup_image_mime FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.login_popup_image_data) {
+            response.writeHead(200, {
+              'content-type': row.login_popup_image_mime || 'image/png',
+              'content-length': row.login_popup_image_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.login_popup_image_data);
+            statusCode = 200;
+            return;
+          }
+        } catch (_) {}
+        sendJson(response, 404, { error: 'No login popup image configured.' });
+        statusCode = 404;
+        return;
+      }
+
+      if (url.pathname === '/api/dashboard-popup-image') {
+        try {
+          const res = await db.query('SELECT dashboard_popup_image_data, dashboard_popup_image_mime FROM website_settings WHERE id = 1');
+          const row = res.rows[0];
+          if (row && row.dashboard_popup_image_data) {
+            response.writeHead(200, {
+              'content-type': row.dashboard_popup_image_mime || 'image/png',
+              'content-length': row.dashboard_popup_image_data.length,
+              'cache-control': 'public, max-age=60',
+              'x-content-type-options': 'nosniff',
+            });
+            response.end(row.dashboard_popup_image_data);
+            statusCode = 200;
+            return;
+          }
+        } catch (_) {}
+        sendJson(response, 404, { error: 'No dashboard popup image configured.' });
+        statusCode = 404;
+        return;
+      }
+
       if (url.pathname === '/api/website/settings') {
         const settings = await getWebsiteSettings();
         sendJson(response, 200, settings);
@@ -5256,6 +5337,12 @@ async function handleRequest(request, response) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        try {
+          const gen = await getGeneralSettings();
+          if (gen && gen.userInactivityAutoDisableEnabled && gen.userInactivityDays > 0) {
+            await checkAndDeactivateInactiveUsers({ db, inactiveDays: gen.userInactivityDays });
+          }
+        } catch (_) {}
         await sendAdminUserListPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
@@ -6464,6 +6551,16 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
+      if (url.pathname === '/api/admin/settings/services/plan-api/roffer-test') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleTestPlanApiRoffer(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services/margin-difference') {
         checkSameOrigin(request);
         const admin = await getSession(request);
@@ -6507,6 +6604,26 @@ async function handleRequest(request, response) {
         });
         sendJson(response, 200, simRes);
         statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/services/notifications' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleSaveNotificationSettings(request, response, input);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/settings/services/run-inactivity-check' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleRunInactivityCheck(request, response, input);
+        statusCode = response.statusCode || 200;
         return;
       }
       if (
@@ -8542,6 +8659,34 @@ async function handleRequest(request, response) {
           mobile,
         });
         sendJson(response, 200, lookup);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/api/recharge/roffer-lookup' || url.pathname === '/api/roffer/lookup') {
+        const input = await readJson(request).catch(() => ({}));
+        const mobile = String(input.mobile || input.number || url.searchParams.get('mobile') || url.searchParams.get('number') || '').trim();
+        const opCode = String(input.operatorCode || input.opCode || url.searchParams.get('opCode') || url.searchParams.get('operatorCode') || '1').trim();
+        if (!mobile || mobile.replace(/\D/g, '').length < 10) {
+          throw httpError('10-digit mobile number is required.', 400);
+        }
+        let apiUserId = '5100';
+        let apiPassword = 'amart@74';
+        try {
+          const cfgRow = await db.query(`SELECT config_ciphertext FROM admin_service_settings WHERE service_key = 'plan_api' AND is_enabled = true LIMIT 1`);
+          if (cfgRow.rowCount > 0 && cfgRow.rows[0].config_ciphertext) {
+            const dec = decryptServiceConfig(cfgRow.rows[0].config_ciphertext);
+            if (dec && dec.apiUserId) apiUserId = dec.apiUserId;
+            if (dec && dec.apiPassword) apiPassword = dec.apiPassword;
+          }
+        } catch (_) {}
+
+        const rofferResult = await fetchEzytmRoffer({
+          apiUserId,
+          apiPassword,
+          mobile,
+          operatorCode: opCode,
+        });
+        sendJson(response, 200, rofferResult);
         statusCode = 200;
         return;
       }

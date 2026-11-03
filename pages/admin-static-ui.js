@@ -9,7 +9,7 @@ const { renderAdminMenuList } = require('../config/admin-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { sendNotFoundPage } = require('./not-found');
 
-module.exports = function createPageModule({ fs, fsp, path, adminUiRoot, adminAssetsRoot, sendJson }) {
+module.exports = function createPageModule({ fs, fsp, path, adminUiRoot, adminAssetsRoot, sendJson, db }) {
   const ADMIN_UI_ROOT = adminUiRoot;
   const ADMIN_ASSETS_ROOT = adminAssetsRoot;
 async function serveAdminUi(urlPath, method, response) {
@@ -116,6 +116,57 @@ async function serveAdminUi(urlPath, method, response) {
         .replace(/src=["'][^"']*assets\/images\/brand\/(?:favicon|logo(?:-[0-9]+)?)\.png["']/gi, 'src="/api/logo"')
         .replace(/class=["']header-brand-img dark-logo["']/gi, 'class="header-brand-img dark-logo" style="max-height:55px;max-width:220px;object-fit:contain;"')
         .replace(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]*>/gi, '<link rel="icon" type="image/x-icon" href="/api/favicon">');
+
+      if (path.basename(filePath) === 'login-2.html' && db) {
+        try {
+          const res = await db.query(
+            `SELECT (login_side_image_data IS NOT NULL) AS has_side_image,
+                    login_side_image_enabled,
+                    (login_popup_image_data IS NOT NULL) AS has_popup,
+                    login_popup_enabled,
+                    login_popup_link
+             FROM website_settings WHERE id = 1 LIMIT 1`
+          );
+          if (res.rowCount > 0) {
+            const row = res.rows[0];
+            if (row.has_side_image && row.login_side_image_enabled !== false) {
+              htmlBody = htmlBody.replace(
+                /<div class="custom-body1">[\s\S]*?<\/div>/i,
+                `<div class="custom-body1" style="display:flex;align-items:center;justify-content:center;height:100%;min-height:480px;padding:15px;text-align:center;">
+                  <img src="/api/login-side-image" alt="Login Graphic" style="max-width:100%;max-height:85vh;object-fit:contain;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.25);">
+                </div>`
+              );
+            }
+            if (row.has_popup && row.login_popup_enabled) {
+              const link = row.login_popup_link ? String(row.login_popup_link).trim() : '';
+              const linkOpen = link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="display:block;cursor:pointer;">` : '';
+              const linkClose = link ? `</a>` : '';
+              const popupHtml = `
+              <!-- Login Notice Modal -->
+              <div id="loginNoticeModal" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.75);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
+                <div style="position:relative;background:#ffffff;border-radius:12px;max-width:550px;width:100%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);overflow:hidden;">
+                  <button type="button" id="closeLoginNoticeModal" style="position:absolute;top:10px;right:10px;z-index:10;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.65);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
+                  ${linkOpen}
+                    <img src="/api/login-popup-image" alt="Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
+                  ${linkClose}
+                </div>
+              </div>
+              <script>
+                (function(){
+                  var m = document.getElementById('loginNoticeModal');
+                  var c = document.getElementById('closeLoginNoticeModal');
+                  if(m && c){
+                    c.onclick = function(){ m.style.display = 'none'; };
+                    m.onclick = function(e){ if(e.target === m) m.style.display = 'none'; };
+                  }
+                })();
+              </script>
+              `;
+              htmlBody = htmlBody.replace(/<\/body>/i, popupHtml + '\n</body>');
+            }
+          }
+        } catch (_) {}
+      }
     }
   }
   const contentLength = htmlBody === undefined ? fileInfo.size : Buffer.byteLength(htmlBody);

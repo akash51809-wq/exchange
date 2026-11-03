@@ -4,9 +4,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   DEFAULT_EZYTM_API_URL,
+  DEFAULT_EZYTM_ROFFER_URL,
   DEFAULT_EZYTM_API_USER_ID,
   DEFAULT_EZYTM_API_PASSWORD,
   fetchEzytmOperatorLookup,
+  fetchEzytmRoffer,
   fetchOperatorLookup,
   normalizeCircleName,
 } = require('../lib/plan-api-service');
@@ -14,6 +16,7 @@ const createAdminServiceSettingsPage = require('../pages/admin-service-settings'
 
 test('ezytm plan API - Defaults and Constants', () => {
   assert.equal(DEFAULT_EZYTM_API_URL, 'https://planapi.in/api/Mobile/OperatorFetchNew');
+  assert.equal(DEFAULT_EZYTM_ROFFER_URL, 'https://planapi.in/api/Mobile/RofferCheck');
   assert.equal(DEFAULT_EZYTM_API_USER_ID, '5100');
   assert.equal(DEFAULT_EZYTM_API_PASSWORD, 'amart@74');
 });
@@ -234,10 +237,12 @@ test('Admin Service Settings - Plan API handlers save and test ezytm plan API co
 
   assert.equal(saveRes.statusCode, 200);
   assert.equal(saveRes.data.ok, true);
-  assert.equal(saveRes.data.planApi.brandName, 'ezytm plan API');
+  assert.equal(saveRes.data.planApi.brandName, 'Plan API (EZYTM)');
   assert.equal(saveRes.data.planApi.apiUserId, '5100');
   assert.equal(saveRes.data.planApi.apiPassword, 'amart@74');
   assert.equal(saveRes.data.planApi.requestType, 'GET');
+  assert.equal(saveRes.data.planApi.circleUrl, 'https://planapi.in/api/Mobile/OperatorFetchNew');
+  assert.equal(saveRes.data.planApi.rofferUrl, 'https://planapi.in/api/Mobile/RofferCheck');
 
   // Test handleTestPlanApi
   const testRes = {};
@@ -245,12 +250,158 @@ test('Admin Service Settings - Plan API handlers save and test ezytm plan API co
     mobile: '9335819686',
     apiUserId: '5100',
     apiPassword: 'amart@74',
-    apiUrl: 'https://planapi.in/api/Mobile/OperatorFetchNew',
   });
 
   assert.equal(testRes.statusCode, 200);
   assert.equal(testRes.data.ok, true);
-  assert.equal(testRes.data.brand, 'ezytm plan API');
+  assert.equal(testRes.data.brand, 'Plan API (EZYTM)');
   assert.equal(testRes.data.operator, 'Airtel');
   assert.equal(testRes.data.circle, 'UP East');
+});
+
+test('fetchEzytmRoffer sends GET request with credentials and operator_code', async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  let calledUrl = '';
+  let calledMethod = '';
+
+  globalThis.fetch = async (url, options) => {
+    calledUrl = String(url);
+    calledMethod = options.method;
+    return {
+      text: async () => JSON.stringify({
+        ERROR: '0',
+        STATUS: '1',
+        MOBILENO: '9335819686',
+        RDATA: [
+          { Price: '199', LogDescription: 'Unlimited Calls + 1.5GB/Day + 100 SMS/Day' },
+          { Price: '299', LogDescription: 'Unlimited Calls + 2GB/Day for 28 Days' },
+        ],
+        MESSAGE: 'Offers fetched successfully',
+      }),
+    };
+  };
+
+  const res = await fetchEzytmRoffer({
+    apiUserId: '5100',
+    apiPassword: 'amart@74',
+    mobile: '9335819686',
+    operatorCode: '2',
+  });
+
+  assert.equal(calledMethod, 'GET');
+  const parsed = new URL(calledUrl);
+  assert.equal(parsed.origin + parsed.pathname, 'https://planapi.in/api/Mobile/RofferCheck');
+  assert.equal(parsed.searchParams.get('apimember_id'), '5100');
+  assert.equal(parsed.searchParams.get('api_password'), 'amart@74');
+  assert.equal(parsed.searchParams.get('operator_code'), '2');
+  assert.equal(parsed.searchParams.get('mobile_no'), '9335819686');
+
+  assert.equal(res.ok, true);
+  assert.equal(res.status, 'SUCCESS');
+  assert.equal(res.mobile, '9335819686');
+  assert.equal(res.operatorCode, '2');
+  assert.equal(res.offers.length, 2);
+  assert.equal(res.offers[0].Price, '199');
+});
+
+test('Admin Service Settings - handleTestPlanApiRoffer executes R-Offer fetch', async (t) => {
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  globalThis.fetch = async () => ({
+    text: async () => JSON.stringify({
+      ERROR: '0',
+      STATUS: '1',
+      MOBILENO: '9335819686',
+      RDATA: [
+        { Price: '239', LogDescription: 'Unlimited Calls + 1.5GB/day 28 days' },
+      ],
+      MESSAGE: 'Success',
+    }),
+  });
+
+  const mockDb = { query: async () => ({ rowCount: 0, rows: [] }) };
+  const serviceSettingsPage = createAdminServiceSettingsPage({
+    db: mockDb,
+    encryptServiceConfig: (d) => Buffer.from(JSON.stringify(d)),
+    decryptServiceConfig: (b) => JSON.parse(b.toString()),
+    httpError: (msg, code) => {
+      const err = new Error(msg);
+      err.statusCode = code;
+      return err;
+    },
+    sendJson: (res, code, data) => {
+      res.statusCode = code;
+      res.data = data;
+    },
+    renderAdminNavigation: () => '',
+    addPanelChrome: (opt, content) => content,
+  });
+
+  const rofferRes = {};
+  await serviceSettingsPage.handleTestPlanApiRoffer({}, rofferRes, {
+    mobile: '9335819686',
+    operatorCode: '2',
+    apiUserId: '5100',
+    apiPassword: 'amart@74',
+  });
+
+  assert.equal(rofferRes.statusCode, 200);
+  assert.equal(rofferRes.data.ok, true);
+  assert.equal(rofferRes.data.brand, 'Plan API (EZYTM)');
+  assert.equal(rofferRes.data.mobile, '9335819686');
+  assert.equal(rofferRes.data.offers.length, 1);
+  assert.equal(rofferRes.data.offers[0].Price, '239');
+});
+
+test('Admin Service Settings - UI rendering reflects PLAN API, Choose Provider, and Hidden URLs', async () => {
+  const mockDb = { query: async () => ({ rowCount: 0, rows: [] }) };
+  const serviceSettingsPage = createAdminServiceSettingsPage({
+    db: mockDb,
+    encryptServiceConfig: (d) => Buffer.from(JSON.stringify(d)),
+    decryptServiceConfig: (b) => JSON.parse(b.toString()),
+    httpError: (msg, code) => new Error(msg),
+    sendJson: () => {},
+    renderAdminNavigation: () => '<nav>AdminNav</nav>',
+    addPanelChrome: (opt, content) => content,
+  });
+
+  let renderedHtml = '';
+  const mockRes = {
+    writeHead: () => {},
+    setHeader: () => {},
+    end: (html) => {
+      renderedHtml = html;
+    },
+  };
+
+  await serviceSettingsPage.sendAdminServiceSettingsPage({ method: 'GET' }, mockRes);
+
+  // Tab renamed to strictly "PLAN API"
+  assert.match(renderedHtml, /<i class="fa fa-search"><\/i>\s*PLAN API/);
+  assert.doesNotMatch(renderedHtml, /Plan API \(ezytm\)/);
+
+  // Choose Provider dropdown present with Plan API (EZYTM)
+  assert.match(renderedHtml, /id="planApiProvider"/);
+  assert.match(renderedHtml, /<option value="ezytm"[^>]*>Plan API \(EZYTM\)<\/option>/);
+
+  // Credentials fields present
+  assert.match(renderedHtml, /id="ezytmApiUserId"/);
+  assert.match(renderedHtml, /id="ezytmApiPassword"/);
+
+  // Raw URL fields MUST NOT exist inside the form
+  assert.doesNotMatch(renderedHtml, /<input[^>]+id="ezytmApiUrl"/);
+  assert.doesNotMatch(renderedHtml, /<input[^>]+id="rofferApiUrl"/);
+
+  // R-Offer check section and button present
+  assert.match(renderedHtml, /Check R-Offer/);
+  assert.match(renderedHtml, /id="btnTestRoffer"/);
+  assert.match(renderedHtml, /id="testRofferOpCode"/);
+  assert.match(renderedHtml, /id="testRofferMobile"/);
 });
