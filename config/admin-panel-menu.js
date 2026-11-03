@@ -23,6 +23,10 @@ const ADMIN_PANEL_MENU = [
   { label: 'Seller API Requests', path: '/admin/seller-api/requests' },
   { label: 'Reports', path: '#', items: [
     { label: 'Daily Sales Report', path: '/admin/reports/daily-sales-report' },
+    { label: 'Buyer Daybook', path: '/admin/reports/buyer-daybook' },
+    { label: 'Buyer Ledger', path: '/admin/reports/buyer-ledger' },
+    { label: 'Seller Daybook', path: '/admin/reports/seller-daybook' },
+    { label: 'Seller Ledger', path: '/admin/reports/seller-ledger' },
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },
     { label: 'Live Recharge Report', path: '/admin/reports/live-recharge' },
     { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },

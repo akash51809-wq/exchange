@@ -91,6 +91,10 @@ const createAdminComplaintReportPage = require('./pages/admin-complaint-report')
 const createAdminUserSendMsgLogPage = require('./pages/admin-user-send-msg-log');
 const createAdminRechargeLogPage = require('./pages/admin-recharge-log');
 const createAdminDailySalesReportPage = require('./pages/admin-daily-sales-report');
+const createAdminBuyerDaybookPage = require('./pages/admin-buyer-daybook');
+const createAdminBuyerLedgerPage = require('./pages/admin-buyer-ledger');
+const createAdminSellerDaybookPage = require('./pages/admin-seller-daybook');
+const createAdminSellerLedgerPage = require('./pages/admin-seller-ledger');
 const createAdminWalletUpdatePage = require('./pages/admin-wallet-update');
 const createAdminWalletRedeemPage = require('./pages/admin-wallet-redeem');
 const createAdminWalletExchangePage = require('./pages/admin-wallet-exchange');
@@ -360,6 +364,30 @@ const { sendAdminDailySalesReportPage } = createAdminDailySalesReportPage({
   db,
   formatMinorUnits,
   decryptMobile,
+  sendJson,
+  httpError,
+});
+const { sendAdminBuyerDaybookPage } = createAdminBuyerDaybookPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminBuyerLedgerPage } = createAdminBuyerLedgerPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminSellerDaybookPage } = createAdminSellerDaybookPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
+const { sendAdminSellerLedgerPage } = createAdminSellerLedgerPage({
+  db,
+  formatMinorUnits,
   sendJson,
   httpError,
 });
@@ -5009,6 +5037,38 @@ async function handleRequest(request, response) {
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
         await sendAdminDailySalesReportPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/buyer-daybook' || url.pathname === '/admin/reports/buyer-day-book') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminBuyerDaybookPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/buyer-ledger') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminBuyerLedgerPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/seller-daybook' || url.pathname === '/admin/reports/seller-day-book') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminSellerDaybookPage(admin, response, url.searchParams);
+        statusCode = 200;
+        return;
+      }
+      if (url.pathname === '/admin/reports/seller-ledger') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminSellerLedgerPage(admin, response, url.searchParams);
         statusCode = 200;
         return;
       }
