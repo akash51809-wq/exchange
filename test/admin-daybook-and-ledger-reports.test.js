@@ -381,3 +381,61 @@ test('Feature: Buyer Buy Recharge NEVER routes to own seller margin even if high
   assert.equal(routedSellers[0].user_id, otherSellerId, 'Must route to other seller');
   assert.notEqual(routedSellers[0].user_id, buyerId, 'Must NEVER route to buyer self');
 });
+
+test('Feature: Admin Reports menu is divided into 2 columns & User/Admin menus have bold typography with icons', async () => {
+  const { renderAdminMenuList, renderAdminNavigation, ADMIN_PANEL_MENU } = require('../config/admin-panel-menu');
+  const { renderUserMenuList, renderUserNavigation, getUserPanelMenu } = require('../config/user-panel-menu');
+  const { addPanelChrome } = require('../lib/panel-chrome');
+
+  // 1. Admin Menu checks
+  const reportsItem = ADMIN_PANEL_MENU.find(m => m.label === 'Reports');
+  assert.ok(reportsItem, 'Reports menu item exists in Admin menu');
+  assert.equal(reportsItem.twoColumns, true, 'Reports menu item has twoColumns: true');
+  assert.equal(reportsItem.icon, 'fa fa-bar-chart', 'Reports menu item has fa-bar-chart icon');
+
+  const adminMenuHtml = renderAdminMenuList('/admin/reports/daily-sales-report');
+  assert.match(adminMenuHtml, /sub-menu two-columns/i, 'Admin Reports dropdown renders with sub-menu two-columns');
+  assert.match(adminMenuHtml, /two-col-container/i, 'Admin Reports dropdown renders with two-col-container');
+  assert.match(adminMenuHtml, /menu-col/i, 'Admin Reports dropdown renders with menu-col');
+  assert.match(adminMenuHtml, /col-divider/i, 'Admin Reports dropdown renders with col-divider between columns');
+  assert.match(adminMenuHtml, /fa fa-tachometer.*Dashboard/i, 'Admin Dashboard has icon');
+  assert.match(adminMenuHtml, /fa fa-users.*User/i, 'Admin User has icon');
+  assert.match(adminMenuHtml, /fa fa-credit-card.*Payment/i, 'Admin Payment has icon');
+  assert.match(adminMenuHtml, /fa fa-gavel.*Disputes/i, 'Admin Disputes has icon');
+  assert.match(adminMenuHtml, /fa fa-cogs.*Settings/i, 'Admin Settings has icon');
+  assert.match(adminMenuHtml, /font-weight:700/i, 'Admin menu links have font-weight:700');
+
+  const adminNavHtml = renderAdminNavigation('/admin/');
+  assert.match(adminNavHtml, /\.sub-menu\.two-columns/i, 'Admin Navigation includes 2-column styles');
+  assert.match(adminNavHtml, /\.horizontalMenu-list > li > a/i, 'Admin Navigation includes bold styles');
+
+  // 2. User Menu checks
+  const userMenu = getUserPanelMenu('single');
+  const sellerItem = userMenu.find(m => m.label === 'Seller');
+  assert.ok(sellerItem, 'Seller item exists in User menu');
+  assert.equal(sellerItem.twoColumns, true, 'Seller menu has twoColumns: true');
+  assert.equal(sellerItem.icon, 'fa fa-shopping-bag', 'Seller menu has shopping bag icon');
+
+  const userMenuHtml = renderUserMenuList('single', '/dashboard');
+  assert.match(userMenuHtml, /fa fa-tachometer.*Dashboard/i, 'User Dashboard has icon');
+  assert.match(userMenuHtml, /fa fa-money.*Fund/i, 'User Fund has icon');
+  assert.match(userMenuHtml, /fa fa-shopping-cart.*Buyer/i, 'User Buyer has icon');
+  assert.match(userMenuHtml, /fa fa-shopping-bag.*Seller/i, 'User Seller has icon');
+  assert.match(userMenuHtml, /fa fa-bar-chart.*User Report/i, 'User Report has icon');
+  assert.match(userMenuHtml, /fa fa-bell.*Alerts Setting/i, 'User Alerts Setting has icon');
+  assert.match(userMenuHtml, /fa fa-file-text-o.*Invoice/i, 'User Invoice has icon');
+  assert.match(userMenuHtml, /fa fa-cogs.*Setting/i, 'User Setting has icon');
+  assert.match(userMenuHtml, /sub-menu two-columns/i, 'User Seller dropdown renders with sub-menu two-columns');
+  assert.match(userMenuHtml, /font-weight:700/i, 'User menu links have font-weight:700');
+
+  const userNavHtml = renderUserNavigation('single', '/dashboard');
+  assert.match(userNavHtml, /\.sub-menu\.two-columns/i, 'User Navigation includes 2-column styles');
+  assert.match(userNavHtml, /\.horizontalMenu-list > li > a/i, 'User Navigation includes bold styles');
+
+  // 3. Panel Chrome injection checks
+  const sampleAdminHtml = '<html><head></head><body><div class="page-main"><nav class="horizontalMenu"></nav></div></body></html>';
+  const injectedAdminHtml = await addPanelChrome(sampleAdminHtml, { role: 'admin' });
+  assert.match(injectedAdminHtml, /sub-menu two-columns/i, 'addPanelChrome renders 2-columns in admin menu');
+  assert.match(injectedAdminHtml, /\.sub-menu\.two-columns/i, 'addPanelChrome injects 2-column styles');
+  assert.match(injectedAdminHtml, /font-weight: 700 !important/i, 'addPanelChrome injects font-weight bold styles');
+});
