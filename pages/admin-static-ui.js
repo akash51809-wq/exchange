@@ -183,6 +183,7 @@ async function serveAdminUi(urlPath, method, response) {
       }
     }
   }
+}
   const contentLength = htmlBody === undefined ? fileInfo.size : Buffer.byteLength(htmlBody);
   response.writeHead(200, {
     'content-type': contentType,
