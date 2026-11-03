@@ -975,8 +975,8 @@ module.exports = function createAdminRechargeReportPage({
 
     const filters = {
       limit: ['20', '50', '100', '500'].includes(searchParams.get('limit')) ? searchParams.get('limit') : '20',
-      fromDate: String(searchParams.get('fromDate') || today).trim(),
-      toDate: String(searchParams.get('toDate') || today).trim(),
+      fromDate: searchParams.has('fromDate') ? String(searchParams.get('fromDate')).trim() : '',
+      toDate: searchParams.has('toDate') ? String(searchParams.get('toDate')).trim() : '',
       clientId: String(searchParams.get('clientId') || '').trim(),
       operatorId: String(searchParams.get('operatorId') || '').trim(),
       circle: String(searchParams.get('circle') || '').trim(),
@@ -1007,13 +1007,13 @@ module.exports = function createAdminRechargeReportPage({
 
     if (filters.status && ['successful', 'pending', 'failed', 'refunded'].includes(filters.status)) {
       if (filters.status === 'pending') {
-        conditions.push(`r.status IN ('pending', 'processing')`);
+        conditions.push(`LOWER(r.status) IN ('pending', 'processing', 'in_process')`);
       } else {
-        conditions.push(`r.status = ${add(filters.status)}`);
+        conditions.push(`LOWER(r.status) = ${add(filters.status)}`);
       }
     } else if (!statusParam) {
       // Default to pending
-      conditions.push(`r.status IN ('pending', 'processing')`);
+      conditions.push(`LOWER(r.status) IN ('pending', 'processing', 'in_process')`);
     }
 
     if (filters.operatorId && UUID_REGEX.test(filters.operatorId)) {

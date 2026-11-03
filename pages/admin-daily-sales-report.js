@@ -58,7 +58,7 @@ module.exports = function createAdminDailySalesReportPage({
     const toDate = String(params.get('toDate') || today).trim();
     const partyName = String(params.get('partyName') || params.get('party') || '').trim();
     const operatorFilter = String(params.get('operator') || '').trim();
-    const statusFilter = String(params.get('status') || 'successful').trim().toLowerCase();
+    const statusFilter = String(params.get('status') || 'all').trim().toLowerCase();
 
     const conditions = [];
     const values = [];
@@ -79,7 +79,17 @@ module.exports = function createAdminDailySalesReportPage({
       conditions.push(`(r.operator_code = ${opParam} OR r.operator_name ILIKE ${opParam} OR o.operator_name ILIKE ${opParam})`);
     }
     if (statusFilter && statusFilter !== 'all') {
-      conditions.push(`r.status = ${add(statusFilter)}`);
+      if (statusFilter === 'successful' || statusFilter === 'success') {
+        conditions.push(`LOWER(r.status) IN ('successful', 'success')`);
+      } else if (statusFilter === 'pending') {
+        conditions.push(`LOWER(r.status) IN ('pending', 'processing', 'in_process')`);
+      } else if (statusFilter === 'failed') {
+        conditions.push(`LOWER(r.status) IN ('failed', 'failure')`);
+      } else if (statusFilter === 'refunded') {
+        conditions.push(`LOWER(r.status) IN ('refunded')`);
+      } else {
+        conditions.push(`LOWER(r.status) = ${add(statusFilter)}`);
+      }
     }
 
     return {
@@ -192,11 +202,11 @@ module.exports = function createAdminDailySalesReportPage({
         COALESCE(o.operator_name, r.operator_name, r.operator_code, 'Unknown') AS operator_display,
         r.operator_code,
         COUNT(r.id) AS total_count,
-        COUNT(CASE WHEN r.status = 'successful' THEN 1 END) AS success_count,
+        COUNT(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN 1 END) AS success_count,
         COALESCE(SUM(r.amount_minor), 0) AS total_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.cost_minor ELSE 0 END), 0) AS total_cost_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.cost_minor ELSE 0 END), 0) AS total_cost_minor,
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
       FROM recharge_orders r
       JOIN users u ON u.id = r.user_id
       LEFT JOIN operator_definitions o ON o.id = r.operator_id
@@ -211,10 +221,10 @@ module.exports = function createAdminDailySalesReportPage({
       SELECT
         r.amount_minor,
         COUNT(r.id) AS total_count,
-        COUNT(CASE WHEN r.status = 'successful' THEN 1 END) AS success_count,
+        COUNT(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN 1 END) AS success_count,
         COALESCE(SUM(r.amount_minor), 0) AS total_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
       FROM recharge_orders r
       JOIN users u ON u.id = r.user_id
       LEFT JOIN operator_definitions o ON o.id = r.operator_id
@@ -234,11 +244,11 @@ module.exports = function createAdminDailySalesReportPage({
         u.role,
         COALESCE(w.balance_minor, 0) AS wallet_balance_minor,
         COUNT(r.id) AS total_count,
-        COUNT(CASE WHEN r.status = 'successful' THEN 1 END) AS success_count,
+        COUNT(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN 1 END) AS success_count,
         COALESCE(SUM(r.amount_minor), 0) AS total_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.cost_minor ELSE 0 END), 0) AS total_cost_minor,
-        COALESCE(SUM(CASE WHEN r.status = 'successful' THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.amount_minor ELSE 0 END), 0) AS success_amount_minor,
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.cost_minor ELSE 0 END), 0) AS total_cost_minor,
+        COALESCE(SUM(CASE WHEN LOWER(r.status) IN ('successful', 'success') THEN r.margin_minor ELSE 0 END), 0) AS total_margin_minor
       FROM recharge_orders r
       JOIN users u ON u.id = r.user_id
       LEFT JOIN wallets w ON w.user_id = u.id AND w.currency = 'INR'
@@ -442,13 +452,14 @@ module.exports = function createAdminDailySalesReportPage({
       }
 
       let statusBadge = '<span class="badge badge-secondary px-2 py-1">Unknown</span>';
-      if (row.status === 'successful') {
+      const st = String(row.status || '').toLowerCase();
+      if (st === 'successful' || st === 'success') {
         statusBadge = '<span class="badge badge-success px-2 py-1" style="background:#10b981;"><i class="fa fa-check-circle mr-1"></i> SUCCESS</span>';
-      } else if (row.status === 'pending' || row.status === 'processing') {
+      } else if (st === 'pending' || st === 'processing' || st === 'in_process') {
         statusBadge = '<span class="badge badge-warning text-white px-2 py-1" style="background:#f59e0b;"><i class="fa fa-clock-o mr-1"></i> PENDING</span>';
-      } else if (row.status === 'failed') {
+      } else if (st === 'failed' || st === 'failure') {
         statusBadge = '<span class="badge badge-danger px-2 py-1" style="background:#ef4444;"><i class="fa fa-times-circle mr-1"></i> FAILED</span>';
-      } else if (row.status === 'refunded') {
+      } else if (st === 'refunded') {
         statusBadge = '<span class="badge badge-info px-2 py-1" style="background:#0ea5e9;"><i class="fa fa-undo mr-1"></i> REFUNDED</span>';
       }
 
@@ -559,49 +570,59 @@ module.exports = function createAdminDailySalesReportPage({
               <button type="button" class="btn btn-outline-secondary btn-quick-date" onclick="setQuickDate('yesterday')">Yesterday</button>
               <button type="button" class="btn btn-outline-secondary btn-quick-date" onclick="setQuickDate('last7')">Last 7 Days</button>
               <button type="button" class="btn btn-outline-secondary btn-quick-date" onclick="setQuickDate('thismonth')">This Month</button>
+              <button type="button" class="btn btn-outline-primary btn-quick-date font-weight-bold" onclick="setQuickDate('all')"><i class="fa fa-history mr-1"></i>All Time</button>
             </div>
           </div>
           <div class="p-3">
             <form method="GET" action="/admin/reports/daily-sales-report" id="filterForm">
-              <div class="form-row">
-                <div class="form-group col-md-2 col-sm-6 mb-2">
+              <div class="form-row align-items-end">
+                <div class="form-group col-lg-2 col-md-3 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterFromDate">From Date</label>
-                  <input type="date" class="form-control form-control-sm" id="filterFromDate" name="fromDate" value="${escapeHtml(fromDate)}" required>
+                  <input type="date" class="form-control" id="filterFromDate" name="fromDate" value="${escapeHtml(fromDate)}" required style="height:38px;">
                 </div>
-                <div class="form-group col-md-2 col-sm-6 mb-2">
+                <div class="form-group col-lg-2 col-md-3 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterToDate">To Date</label>
-                  <input type="date" class="form-control form-control-sm" id="filterToDate" name="toDate" value="${escapeHtml(toDate)}" required>
+                  <input type="date" class="form-control" id="filterToDate" name="toDate" value="${escapeHtml(toDate)}" required style="height:38px;">
                 </div>
-                <div class="form-group col-md-3 col-sm-6 mb-2">
+                <div class="form-group col-lg-3 col-md-6 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterParty">Party Name / Username</label>
-                  <input type="text" class="form-control form-control-sm" id="filterParty" name="partyName" value="${escapeHtml(partyName)}" placeholder="Search party or username...">
+                  <input type="text" class="form-control" id="filterParty" name="partyName" value="${escapeHtml(partyName)}" placeholder="Search party or username..." style="height:38px;">
                 </div>
-                <div class="form-group col-md-2 col-sm-6 mb-2">
+                <div class="form-group col-lg-2 col-md-4 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterOperator">Operator</label>
-                  <select class="form-control form-control-sm" id="filterOperator" name="operator">
+                  <select class="form-control" id="filterOperator" name="operator" style="height:38px;">
                     <option value="">All Operators</option>
                     ${opSelectOptions}
                   </select>
                 </div>
-                <div class="form-group col-md-1 col-sm-6 mb-2">
+                <div class="form-group col-lg-2 col-md-4 col-sm-6 mb-2">
                   <label class="small font-weight-bold text-muted mb-1" for="filterStatus">Status</label>
-                  <select class="form-control form-control-sm" id="filterStatus" name="status">
-                    <option value="all"${statusFilter === 'all' ? ' selected' : ''}>All</option>
-                    <option value="successful"${statusFilter === 'successful' ? ' selected' : ''}>Success</option>
+                  <select class="form-control" id="filterStatus" name="status" style="height:38px;">
+                    <option value="all"${statusFilter === 'all' || !statusFilter ? ' selected' : ''}>All Status</option>
+                    <option value="successful"${statusFilter === 'successful' || statusFilter === 'success' ? ' selected' : ''}>Success</option>
                     <option value="pending"${statusFilter === 'pending' ? ' selected' : ''}>Pending</option>
                     <option value="failed"${statusFilter === 'failed' ? ' selected' : ''}>Failed</option>
                     <option value="refunded"${statusFilter === 'refunded' ? ' selected' : ''}>Refunded</option>
                   </select>
                 </div>
-                <div class="form-group col-md-2 col-sm-12 mb-2 d-flex align-items-end" style="gap:6px;">
-                  <button type="submit" class="btn btn-primary btn-sm btn-block font-weight-bold">
+                <div class="form-group col-lg-1 col-md-4 col-sm-12 mb-2 d-flex align-items-end" style="gap:6px;">
+                  <button type="submit" class="btn btn-primary font-weight-bold" style="height:38px; display:inline-flex; align-items:center; justify-content:center; min-width:70px;">
                     <i class="fa fa-search mr-1"></i> Apply
                   </button>
-                  <a href="/admin/reports/daily-sales-report" class="btn btn-outline-secondary btn-sm font-weight-bold">
+                  <a href="/admin/reports/daily-sales-report" class="btn btn-outline-secondary font-weight-bold" style="height:38px; display:inline-flex; align-items:center; justify-content:center; min-width:65px;">
                     Reset
                   </a>
                 </div>
               </div>
+              ${grandTotalCount === 0 ? `
+              <div class="alert alert-warning py-2 px-3 small font-weight-bold d-flex align-items-center justify-content-between mb-0 mt-2" style="border-radius:6px;">
+                <div>
+                  <i class="fa fa-info-circle mr-1"></i> No transactions found for selected date: <b>${escapeHtml(fromDate)}</b> to <b>${escapeHtml(toDate)}</b>.
+                </div>
+                <button type="button" class="btn btn-sm btn-dark py-1 px-3 font-weight-bold" onclick="setQuickDate('all')">
+                  <i class="fa fa-history mr-1"></i> View All Time Records
+                </button>
+              </div>` : ''}
             </form>
           </div>
         </section>
@@ -861,6 +882,9 @@ module.exports = function createAdminDailySalesReportPage({
     } else if (preset === 'thismonth') {
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       fromInput.value = formatDate(startOfMonth);
+      toInput.value = formatDate(today);
+    } else if (preset === 'all') {
+      fromInput.value = '2026-01-01';
       toInput.value = formatDate(today);
     }
     document.getElementById('filterForm').submit();
