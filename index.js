@@ -4777,13 +4777,6 @@ async function handleRequest(request, response) {
         statusCode = 404;
         return;
       }
-            return;
-          }
-        } catch (_) {}
-        sendJson(response, 404, { error: 'No dashboard popup image configured.' });
-        statusCode = 404;
-        return;
-      }
 
       if (url.pathname === '/api/website/settings') {
         const settings = await getWebsiteSettings();
