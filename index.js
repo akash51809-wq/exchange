@@ -108,6 +108,7 @@ const createAdminSendBulkEmailPage = require('./pages/admin-send-bulk-email');
 const createAdminIncomingSmsPage = require('./pages/admin-incoming-sms');
 const createAdminAllSellerMarginPage = require('./pages/admin-all-seller-margin');
 const createAdminAllBuyerMarginPage = require('./pages/admin-all-buyer-margin');
+const createAdminDashboardPage = require('./pages/admin-dashboard');
 const { checkAndDeactivateInactiveUsers } = require('./lib/user-inactivity-service');
 const {
   calculateGstAmounts,
@@ -498,6 +499,12 @@ const { sendUserSettingIpPage } = createUserSettingIpPage({ db, decryptMobile })
 const { sendUserSettingCallbackPage } = createUserSettingCallbackPage({ db, decryptMobile });
 const { sendUserIntegrationRequestPage } = createUserIntegrationRequestPage({ db });
 const { sendSystemChartPage } = createSystemChartPage();
+const { sendAdminDashboardPage } = createAdminDashboardPage({
+  db,
+  formatMinorUnits,
+  sendJson,
+  httpError,
+});
 const {
   checkAndSuspendSellerApiOnDailyRefund,
   handleSellerApiSuccess,
@@ -5533,6 +5540,15 @@ async function handleRequest(request, response) {
         statusCode = 302;
         response.writeHead(statusCode, { location: '/admin/users/list' });
         response.end();
+        return;
+      }
+
+      if (url.pathname === '/admin' || url.pathname === '/admin/' || url.pathname === '/admin/dashboard' || url.pathname === '/admin/index.html') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await sendAdminDashboardPage(admin, response, url.searchParams);
+        statusCode = 200;
         return;
       }
 
