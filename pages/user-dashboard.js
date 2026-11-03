@@ -400,7 +400,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       padding: 16px 20px 48px;
     }
 
-    /* Top Horizontal Dashboard Banner (full width & limited height) */
+    /* Top Horizontal Dashboard Banner (full width & clean responsive fit) */
     .user-dashboard-banner-container {
       width: 100%;
       border-radius: 12px;
@@ -408,15 +408,20 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       margin-bottom: 20px;
       border: 1px solid #e2e8f0;
       box-shadow: 0 4px 14px rgba(0,0,0,0.05);
-      background: #0f172a;
-      max-height: 160px;
+      background: #ffffff;
+      height: auto !important;
+      max-height: none !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .user-dashboard-banner-img {
       width: 100%;
-      height: 140px;
-      max-height: 160px;
-      object-fit: cover;
+      height: auto !important;
+      max-height: 240px !important;
+      object-fit: contain !important;
       display: block;
+      margin: 0 auto;
     }
 
     /* Running News Bar directly touching below menu bar */

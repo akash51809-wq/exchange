@@ -222,6 +222,13 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
       margin: 0 !important;
       list-style: none !important;
     }
+    .horizontalMenu-list .sub-menu {
+      text-align: left !important;
+    }
+    .horizontalMenu-list .sub-menu li,
+    .horizontalMenu-list .sub-menu > li {
+      text-align: left !important;
+    }
     .horizontalMenu-list .sub-menu li a,
     .horizontalMenu-list .sub-menu a,
     .horizontalMenu-list .sub-menu.two-columns .menu-col li a {
@@ -229,6 +236,11 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
       font-size: 13px !important;
       color: #334155 !important;
       letter-spacing: 0.1px !important;
+      display: block !important;
+      width: 100% !important;
+      text-align: left !important;
+      padding: 7px 12px !important;
+      white-space: nowrap !important;
     }
     .horizontalMenu-list .sub-menu li a:hover,
     .horizontalMenu-list .sub-menu a:hover,
@@ -236,6 +248,7 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
       font-weight: 700 !important;
       color: #2563eb !important;
       background: #eff6ff !important;
+      text-align: left !important;
     }
     .horizontalMenu-list .sub-menu li a.active,
     .horizontalMenu-list .sub-menu a.active,
@@ -243,6 +256,7 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
       font-weight: 800 !important;
       color: #2563eb !important;
       background: #eff6ff !important;
+      text-align: left !important;
     }
   </style>`;
 }

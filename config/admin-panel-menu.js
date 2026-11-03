@@ -120,6 +120,9 @@ function renderAdminNavigation(activePath = '') {
       font-size: 14px !important;
       margin-right: 2px !important;
     }
+    .horizontalMenu-list .sub-menu {
+      text-align: left !important;
+    }
     .horizontalMenu-list .sub-menu.two-columns {
       min-width: 480px !important;
       width: max-content !important;
@@ -127,12 +130,16 @@ function renderAdminNavigation(activePath = '') {
       box-shadow: 0 10px 30px rgba(0,0,0,0.18) !important;
       border-radius: 8px !important;
       background: #ffffff !important;
+      text-align: left !important;
     }
     .horizontalMenu-list .sub-menu.two-columns .two-col-container {
       display: flex !important;
       flex-direction: row !important;
-      gap: 14px !important;
+      gap: 16px !important;
       width: 100% !important;
+      text-align: left !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
     }
     .horizontalMenu-list .sub-menu.two-columns .menu-col {
       flex: 1 1 50% !important;
@@ -140,16 +147,23 @@ function renderAdminNavigation(activePath = '') {
       list-style: none !important;
       padding: 0 !important;
       margin: 0 !important;
+      text-align: left !important;
     }
     .horizontalMenu-list .sub-menu.two-columns .menu-col.col-divider {
       border-left: 1px solid #e2e8f0 !important;
-      padding-left: 12px !important;
+      padding-left: 14px !important;
     }
     .horizontalMenu-list .sub-menu.two-columns .menu-col li {
       display: block !important;
       width: 100% !important;
       margin: 0 !important;
+      padding: 0 !important;
       list-style: none !important;
+      text-align: left !important;
+    }
+    .horizontalMenu-list .sub-menu li,
+    .horizontalMenu-list .sub-menu > li {
+      text-align: left !important;
     }
     .horizontalMenu-list .sub-menu li a,
     .horizontalMenu-list .sub-menu a,
@@ -158,6 +172,11 @@ function renderAdminNavigation(activePath = '') {
       font-size: 13px !important;
       color: #334155 !important;
       letter-spacing: 0.1px !important;
+      display: block !important;
+      width: 100% !important;
+      text-align: left !important;
+      padding: 7px 12px !important;
+      white-space: nowrap !important;
     }
     .horizontalMenu-list .sub-menu li a:hover,
     .horizontalMenu-list .sub-menu a:hover,
@@ -165,6 +184,7 @@ function renderAdminNavigation(activePath = '') {
       font-weight: 700 !important;
       color: #2563eb !important;
       background: #eff6ff !important;
+      text-align: left !important;
     }
     .horizontalMenu-list .sub-menu li a.active,
     .horizontalMenu-list .sub-menu a.active,
@@ -172,6 +192,7 @@ function renderAdminNavigation(activePath = '') {
       font-weight: 800 !important;
       color: #2563eb !important;
       background: #eff6ff !important;
+      text-align: left !important;
     }
   </style>`;
 }

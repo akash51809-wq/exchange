@@ -1090,9 +1090,23 @@ const DATABASE_SCHEMA = `
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_multiplier NUMERIC(5,2) NOT NULL DEFAULT 1.00;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dispute_refund_lien_days INT NOT NULL DEFAULT 7;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker TEXT DEFAULT 'Welcome to Exchange Recharge Platform! Lightning-fast automated LAPU stock swapping, instant recharge execution, and 24x7 real-time settlement.';
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker_enabled BOOLEAN DEFAULT TRUE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_enabled BOOLEAN DEFAULT TRUE;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_data BYTEA;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_mime TEXT;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_url TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_data BYTEA;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_mime TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_enabled BOOLEAN DEFAULT TRUE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT FALSE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_data BYTEA;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_mime TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_link TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT FALSE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_data BYTEA;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_mime TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_link TEXT;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_frequency TEXT DEFAULT 'session';
 
   ALTER TABLE wallets ADD COLUMN IF NOT EXISTS lien_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (lien_balance_minor >= 0);
 
@@ -2095,6 +2109,8 @@ function adminSessionCookie(token, maxAge) {
   return `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${IS_PRODUCTION ? '; Secure' : ''}`;
 }
 
+const recentLoginNotifications = new Map();
+
 async function loginUser(request, response) {
   checkSameOrigin(request);
   const input = await readJson(request);
@@ -2145,6 +2161,19 @@ async function loginUser(request, response) {
       ).catch(() => {});
     } catch (_) {}
     throw httpError('Invalid user ID or password.', 401);
+  }
+
+  // Enforce portal isolation: /user/login allows ONLY users; /admin/login allows ONLY admin
+  const portal = String(input.portal || '').toLowerCase();
+  const referer = String(request.headers['referer'] || '');
+  const isFromAdminPortal = portal === 'admin' || referer.includes('/admin/login');
+  const isFromUserPortal = portal === 'user' || referer.includes('/user/login');
+
+  if (isFromUserPortal && user.role === 'admin') {
+    throw httpError('Admin accounts cannot log in through the user portal. Please use the Admin Login page.', 403);
+  }
+  if (isFromAdminPortal && user.role !== 'admin') {
+    throw httpError('Access denied. Only administrators can log in here.', 403);
   }
 
   // Check Login OTP general setting
@@ -2266,28 +2295,38 @@ async function loginUser(request, response) {
         tokenHash,
       ]
     ).catch((logErr) => console.warn('[user_login_logs insert error]', logErr.message));
-    // Dispatch login_info_user notification (WhatsApp & Email)
+    // Dispatch login_info_user notification (WhatsApp & Email) with single-notification debounce
     try {
-      const uDetails = await db.query('SELECT email, phone_ciphertext FROM users WHERE id = $1', [user.id]);
-      const uRow = uDetails.rows[0] || {};
-      let uMobile = '';
-      if (uRow.phone_ciphertext && typeof decryptMobile === 'function') {
-        try { uMobile = decryptMobile(uRow.phone_ciphertext); } catch (_) {}
+      const now = Date.now();
+      const lastNotif = recentLoginNotifications.get(user.id) || 0;
+      if (now - lastNotif >= 20_000) {
+        recentLoginNotifications.set(user.id, now);
+        if (recentLoginNotifications.size > 1000) {
+          for (const [k, v] of recentLoginNotifications.entries()) {
+            if (now - v > 60_000) recentLoginNotifications.delete(k);
+          }
+        }
+        const uDetails = await db.query('SELECT email, phone_ciphertext FROM users WHERE id = $1', [user.id]);
+        const uRow = uDetails.rows[0] || {};
+        let uMobile = '';
+        if (uRow.phone_ciphertext && typeof decryptMobile === 'function') {
+          try { uMobile = decryptMobile(uRow.phone_ciphertext); } catch (_) {}
+        }
+        sendNotificationEvent({
+          db,
+          decryptServiceConfig,
+          eventKey: 'login_info_user',
+          params: {
+            name: user.name || user.username,
+            username: user.username,
+            ip_address: clientIp,
+            device: `${parsed.browserName || 'Browser'} on ${parsed.osName || 'Device'}`,
+            date_time: new Date().toLocaleString('en-IN'),
+          },
+          recipientMobile: uMobile || undefined,
+          recipientEmail: uRow.email || undefined,
+        }).catch(() => {});
       }
-      sendNotificationEvent({
-        db,
-        decryptServiceConfig,
-        eventKey: 'login_info_user',
-        params: {
-          name: user.name || user.username,
-          username: user.username,
-          ip_address: clientIp,
-          device: `${parsed.browserName || 'Browser'} on ${parsed.osName || 'Device'}`,
-          date_time: new Date().toLocaleString('en-IN'),
-        },
-        recipientMobile: uMobile || undefined,
-        recipientEmail: uRow.email || undefined,
-      }).catch(() => {});
     } catch (_) {}
   } catch (err) {
     console.warn('[user_login_logs error]', err.message);
@@ -3659,12 +3698,27 @@ const AUTH_CLIENT_JS = `
   if (loginForm) {
     const userIdFromUrl = new URLSearchParams(location.search).get('userId');
     if (userIdFromUrl) byId('login-user-id').value = userIdFromUrl;
+    let isSubmitting = false;
+
     loginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
+      if (isSubmitting) return;
+
+      const submitBtn = loginForm.querySelector('button[type="submit"]');
+      const originalText = submitBtn ? submitBtn.innerHTML : 'Login';
+
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Signing in...';
+      }
+      isSubmitting = true;
+
       try {
+        const isPortalAdmin = window.location.pathname.startsWith('/admin');
         const payload = {
           userId: byId('login-user-id').value,
           password: byId('login-password').value,
+          portal: isPortalAdmin ? 'admin' : 'user',
         };
         const otpInput = byId('login-otp');
         if (otpInput && otpInput.value) {
@@ -3686,13 +3740,25 @@ const AUTH_CLIENT_JS = `
               loginForm.prepend(otpGroup);
             }
           }
-          const submitBtn = loginForm.querySelector('button[type="submit"]');
-          if (submitBtn) submitBtn.textContent = 'Verify OTP & Login';
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Verify OTP & Login';
+          }
+          isSubmitting = false;
           message(result.message);
           return;
         }
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.innerHTML = '<i class="fa fa-check mr-1"></i> Success! Redirecting...';
+        }
         location.assign(result.redirect);
       } catch (error) {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
+        isSubmitting = false;
         message(error.message, true);
       }
     });
@@ -4624,7 +4690,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.dashboard_banner_mime || 'image/png',
               'content-length': row.dashboard_banner_data.length,
-              'cache-control': 'public, max-age=60',
+              'cache-control': 'no-cache, no-store, must-revalidate',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.dashboard_banner_data);
@@ -4642,7 +4708,7 @@ async function handleRequest(request, response) {
         response.writeHead(200, {
           'content-type': 'image/svg+xml; charset=utf-8',
           'content-length': Buffer.byteLength(defaultBanner),
-          'cache-control': 'public, max-age=300',
+          'cache-control': 'no-cache, no-store, must-revalidate',
         });
         response.end(defaultBanner);
         statusCode = 200;
@@ -4657,7 +4723,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.login_side_image_mime || 'image/png',
               'content-length': row.login_side_image_data.length,
-              'cache-control': 'public, max-age=60',
+              'cache-control': 'no-cache, no-store, must-revalidate',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.login_side_image_data);
@@ -4678,7 +4744,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.login_popup_image_mime || 'image/png',
               'content-length': row.login_popup_image_data.length,
-              'cache-control': 'public, max-age=60',
+              'cache-control': 'no-cache, no-store, must-revalidate',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.login_popup_image_data);
@@ -4699,11 +4765,18 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.dashboard_popup_image_mime || 'image/png',
               'content-length': row.dashboard_popup_image_data.length,
-              'cache-control': 'public, max-age=60',
+              'cache-control': 'no-cache, no-store, must-revalidate',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.dashboard_popup_image_data);
             statusCode = 200;
+            return;
+          }
+        } catch (_) {}
+        sendJson(response, 404, { error: 'No dashboard popup image configured.' });
+        statusCode = 404;
+        return;
+      }
             return;
           }
         } catch (_) {}
@@ -4809,8 +4882,8 @@ async function handleRequest(request, response) {
       const legacyRedirects = {
         '/admin/login-2.html': '/admin/login',
         '/admin/login.html': '/admin/login',
-        '/login-2.html': '/admin/login',
-        '/login.html': '/admin/login',
+        '/login-2.html': '/user/login',
+        '/login.html': '/user/login',
         '/admin/register-2.html': '/admin/register',
         '/admin/register.html': '/admin/register',
         '/register-2.html': '/admin/register',
@@ -4835,7 +4908,7 @@ async function handleRequest(request, response) {
       if (url.pathname === '/login') {
         statusCode = 302;
         const query = url.search || '';
-        response.writeHead(statusCode, { location: '/admin/login' + query });
+        response.writeHead(statusCode, { location: '/user/login' + query });
         response.end();
         return;
       }
@@ -4858,7 +4931,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) {
           statusCode = 302;
-          response.writeHead(statusCode, { location: '/admin/login' });
+          response.writeHead(statusCode, { location: '/user/login' });
           response.end();
           return;
         }
@@ -4878,7 +4951,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) {
           statusCode = 302;
-          response.writeHead(statusCode, { location: '/admin/login' });
+          response.writeHead(statusCode, { location: '/user/login' });
           response.end();
           return;
         }
@@ -6687,7 +6760,7 @@ async function handleRequest(request, response) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        const input = await readJson(request);
+        const input = await readJson(request, 25_000_000);
         await handleSaveNotificationSettings(request, response, input);
         statusCode = response.statusCode || 200;
         return;

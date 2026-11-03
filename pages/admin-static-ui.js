@@ -19,7 +19,7 @@ async function serveAdminUi(urlPath, method, response) {
   if (urlPath === '/admin' || urlPath === '/admin/') {
     root = ADMIN_UI_ROOT;
     requestedPath = 'index.html';
-  } else if (urlPath === '/admin/login' || urlPath === '/login') {
+  } else if (urlPath === '/admin/login' || urlPath === '/user/login' || urlPath === '/login') {
     root = ADMIN_UI_ROOT;
     requestedPath = 'login-2.html';
   } else if (urlPath === '/admin/register' || urlPath === '/admin/signup' || urlPath === '/signup' || urlPath === '/register') {
@@ -117,9 +117,23 @@ async function serveAdminUi(urlPath, method, response) {
         .replace(/class=["']header-brand-img dark-logo["']/gi, 'class="header-brand-img dark-logo" style="max-height:55px;max-width:220px;object-fit:contain;"')
         .replace(/<link[^>]+rel=["'](?:shortcut )?icon["'][^>]*>/gi, '<link rel="icon" type="image/x-icon" href="/api/favicon">');
 
-      if (path.basename(filePath) === 'login-2.html' && db) {
-        try {
-          const res = await db.query(
+      if (path.basename(filePath) === 'login-2.html') {
+        const isUserPortal = urlPath === '/user/login' || urlPath === '/login';
+        if (isUserPortal) {
+          htmlBody = htmlBody
+            .replace(/<title>[\s\S]*?<\/title>/i, '<title>User Login - Exchange Platform</title>')
+            .replace(/<h2>Login<\/h2>/i, '<h2>User Login</h2>')
+            .replace(/href=["']\/admin\/login["']/gi, 'href="/user/login"');
+        } else {
+          htmlBody = htmlBody
+            .replace(/<title>[\s\S]*?<\/title>/i, '<title>Admin Login - Exchange</title>')
+            .replace(/<h2>Login<\/h2>/i, '<h2>Admin Login</h2>')
+            .replace(/<div class="text-center mt-7">[\s\S]*?<\/div>\s*<\/div>/i, '</div>');
+        }
+
+        if (db) {
+          try {
+            const res = await db.query(
             `SELECT (login_side_image_data IS NOT NULL) AS has_side_image,
                     login_side_image_enabled,
                     (login_popup_image_data IS NOT NULL) AS has_popup,

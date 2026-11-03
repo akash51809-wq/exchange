@@ -2035,7 +2035,13 @@ module.exports = function createAdminServiceSettingsPage({
                         <h6 class="font-weight-bold text-dark mb-0">
                           <i class="fa fa-image text-primary mr-1"></i> 2. User Dashboard Banner (Under Live News)
                         </h6>
-                        <span class="badge badge-secondary" id="banner-status-badge">Default Banner Active</span>
+                        <div class="d-flex align-items-center">
+                          <span class="badge badge-secondary mr-2" id="banner-status-badge">Default Banner Active</span>
+                          <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="dashboardBannerEnabled" checked>
+                            <label class="custom-control-label font-weight-bold small" for="dashboardBannerEnabled" id="dashboardBannerEnabledLabel">Banner Enabled</label>
+                          </div>
+                        </div>
                       </div>
                       <span class="media-size-pill">
                         <i class="fa fa-info-circle mr-1"></i> Proper Size: 1200 &times; 180 px (or 1600 &times; 240 px, Wide Horizontal Banner, Aspect Ratio ~ 7:1)
@@ -2594,6 +2600,7 @@ module.exports = function createAdminServiceSettingsPage({
         // Populate Notifications & Display Media
         if (data.notifications) {
           const n = data.notifications;
+          const t = Date.now();
           const ntSwitch = document.getElementById('newsTickerEnabled');
           if (ntSwitch) {
             ntSwitch.checked = Boolean(n.news_ticker_enabled !== false);
@@ -2606,15 +2613,29 @@ module.exports = function createAdminServiceSettingsPage({
             const preview = document.getElementById('newsTickerLivePreview');
             if (preview) preview.textContent = n.news_ticker || 'No live news set';
           }
+          const dbSwitch = document.getElementById('dashboardBannerEnabled');
+          if (dbSwitch) {
+            dbSwitch.checked = Boolean(n.dashboard_banner_enabled !== false);
+            const dbLabel = document.getElementById('dashboardBannerEnabledLabel');
+            if (dbLabel) dbLabel.textContent = dbSwitch.checked ? 'Banner Enabled' : 'Banner Disabled';
+          }
           if (document.getElementById('banner-status-badge')) {
             document.getElementById('banner-status-badge').textContent = n.has_dashboard_banner ? 'Custom Banner Active' : 'Default Banner Active';
-            document.getElementById('banner-status-badge').className = n.has_dashboard_banner ? 'badge badge-success' : 'badge badge-secondary';
+            document.getElementById('banner-status-badge').className = n.has_dashboard_banner ? 'badge badge-success mr-2' : 'badge badge-secondary mr-2';
+          }
+          const bannerImg = document.getElementById('banner-preview-img');
+          if (bannerImg) {
+            bannerImg.src = '/api/dashboard-banner?t=' + t;
           }
           const lsSwitch = document.getElementById('loginSideImageEnabled');
           if (lsSwitch) lsSwitch.checked = Boolean(n.login_side_image_enabled !== false);
           if (document.getElementById('login-side-status-badge')) {
             document.getElementById('login-side-status-badge').textContent = n.has_login_side_image ? 'Custom Image Active' : 'Default Gradient Active';
             document.getElementById('login-side-status-badge').className = n.has_login_side_image ? 'badge badge-success mr-2' : 'badge badge-secondary mr-2';
+          }
+          const sideImg = document.getElementById('login-side-preview-img');
+          if (sideImg) {
+            sideImg.src = '/api/login-side-image?t=' + t;
           }
           const lpSwitch = document.getElementById('loginPopupEnabled');
           if (lpSwitch) {
@@ -2626,6 +2647,10 @@ module.exports = function createAdminServiceSettingsPage({
           if (document.getElementById('login-popup-status-badge')) {
             document.getElementById('login-popup-status-badge').textContent = n.has_login_popup ? 'Image Uploaded' : 'No Image';
             document.getElementById('login-popup-status-badge').className = n.has_login_popup ? 'badge badge-success' : 'badge badge-secondary';
+          }
+          const lpImg = document.getElementById('login-popup-preview-img');
+          if (lpImg) {
+            lpImg.src = '/api/login-popup-image?t=' + t;
           }
 
           const dpSwitch = document.getElementById('dashboardPopupEnabled');
@@ -2639,6 +2664,10 @@ module.exports = function createAdminServiceSettingsPage({
           if (document.getElementById('dashboard-popup-status-badge')) {
             document.getElementById('dashboard-popup-status-badge').textContent = n.has_dashboard_popup ? 'Image Uploaded' : 'No Image';
             document.getElementById('dashboard-popup-status-badge').className = n.has_dashboard_popup ? 'badge badge-success' : 'badge badge-secondary';
+          }
+          const dpImg = document.getElementById('dashboard-popup-preview-img');
+          if (dpImg) {
+            dpImg.src = '/api/dashboard-popup-image?t=' + t;
           }
         }
       } catch (err) {
@@ -3580,6 +3609,7 @@ module.exports = function createAdminServiceSettingsPage({
           const payload = {
             newsTickerEnabled: document.getElementById('newsTickerEnabled').checked,
             newsTickerText: document.getElementById('newsTickerText').value.trim(),
+            dashboardBannerEnabled: document.getElementById('dashboardBannerEnabled')?.checked !== false,
             reset_dashboard_banner: document.getElementById('reset_dashboard_banner')?.checked || false,
             loginSideImageEnabled: document.getElementById('loginSideImageEnabled').checked,
             reset_login_side_image: document.getElementById('reset_login_side_image')?.checked || false,
@@ -3759,6 +3789,7 @@ module.exports = function createAdminServiceSettingsPage({
     try {
       const notifRes = await db.query(
         `SELECT news_ticker, news_ticker_enabled,
+                dashboard_banner_enabled,
                 (dashboard_banner_data IS NOT NULL) AS has_dashboard_banner,
                 (login_side_image_data IS NOT NULL) AS has_login_side_image,
                 login_side_image_enabled,
@@ -4659,6 +4690,7 @@ module.exports = function createAdminServiceSettingsPage({
       INSERT INTO website_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker TEXT;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS news_ticker_enabled BOOLEAN DEFAULT TRUE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_enabled BOOLEAN DEFAULT TRUE;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_data BYTEA;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_mime TEXT;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_banner_url TEXT;
@@ -4678,6 +4710,7 @@ module.exports = function createAdminServiceSettingsPage({
 
     const newsTickerText = String(input.newsTickerText || '').trim();
     const newsTickerEnabled = input.newsTickerEnabled !== false;
+    const dashboardBannerEnabled = input.dashboardBannerEnabled !== false;
     const loginSideImageEnabled = input.loginSideImageEnabled !== false;
     const loginPopupEnabled = Boolean(input.loginPopupEnabled);
     const loginPopupLink = String(input.loginPopupLink || '').trim();
@@ -4689,17 +4722,19 @@ module.exports = function createAdminServiceSettingsPage({
       `UPDATE website_settings SET
          news_ticker = $1,
          news_ticker_enabled = $2,
-         login_side_image_enabled = $3,
-         login_popup_enabled = $4,
-         login_popup_link = $5,
-         dashboard_popup_enabled = $6,
-         dashboard_popup_frequency = $7,
-         dashboard_popup_link = $8,
+         dashboard_banner_enabled = $3,
+         login_side_image_enabled = $4,
+         login_popup_enabled = $5,
+         login_popup_link = $6,
+         dashboard_popup_enabled = $7,
+         dashboard_popup_frequency = $8,
+         dashboard_popup_link = $9,
          updated_at = now()
        WHERE id = 1`,
       [
         newsTickerText,
         newsTickerEnabled,
+        dashboardBannerEnabled,
         loginSideImageEnabled,
         loginPopupEnabled,
         loginPopupLink,

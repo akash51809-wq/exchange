@@ -1196,7 +1196,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       </ul>
 
       <div class="nav-actions">
-        <a href="/admin/login" class="btn-login"><i class="fa fa-user-circle mr-1"></i> Partner Login</a>
+        <a href="/user/login" class="btn-login"><i class="fa fa-user-circle mr-1"></i> Partner Login</a>
         <a href="/admin/register" class="btn-register-3d"><i class="fa fa-bolt"></i> Get Started</a>
       </div>
     </div>
@@ -1225,7 +1225,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
             <a href="#calculator" class="btn-hero-glass">
               <i class="fa fa-calculator"></i> Calculate Profit
             </a>
-            <a href="/admin/login" class="btn-hero-glass">
+            <a href="/user/login" class="btn-hero-glass">
               <i class="fa fa-sign-in"></i> Live Terminal
             </a>
           </div>
@@ -1713,7 +1713,7 @@ curl -X POST https://exchange.easyrechargesolution.com/api/buyer/recharge \\
         <div class="footer-col">
           <h6>Quick Links</h6>
           <ul class="footer-links">
-            <li><a href="/admin/login">Partner Login</a></li>
+            <li><a href="/user/login">Partner Login</a></li>
             <li><a href="/admin/register">New Registration</a></li>
             <li><a href="/admin/forgot-password">Reset Password</a></li>
             <li><a href="#api">Developer API Hub</a></li>
