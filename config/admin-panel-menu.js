@@ -77,8 +77,8 @@ function renderAdminMenuList(activePath = '') {
 
       const renderCol = (list, isSecond) => {
         const lis = list.map((child) => {
-          const childActive = activePath === child.path ? ' active font-weight-bold text-primary' : '';
-          return `<li aria-haspopup="true"><a class="${childActive}" href="${child.path}">${escapeHtml(child.label)}</a></li>`;
+          const childActive = activePath === child.path ? ' active text-primary' : '';
+          return `<li aria-haspopup="true"><a class="font-weight-bold${childActive}" style="font-weight:700" href="${child.path}">${escapeHtml(child.label)}</a></li>`;
         }).join('');
         return `<ul class="menu-col${isSecond ? ' col-divider' : ''}">${lis}</ul>`;
       };
@@ -88,8 +88,8 @@ function renderAdminMenuList(activePath = '') {
     }
 
     const children = item.items.map((child) => {
-      const childActive = activePath === child.path ? ' active font-weight-bold text-primary' : '';
-      return `<li aria-haspopup="true"><a class="${childActive}" href="${child.path}">${escapeHtml(child.label)}</a></li>`;
+      const childActive = activePath === child.path ? ' active text-primary' : '';
+      return `<li aria-haspopup="true"><a class="font-weight-bold${childActive}" style="font-weight:700" href="${child.path}">${escapeHtml(child.label)}</a></li>`;
     }).join('');
     return `<li aria-haspopup="true"><a href="${item.path}" class="sub-icon font-weight-bold${activeClass}" style="font-weight:700">${iconHtml}${label} <i class="fa fa-angle-down horizontal-icon"></i></a><ul class="sub-menu">${children}</ul></li>`;
   }).join('');
@@ -151,26 +151,26 @@ function renderAdminNavigation(activePath = '') {
       margin: 0 !important;
       list-style: none !important;
     }
+    .horizontalMenu-list .sub-menu li a,
+    .horizontalMenu-list .sub-menu a,
     .horizontalMenu-list .sub-menu.two-columns .menu-col li a {
-      display: flex !important;
-      align-items: center !important;
-      padding: 6.5px 10px !important;
-      color: #334155 !important;
-      font-size: 13px !important;
-      font-weight: 500 !important;
-      border-radius: 4px !important;
-      white-space: nowrap !important;
-      text-decoration: none !important;
-      transition: all 0.15s ease-in-out !important;
-    }
-    .horizontalMenu-list .sub-menu.two-columns .menu-col li a:hover {
-      background: #eff6ff !important;
-      color: #2563eb !important;
-      padding-left: 14px !important;
-    }
-    .horizontalMenu-list .sub-menu.two-columns .menu-col li a.active {
-      color: #2563eb !important;
       font-weight: 700 !important;
+      font-size: 13px !important;
+      color: #334155 !important;
+      letter-spacing: 0.1px !important;
+    }
+    .horizontalMenu-list .sub-menu li a:hover,
+    .horizontalMenu-list .sub-menu a:hover,
+    .horizontalMenu-list .sub-menu.two-columns .menu-col li a:hover {
+      font-weight: 700 !important;
+      color: #2563eb !important;
+      background: #eff6ff !important;
+    }
+    .horizontalMenu-list .sub-menu li a.active,
+    .horizontalMenu-list .sub-menu a.active,
+    .horizontalMenu-list .sub-menu.two-columns .menu-col li a.active {
+      font-weight: 800 !important;
+      color: #2563eb !important;
       background: #eff6ff !important;
     }
   </style>`;

@@ -438,4 +438,16 @@ test('Feature: Admin Reports menu is divided into 2 columns & User/Admin menus h
   assert.match(injectedAdminHtml, /sub-menu two-columns/i, 'addPanelChrome renders 2-columns in admin menu');
   assert.match(injectedAdminHtml, /\.sub-menu\.two-columns/i, 'addPanelChrome injects 2-column styles');
   assert.match(injectedAdminHtml, /font-weight: 700 !important/i, 'addPanelChrome injects font-weight bold styles');
+  assert.match(injectedAdminHtml, /\.sub-menu li a[\s\S]*font-weight: 700 !important/i, 'addPanelChrome ensures all submenu links are bold');
+
+  // Verify all submenus in admin and user panel render with font-weight-bold and style="font-weight:700"
+  assert.match(adminMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Daily Sales Report<\/a>/i);
+  assert.match(adminMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>List User<\/a>/i);
+  assert.match(adminMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Fund Request<\/a>/i);
+  assert.match(adminMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>API Setting<\/a>/i);
+
+  assert.match(userMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Wallet Topup Request<\/a>/i);
+  assert.match(userMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Buyer Margin<\/a>/i);
+  assert.match(userMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Sales Margin<\/a>/i);
+  assert.match(userMenuHtml, /<a class="font-weight-bold[^"]*" style="font-weight:700"[^>]*>Account Statement<\/a>/i);
 });
