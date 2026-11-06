@@ -1627,19 +1627,9 @@ async function requestEmailOtp(request, response) {
         db,
         decryptServiceConfig,
         toEmail: email,
-        subject: '[Exchange Portal] Email Verification OTP',
-        text: `Hello,\n\nYour Email verification OTP for Exchange Portal is: ${otp}\nValid for 5 minutes.\n\nRegards,\nExchange Portal Admin`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 500px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-            <h2 style="color: #1e3a8a; margin-top: 0;">Exchange Portal</h2>
-            <p>Hello,</p>
-            <p>Your Email verification OTP for registration is:</p>
-            <div style="background: #eff6ff; border: 1px dashed #3b82f6; padding: 12px; font-size: 24px; font-weight: bold; letter-spacing: 4px; text-align: center; color: #1e3a8a; border-radius: 6px; margin: 16px 0;">
-              ${otp}
-            </div>
-            <p style="font-size: 13px; color: #64748b;">This OTP is valid for 5 minutes. Do not share it with anyone.</p>
-          </div>
-        `,
+        subject: 'Your Verification Code',
+        text: `Your One-Time Password (OTP) is ${otp}.`,
+        html: `Your One-Time Password (OTP) is ${otp}.\n<div style="font-size:28px; font-weight:bold;">\n  ${otp}\n</div>`,
       });
       emailSent = Boolean(emailRes.sent);
     } catch (mailErr) {
@@ -2229,9 +2219,9 @@ async function loginUser(request, response) {
           db,
           decryptServiceConfig,
           toEmail: userRow.email,
-          subject: `Exchange Login OTP: ${generatedOtp}`,
-          text: otpMsg,
-          html: `<p>Your Login OTP is:</p><h2 style="letter-spacing:4px;color:#1e3a8a;">${generatedOtp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+          subject: 'Your Verification Code',
+          text: `Your One-Time Password (OTP) is ${generatedOtp}.`,
+          html: `Your One-Time Password (OTP) is ${generatedOtp}.\n<div style="font-size:28px; font-weight:bold;">\n  ${generatedOtp}\n</div>`,
         }).catch((err) => console.warn('[Email Login OTP Error]', err.message));
       }
 
@@ -8301,9 +8291,9 @@ async function handleRequest(request, response) {
             db,
             decryptServiceConfig,
             toEmail: email,
-            subject: `IP Security OTP: ${otp}`,
-            text: waMsg,
-            html: `<p>Your 6-digit OTP for <strong>${actionText}</strong> is:</p><h2 style="letter-spacing:4px;color:#2563eb;">${otp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+            subject: 'Your Verification Code',
+            text: `Your One-Time Password (OTP) is ${otp}.`,
+            html: `Your One-Time Password (OTP) is ${otp}.\n<div style="font-size:28px; font-weight:bold;">\n  ${otp}\n</div>`,
           }).catch((err) => console.warn('[Email IP OTP Send Error]', err.message));
         }
 
@@ -8461,9 +8451,9 @@ async function handleRequest(request, response) {
             db,
             decryptServiceConfig,
             toEmail: email,
-            subject: `Callback URL Security OTP: ${otp}`,
-            text: waMsg,
-            html: `<p>Your 6-digit OTP for <strong>${actionText}</strong> is:</p><h2 style="letter-spacing:4px;color:#2563eb;">${otp}</h2><p>Valid for 5 minutes. Do not share with anyone.</p>`,
+            subject: 'Your Verification Code',
+            text: `Your One-Time Password (OTP) is ${otp}.`,
+            html: `Your One-Time Password (OTP) is ${otp}.\n<div style="font-size:28px; font-weight:bold;">\n  ${otp}\n</div>`,
           }).catch((err) => console.warn('[Email Callback OTP Send Error]', err.message));
         }
 
