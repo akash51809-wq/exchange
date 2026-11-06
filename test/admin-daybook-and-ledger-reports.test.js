@@ -181,25 +181,33 @@ function createMockDb() {
   };
 }
 
-test('Feature: Admin Menu includes 4 new Daybook and Ledger items under Reports', () => {
-  const reportsGroup = ADMIN_PANEL_MENU.find((g) => g.label === 'Reports');
-  assert.ok(reportsGroup, 'Reports menu group should exist');
+test('Feature: Admin Menu includes new Accounts menu with Daybook, Ledger, Earning and Invoice items', () => {
+  const accountsGroup = ADMIN_PANEL_MENU.find((g) => g.label === 'Accounts');
+  assert.ok(accountsGroup, 'Accounts menu group should exist');
+  assert.equal(accountsGroup.icon, 'fa fa-book', 'Accounts menu item has fa-book icon');
 
-  const buyerDaybook = reportsGroup.items.find((i) => i.path === '/admin/reports/buyer-daybook');
-  const buyerLedger = reportsGroup.items.find((i) => i.path === '/admin/reports/buyer-ledger');
-  const sellerDaybook = reportsGroup.items.find((i) => i.path === '/admin/reports/seller-daybook');
-  const sellerLedger = reportsGroup.items.find((i) => i.path === '/admin/reports/seller-ledger');
+  const buyerDaybook = accountsGroup.items.find((i) => i.path === '/admin/reports/buyer-daybook');
+  const buyerLedger = accountsGroup.items.find((i) => i.path === '/admin/reports/buyer-ledger');
+  const sellerDaybook = accountsGroup.items.find((i) => i.path === '/admin/reports/seller-daybook');
+  const sellerLedger = accountsGroup.items.find((i) => i.path === '/admin/reports/seller-ledger');
+  const adminEarning = accountsGroup.items.find((i) => i.path === '/admin/reports/admin-earning');
+  const invoices = accountsGroup.items.find((i) => i.path === '/admin/invoice');
 
-  assert.ok(buyerDaybook, 'Buyer Daybook menu item should exist');
-  assert.ok(buyerLedger, 'Buyer Ledger menu item should exist');
-  assert.ok(sellerDaybook, 'Seller Daybook menu item should exist');
-  assert.ok(sellerLedger, 'Seller Ledger menu item should exist');
+  assert.ok(buyerDaybook, 'Buyer Daybook menu item should exist under Accounts');
+  assert.ok(buyerLedger, 'Buyer Ledger menu item should exist under Accounts');
+  assert.ok(sellerDaybook, 'Seller Daybook menu item should exist under Accounts');
+  assert.ok(sellerLedger, 'Seller Ledger menu item should exist under Accounts');
+  assert.ok(adminEarning, 'Admin Earning menu item should exist under Accounts');
+  assert.ok(invoices, 'Invoices menu item should exist under Accounts');
 
   const renderedList = renderAdminMenuList('/admin/reports/buyer-daybook');
+  assert.match(renderedList, /Accounts/);
   assert.match(renderedList, /href="\/admin\/reports\/buyer-daybook"/);
   assert.match(renderedList, /href="\/admin\/reports\/buyer-ledger"/);
   assert.match(renderedList, /href="\/admin\/reports\/seller-daybook"/);
   assert.match(renderedList, /href="\/admin\/reports\/seller-ledger"/);
+  assert.match(renderedList, /href="\/admin\/reports\/admin-earning"/);
+  assert.match(renderedList, /href="\/admin\/invoice"/);
 });
 
 test('Feature: Buyer Daybook Page - Top summary metrics & operator breakdown table', async () => {
@@ -401,6 +409,7 @@ test('Feature: Admin Reports menu is divided into 2 columns & User/Admin menus h
   assert.match(adminMenuHtml, /fa fa-tachometer.*Dashboard/i, 'Admin Dashboard has icon');
   assert.match(adminMenuHtml, /fa fa-users.*User/i, 'Admin User has icon');
   assert.match(adminMenuHtml, /fa fa-credit-card.*Payment/i, 'Admin Payment has icon');
+  assert.match(adminMenuHtml, /fa fa-book.*Accounts/i, 'Admin Accounts has icon');
   assert.match(adminMenuHtml, /fa fa-gavel.*Disputes/i, 'Admin Disputes has icon');
   assert.match(adminMenuHtml, /fa fa-cogs.*Settings/i, 'Admin Settings has icon');
   assert.match(adminMenuHtml, /font-weight:700/i, 'Admin menu links have font-weight:700');

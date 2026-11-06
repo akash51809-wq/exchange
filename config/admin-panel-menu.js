@@ -19,24 +19,26 @@ const ADMIN_PANEL_MENU = [
     { label: 'List of Wallet Redeem', path: '/admin/payment/wallet-redeem' },
     { label: 'List of Wallet Exchange', path: '/admin/payment/wallet-exchange' },
   ] },
+  { label: 'Accounts', path: '#', icon: 'fa fa-book', items: [
+    { label: 'Buyer Daybook', path: '/admin/reports/buyer-daybook' },
+    { label: 'Buyer Ledger', path: '/admin/reports/buyer-ledger' },
+    { label: 'Seller Daybook', path: '/admin/reports/seller-daybook' },
+    { label: 'Seller Ledger', path: '/admin/reports/seller-ledger' },
+    { label: 'Admin Earning', path: '/admin/reports/admin-earning' },
+    { label: 'Invoices', path: '/admin/invoice' },
+  ] },
   { label: 'Disputes', path: '/admin/disputes', icon: 'fa fa-gavel' },
   { label: 'Seller API Requests', path: '/admin/seller-api/requests', icon: 'fa fa-exchange' },
   { label: 'Reports', path: '#', icon: 'fa fa-bar-chart', twoColumns: true, items: [
     // Column 1 (Left Part)
     { label: 'Daily Sales Report', path: '/admin/reports/daily-sales-report' },
-    { label: 'Buyer Daybook', path: '/admin/reports/buyer-daybook' },
-    { label: 'Buyer Ledger', path: '/admin/reports/buyer-ledger' },
-    { label: 'Seller Daybook', path: '/admin/reports/seller-daybook' },
-    { label: 'Seller Ledger', path: '/admin/reports/seller-ledger' },
     { label: 'Recharge Report', path: '/admin/reports/recharge-report' },
     { label: 'Live Recharge Report', path: '/admin/reports/live-recharge' },
     { label: 'Pending Recharge Report', path: '/admin/reports/pending-recharge' },
-    { label: 'Admin Earning', path: '/admin/reports/admin-earning' },
-    { label: 'Invoices', path: '/admin/invoice' },
-    // Column 2 (Right Part)
     { label: 'Refund Report', path: '/admin/reports/refund-report' },
     { label: 'Seller Refund Ratio', path: '/admin/reports/seller-refund-ratio' },
     { label: 'Fake Complaint Ratio', path: '/admin/reports/fake-complaint-ratio' },
+    // Column 2 (Right Part)
     { label: 'Complaint Report', path: '/admin/reports/complaint' },
     { label: 'Show All Seller Margin', path: '/admin/reports/all-seller-margin' },
     { label: 'Show All Buyer Margin', path: '/admin/reports/all-buyer-margin' },
