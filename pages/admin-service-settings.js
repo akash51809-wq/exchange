@@ -3566,32 +3566,69 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
-    // Setup media file preview
-    function setupFilePreview(inputId, imgId, resetBoxId) {
+    // Setup media file preview with drag-and-drop
+    function setupFilePreview(inputId, imgId, resetBoxId, dropAreaId) {
       const input = document.getElementById(inputId);
       const img = document.getElementById(imgId);
-      if (input && img) {
+      const dropArea = dropAreaId ? document.getElementById(dropAreaId) : null;
+
+      function handleFile(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          if (img) img.src = evt.target.result;
+          if (resetBoxId) {
+            const resetBox = document.getElementById(resetBoxId);
+            if (resetBox) resetBox.checked = false;
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      if (input) {
         input.addEventListener('change', (e) => {
-          const file = e.target.files[0];
+          handleFile(e.target.files[0]);
+        });
+      }
+
+      if (dropArea) {
+        ['dragenter', 'dragover'].forEach((eventName) => {
+          dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropArea.style.borderColor = '#3b82f6';
+            dropArea.style.backgroundColor = '#eff6ff';
+          });
+        });
+        ['dragleave', 'drop'].forEach((eventName) => {
+          dropArea.addEventListener(eventName, (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropArea.style.borderColor = '#cbd5e1';
+            dropArea.style.backgroundColor = '#f8fafc';
+          });
+        });
+        dropArea.addEventListener('drop', (e) => {
+          const dt = e.dataTransfer;
+          const file = dt && dt.files && dt.files[0];
           if (file) {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-              img.src = evt.target.result;
-              if (resetBoxId) {
-                const resetBox = document.getElementById(resetBoxId);
-                if (resetBox) resetBox.checked = false;
-              }
-            };
-            reader.readAsDataURL(file);
+            if (input && window.DataTransfer) {
+              try {
+                const dtObj = new DataTransfer();
+                dtObj.items.add(file);
+                input.files = dtObj.files;
+              } catch (_) {}
+            }
+            handleFile(file);
           }
         });
       }
     }
 
-    setupFilePreview('dashboard_banner_file', 'banner-preview-img', 'reset_dashboard_banner');
-    setupFilePreview('login_side_image_file', 'login-side-preview-img', 'reset_login_side_image');
-    setupFilePreview('login_popup_image_file', 'login-popup-preview-img', 'reset_login_popup');
-    setupFilePreview('dashboard_popup_image_file', 'dashboard-popup-preview-img', 'reset_dashboard_popup');
+    setupFilePreview('dashboard_banner_file', 'banner-preview-img', 'reset_dashboard_banner', 'banner-drop-area');
+    setupFilePreview('login_side_image_file', 'login-side-preview-img', 'reset_login_side_image', 'login-side-drop-area');
+    setupFilePreview('login_popup_image_file', 'login-popup-preview-img', 'reset_login_popup', 'login-popup-drop-area');
+    setupFilePreview('dashboard_popup_image_file', 'dashboard-popup-preview-img', 'reset_dashboard_popup', 'dashboard-popup-drop-area');
 
     // Save Notifications Form
     const notificationForm = document.getElementById('notificationForm');
@@ -3659,12 +3696,21 @@ module.exports = function createAdminServiceSettingsPage({
           notificationSaveStatus.className = 'text-success font-weight-bold ml-2';
           setTimeout(() => { notificationSaveStatus.textContent = ''; }, 3500);
 
-          // Update cache-busted preview URLs
+          // Update cache-busted preview URLs and reload fresh state
           const t = Date.now();
           if (document.getElementById('banner-preview-img')) document.getElementById('banner-preview-img').src = '/api/dashboard-banner?t=' + t;
           if (document.getElementById('login-side-preview-img')) document.getElementById('login-side-preview-img').src = '/api/login-side-image?t=' + t;
           if (document.getElementById('login-popup-preview-img')) document.getElementById('login-popup-preview-img').src = '/api/login-popup-image?t=' + t;
           if (document.getElementById('dashboard-popup-preview-img')) document.getElementById('dashboard-popup-preview-img').src = '/api/dashboard-popup-image?t=' + t;
+
+          // Clear file inputs so subsequent uploads don't double submit
+          ['dashboard_banner_file', 'login_side_image_file', 'login_popup_image_file', 'dashboard_popup_image_file'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+          });
+
+          // Reload settings after short delay to refresh status badges
+          setTimeout(loadSettings, 400);
         } catch (err) {
           notificationSaveStatus.textContent = '✗ ' + err.message;
           notificationSaveStatus.className = 'text-danger font-weight-bold ml-2';

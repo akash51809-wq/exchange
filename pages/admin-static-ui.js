@@ -128,7 +128,7 @@ async function serveAdminUi(urlPath, method, response) {
           htmlBody = htmlBody
             .replace(/<title>[\s\S]*?<\/title>/i, '<title>Admin Login - Exchange</title>')
             .replace(/<h2>Login<\/h2>/i, '<h2>Admin Login</h2>')
-            .replace(/<div class="text-center mt-7">[\s\S]*?<\/div>\s*<\/div>/i, '</div>');
+            .replace(/<div class="text-center mt-7">[\s\S]*?Don't have an account[\s\S]*?<\/div>\s*<\/div>/i, '');
         }
 
         // Clean layout styles: eliminate blue box, prevent scroll down, and fit side banner cleanly
@@ -148,10 +148,12 @@ async function serveAdminUi(urlPath, method, response) {
             overflow: hidden !important;
             display: flex !important;
             flex-direction: row !important;
+            margin: 0 !important;
+            padding: 0 !important;
           }
           .w-40.h-100vh {
-            flex: 0 0 420px !important;
-            width: 420px !important;
+            flex: 0 0 440px !important;
+            width: 440px !important;
             max-width: 100% !important;
             height: 100vh !important;
             max-height: 100vh !important;
@@ -180,63 +182,68 @@ async function serveAdminUi(urlPath, method, response) {
           .bg-style {
             background: #f1f5f9 !important;
           }
-          .bg-style:before {
+          .bg-style:before,
+          .page-style:before,
+          .login-right-pane:before {
             display: none !important;
             background: transparent !important;
             content: none !important;
           }
+          .login-right-pane,
           .w-80.bg-style {
             flex: 1 1 auto !important;
-            width: calc(100% - 420px) !important;
+            width: calc(100% - 440px) !important;
             height: 100vh !important;
             max-height: 100vh !important;
             overflow: hidden !important;
-            background: #f1f5f9 !important;
+            background: #f8fafc !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
-            padding: 20px !important;
+            padding: 24px !important;
             box-sizing: border-box !important;
             position: relative !important;
+            top: 0 !important;
+            margin: 0 !important;
           }
+          .login-banner-container,
+          .login-right-pane .page-single-content,
           .w-80.bg-style .page-single-content,
           .w-80.bg-style .card-body,
           .w-80.bg-style .row,
-          .w-80.bg-style [class*="col-"] {
-            width: 100% !important;
-            height: 100% !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-          }
+          .w-80.bg-style [class*="col-"],
           .custom-body1 {
             width: 100% !important;
             height: 100% !important;
+            max-height: 100% !important;
             display: flex !important;
             align-items: center !important;
             justify-content: center !important;
             padding: 0 !important;
             margin: 0 !important;
+            top: 0 !important;
+            position: static !important;
             text-align: center !important;
           }
           .login-side-banner-img {
             max-width: 100% !important;
-            max-height: 94vh !important;
+            max-height: 92vh !important;
             width: auto !important;
             height: auto !important;
             object-fit: contain !important;
-            border-radius: 12px !important;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            border-radius: 14px !important;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
             display: block !important;
+            margin: auto !important;
           }
           @media (max-width: 767px) {
             .w-40.h-100vh {
               width: 100% !important;
               flex: 0 0 100% !important;
               padding: 24px 20px !important;
+              box-shadow: none !important;
             }
+            .login-right-pane,
             .w-80.bg-style {
               display: none !important;
             }
@@ -245,10 +252,10 @@ async function serveAdminUi(urlPath, method, response) {
         `;
         htmlBody = htmlBody.replace(/<\/head>/i, cleanLoginStyles + '\n</head>');
 
-        // Always show the side banner image instead of the blue text box
+        // Always show the side banner image instead of the blue text box if legacy template markup exists
         htmlBody = htmlBody.replace(
           /<div class="custom-body1">[\s\S]*?<\/div>/i,
-          `<div class="custom-body1">
+          `<div class="login-banner-container">
             <img src="/api/login-side-image" alt="Login Graphic" class="login-side-banner-img" onerror="this.onerror=null;this.src='/assets/images/photos/custom-2.jpg';">
           </div>`
         );
@@ -266,7 +273,7 @@ async function serveAdminUi(urlPath, method, response) {
           if (res.rowCount > 0) {
             const row = res.rows[0];
             if (row.login_side_image_enabled === false) {
-              htmlBody = htmlBody.replace(/<\/head>/i, `<style>.w-80.bg-style { display: none !important; } .w-40.h-100vh { flex: 0 0 100% !important; width: 100% !important; margin: auto !important; max-width: 480px !important; }</style>\n</head>`);
+              htmlBody = htmlBody.replace(/<\/head>/i, `<style>.login-right-pane, .w-80.bg-style { display: none !important; } .w-40.h-100vh { flex: 0 0 100% !important; width: 100% !important; margin: auto !important; max-width: 480px !important; }</style>\n</head>`);
             }
             if (row.has_popup && row.login_popup_enabled) {
               const link = row.login_popup_link ? String(row.login_popup_link).trim() : '';

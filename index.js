@@ -4680,7 +4680,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.dashboard_banner_mime || 'image/png',
               'content-length': row.dashboard_banner_data.length,
-              'cache-control': 'no-cache, no-store, must-revalidate',
+              'cache-control': 'public, max-age=86400, stale-while-revalidate=604800',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.dashboard_banner_data);
@@ -4698,7 +4698,7 @@ async function handleRequest(request, response) {
         response.writeHead(200, {
           'content-type': 'image/svg+xml; charset=utf-8',
           'content-length': Buffer.byteLength(defaultBanner),
-          'cache-control': 'no-cache, no-store, must-revalidate',
+          'cache-control': 'public, max-age=86400, stale-while-revalidate=604800',
         });
         response.end(defaultBanner);
         statusCode = 200;
@@ -4713,7 +4713,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.login_side_image_mime || 'image/png',
               'content-length': row.login_side_image_data.length,
-              'cache-control': 'no-cache, no-store, must-revalidate',
+              'cache-control': 'public, max-age=86400, stale-while-revalidate=604800',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.login_side_image_data);
@@ -4735,7 +4735,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.login_popup_image_mime || 'image/png',
               'content-length': row.login_popup_image_data.length,
-              'cache-control': 'no-cache, no-store, must-revalidate',
+              'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.login_popup_image_data);
@@ -4743,8 +4743,14 @@ async function handleRequest(request, response) {
             return;
           }
         } catch (_) {}
-        sendJson(response, 404, { error: 'No login popup image configured.' });
-        statusCode = 404;
+        const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+        response.writeHead(200, {
+          'content-type': 'image/gif',
+          'content-length': transparentGif.length,
+          'cache-control': 'no-cache',
+        });
+        response.end(transparentGif);
+        statusCode = 200;
         return;
       }
 
@@ -4756,7 +4762,7 @@ async function handleRequest(request, response) {
             response.writeHead(200, {
               'content-type': row.dashboard_popup_image_mime || 'image/png',
               'content-length': row.dashboard_popup_image_data.length,
-              'cache-control': 'no-cache, no-store, must-revalidate',
+              'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
               'x-content-type-options': 'nosniff',
             });
             response.end(row.dashboard_popup_image_data);
@@ -4764,8 +4770,14 @@ async function handleRequest(request, response) {
             return;
           }
         } catch (_) {}
-        sendJson(response, 404, { error: 'No dashboard popup image configured.' });
-        statusCode = 404;
+        const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+        response.writeHead(200, {
+          'content-type': 'image/gif',
+          'content-length': transparentGif.length,
+          'cache-control': 'no-cache',
+        });
+        response.end(transparentGif);
+        statusCode = 200;
         return;
       }
 
@@ -6744,7 +6756,7 @@ async function handleRequest(request, response) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        const input = await readJson(request, 25_000_000);
+        const input = await readJson(request, 35_000_000);
         await handleSaveNotificationSettings(request, response, input);
         statusCode = response.statusCode || 200;
         return;
@@ -8631,7 +8643,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) throw httpError('login required', 401);
 
-        const input = await readJson(request, 25_000_000);
+        const input = await readJson(request, 35_000_000);
         const aadharNumber = String(input.aadharNumber || input.aadhar_number || '').replace(/\s+/g, '').trim();
         const panNumber = String(input.panNumber || input.pan_number || '').replace(/\s+/g, '').trim().toUpperCase();
         const gstNumber = String(input.gstNumber || input.gst_number || '').replace(/\s+/g, '').trim().toUpperCase();

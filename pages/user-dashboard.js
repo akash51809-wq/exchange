@@ -55,6 +55,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     let newsTickerText = 'Welcome to Exchange Recharge & LAPU Trading Platform! Fast execution, automated LAPU stock swapping, and 24x7 real-time settlement. Keep your wallet balance updated for uninterrupted recharge transactions.';
     let newsTickerEnabled = true;
     let dashboardBannerEnabled = true;
+    let dashboardBannerSrc = '/api/dashboard-banner';
     let dashboardPopupEnabled = false;
     let dashboardPopupLink = '';
     let dashboardPopupFrequency = 'session';
@@ -62,7 +63,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     try {
       const wsRes = await db.query(`
         SELECT news_ticker, news_ticker_enabled,
-               dashboard_banner_enabled,
+               dashboard_banner_enabled, dashboard_banner_data, dashboard_banner_mime,
                (dashboard_popup_image_data IS NOT NULL) AS has_dashboard_popup,
                dashboard_popup_enabled, dashboard_popup_link, dashboard_popup_frequency,
                website_name
@@ -78,6 +79,13 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
         }
         if (row.dashboard_banner_enabled !== null && row.dashboard_banner_enabled !== undefined) {
           dashboardBannerEnabled = Boolean(row.dashboard_banner_enabled);
+        }
+        if (row.dashboard_banner_data) {
+          const mime = row.dashboard_banner_mime || 'image/png';
+          const b64 = Buffer.isBuffer(row.dashboard_banner_data)
+            ? row.dashboard_banner_data.toString('base64')
+            : Buffer.from(row.dashboard_banner_data).toString('base64');
+          dashboardBannerSrc = `data:${mime};base64,${b64}`;
         }
         hasDashboardPopup = Boolean(row.has_dashboard_popup);
         dashboardPopupEnabled = Boolean(row.dashboard_popup_enabled);
@@ -384,6 +392,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>User Dashboard - Exchange Recharge Platform</title>
   <link rel="icon" type="image/x-icon" href="/api/favicon">
+  ${dashboardBannerEnabled ? `<link rel="preload" as="image" href="${dashboardBannerSrc.startsWith('data:') ? dashboardBannerSrc : '/api/dashboard-banner'}">` : ''}
   <link rel="stylesheet" href="/assets/plugins/bootstrap/css/bootstrap.css">
   <link rel="stylesheet" href="/assets/css/style.css">
   <link rel="stylesheet" href="/assets/css/dark.css">
@@ -400,28 +409,30 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       padding: 16px 20px 48px;
     }
 
-    /* Top Horizontal Dashboard Banner (full width & clean responsive fit) */
+    /* Top Horizontal Dashboard Banner (full width & clean responsive fit left-to-right) */
     .user-dashboard-banner-container {
-      width: 100%;
-      border-radius: 12px;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      border-radius: 10px;
       overflow: hidden;
       margin-bottom: 20px;
       border: 1px solid #e2e8f0;
       box-shadow: 0 4px 14px rgba(0,0,0,0.05);
       background: #ffffff;
-      height: auto !important;
-      max-height: none !important;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      padding: 0 !important;
+      display: block !important;
+      line-height: 0;
     }
     .user-dashboard-banner-img {
-      width: 100%;
+      width: 100% !important;
+      max-width: 100% !important;
       height: auto !important;
-      max-height: 240px !important;
-      object-fit: contain !important;
-      display: block;
-      margin: 0 auto;
+      max-height: none !important;
+      display: block !important;
+      object-fit: cover !important;
+      border-radius: 10px !important;
+      margin: 0 !important;
     }
 
     /* Running News Bar directly touching below menu bar */
@@ -711,7 +722,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       ${dashboardBannerEnabled ? `
       <!-- 0. Top Horizontal Dashboard Banner (full width & limited height) -->
       <div class="user-dashboard-banner-container">
-        <img src="/api/dashboard-banner" alt="Dashboard Banner" class="user-dashboard-banner-img">
+        <img src="${dashboardBannerSrc}" alt="Dashboard Banner" class="user-dashboard-banner-img" fetchpriority="high">
       </div>` : ''}
 
       <!-- Welcome Header -->

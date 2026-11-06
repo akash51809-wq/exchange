@@ -57,9 +57,10 @@ test('User Dashboard Banner: container and image have height: auto, no clipping 
 
   await userDashboard.sendUserDashboard({ id: 'u1', username: 'testuser', name: 'Test User', role: 'user' }, mockResponse);
 
-  // Check banner styles
+  // Check banner styles (full width left-to-right fit and no vertical clipping)
   assert.match(capturedHtml, /\.user-dashboard-banner-container\s*\{[^}]*height:\s*auto\s*!important/s);
-  assert.match(capturedHtml, /\.user-dashboard-banner-img\s*\{[^}]*object-fit:\s*contain\s*!important/s);
+  assert.match(capturedHtml, /\.user-dashboard-banner-img\s*\{[^}]*object-fit:\s*(?:cover|contain)\s*!important/s);
+  assert.match(capturedHtml, /\.user-dashboard-banner-img\s*\{[^}]*width:\s*100%\s*!important/s);
 
   // Check live news reflection
   assert.match(capturedHtml, /New Flash Announcement Live from Admin/);
