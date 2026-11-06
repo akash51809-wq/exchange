@@ -4721,8 +4721,9 @@ async function handleRequest(request, response) {
             return;
           }
         } catch (_) {}
-        sendJson(response, 404, { error: 'No login side image configured.' });
-        statusCode = 404;
+        response.writeHead(302, { location: '/assets/images/photos/custom-2.jpg' });
+        response.end();
+        statusCode = 302;
         return;
       }
 
