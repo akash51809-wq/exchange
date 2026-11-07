@@ -25,6 +25,11 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           socialTelegram: r.social_telegram || 'https://t.me/easyrechargesolution',
           metaTitle: r.meta_title || 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
           metaDescription: r.meta_description || 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
+          hasPopup: Boolean(r.login_popup_image_data || r.dashboard_popup_image_data),
+          popupEnabled: (r.login_popup_enabled !== false && r.login_popup_image_data) || (r.dashboard_popup_enabled !== false && r.dashboard_popup_image_data),
+          popupLink: r.login_popup_link || r.dashboard_popup_link || '',
+          popupSrc: r.login_popup_image_data ? '/api/login-popup-image' : '/api/dashboard-popup-image',
+          popupUpdatedAt: r.updated_at ? String(r.updated_at) : String(Date.now()),
         };
       }
     } catch (_) {}
@@ -42,6 +47,11 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       socialTelegram: 'https://t.me/easyrechargesolution',
       metaTitle: 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
       metaDescription: 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
+      hasPopup: false,
+      popupEnabled: false,
+      popupLink: '',
+      popupSrc: '/api/login-popup-image',
+      popupUpdatedAt: String(Date.now()),
     };
   }
 
@@ -1923,6 +1933,43 @@ echo $response;\`
       }, 900);
     });
   </script>
+
+  ${s.hasPopup && s.popupEnabled ? `
+  <!-- Homepage Notice Popup Modal -->
+  <div id="homeNoticeModal" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.82);z-index:9999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);">
+    <div style="position:relative;background:#ffffff;border-radius:14px;max-width:560px;width:100%;box-shadow:0 25px 60px -10px rgba(0,0,0,0.65);overflow:hidden;animation:homePopupScale 0.25s ease-out;">
+      <button type="button" id="closeHomeNoticeModal" style="position:absolute;top:10px;right:10px;z-index:10;width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.7);color:#ffffff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;transition:background 0.2s;" aria-label="Close">&times;</button>
+      ${s.popupLink ? `<a href="${escapeHtml(s.popupLink)}" target="_blank" rel="noopener noreferrer" style="display:block;cursor:pointer;">` : ''}
+        <img src="${s.popupSrc}?v=${encodeURIComponent(s.popupUpdatedAt)}" alt="Website Announcement" style="width:100%;height:auto;display:block;max-height:82vh;object-fit:contain;">
+      ${s.popupLink ? `</a>` : ''}
+    </div>
+  </div>
+  <script>
+    (function(){
+      var m = document.getElementById('homeNoticeModal');
+      var c = document.getElementById('closeHomeNoticeModal');
+      if (!m || !c) return;
+      var popupKey = 'home_popup_seen_' + ${JSON.stringify(s.popupUpdatedAt)};
+      if (sessionStorage.getItem(popupKey)) {
+        m.style.display = 'none';
+        return;
+      }
+      m.style.display = 'flex';
+      function dismiss() {
+        m.style.display = 'none';
+        try { sessionStorage.setItem(popupKey, '1'); } catch(_) {}
+      }
+      c.onclick = dismiss;
+      m.onclick = function(e) { if (e.target === m) dismiss(); };
+    })();
+  </script>
+  <style>
+  @keyframes homePopupScale {
+    from { opacity: 0; transform: scale(0.92); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  </style>
+  ` : ''}
 </body>
 </html>`;
 

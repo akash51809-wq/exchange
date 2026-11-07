@@ -2119,7 +2119,7 @@ module.exports = function createAdminServiceSettingsPage({
                     <div class="notif-card-section">
                       <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
                         <h6 class="font-weight-bold text-dark mb-0">
-                          <i class="fa fa-window-maximize text-warning mr-1"></i> 4. Login Page Popup Notice
+                          <i class="fa fa-window-maximize text-warning mr-1"></i> 4. Website Homepage &amp; Login Page Popup Notice
                         </h6>
                         <div class="custom-control custom-switch">
                           <input type="checkbox" class="custom-control-input" id="loginPopupEnabled">
@@ -2130,7 +2130,7 @@ module.exports = function createAdminServiceSettingsPage({
                         <i class="fa fa-info-circle mr-1"></i> Proper Size: 600 &times; 600 px (Square) or 600 &times; 750 px (Max 5MB)
                       </span>
                       <p class="text-muted small mb-3">
-                        Jab koi bhi user ya admin Login page (<code>/admin/login</code>) open karega, to screen par ye notice / offers / updates popup image show hoga jise user close button se hata sakta hai.
+                        Jab koi bhi user ya visitor Website Homepage (<code>/</code>) ya Login page (<code>/user/login</code>, <code>/admin/login</code>) open karega, to screen par ye notice / offers / updates popup image show hoga jise user close button se hata sakta hai.
                       </p>
 
                       <div class="form-group mb-3">
@@ -3581,6 +3581,18 @@ module.exports = function createAdminServiceSettingsPage({
             const resetBox = document.getElementById(resetBoxId);
             if (resetBox) resetBox.checked = false;
           }
+          if (inputId === 'login_popup_image_file') {
+            const sw = document.getElementById('loginPopupEnabled');
+            if (sw) sw.checked = true;
+            const lbl = document.getElementById('loginPopupEnabledLabel');
+            if (lbl) lbl.textContent = 'Popup Enabled';
+          }
+          if (inputId === 'dashboard_popup_image_file') {
+            const sw = document.getElementById('dashboardPopupEnabled');
+            if (sw) sw.checked = true;
+            const lbl = document.getElementById('dashboardPopupEnabledLabel');
+            if (lbl) lbl.textContent = 'Popup Enabled';
+          }
         };
         reader.readAsDataURL(file);
       }
@@ -3675,12 +3687,14 @@ module.exports = function createAdminServiceSettingsPage({
           if (loginPopupFile) {
             payload.login_popup_image_data_b64 = await readFileAsBase64(loginPopupFile);
             payload.login_popup_image_mime = loginPopupFile.type || 'image/png';
+            payload.loginPopupEnabled = true;
           }
 
           const dashPopupFile = document.getElementById('dashboard_popup_image_file')?.files[0];
           if (dashPopupFile) {
             payload.dashboard_popup_image_data_b64 = await readFileAsBase64(dashPopupFile);
             payload.dashboard_popup_image_mime = dashPopupFile.type || 'image/png';
+            payload.dashboardPopupEnabled = true;
           }
 
           const res = await fetch('/api/admin/settings/services/notifications', {
@@ -3846,7 +3860,14 @@ module.exports = function createAdminServiceSettingsPage({
          FROM website_settings WHERE id = 1`
       );
       if (notifRes.rowCount > 0) {
-        result.notifications = notifRes.rows[0];
+        const notif = notifRes.rows[0];
+        if (notif.has_login_popup && notif.login_popup_enabled !== false) {
+          notif.login_popup_enabled = true;
+        }
+        if (notif.has_dashboard_popup && notif.dashboard_popup_enabled !== false) {
+          notif.dashboard_popup_enabled = true;
+        }
+        result.notifications = notif;
       }
     } catch (_) {}
     if (!result.sms) {
@@ -4810,20 +4831,20 @@ module.exports = function createAdminServiceSettingsPage({
 
     // Handle login popup image upload or reset
     if (input.reset_login_popup) {
-      await db.query('UPDATE website_settings SET login_popup_image_data = NULL, login_popup_image_mime = NULL, updated_at = now() WHERE id = 1');
+      await db.query('UPDATE website_settings SET login_popup_image_data = NULL, login_popup_image_mime = NULL, login_popup_enabled = FALSE, updated_at = now() WHERE id = 1');
     } else if (input.login_popup_image_data_b64) {
       const buf = Buffer.from(input.login_popup_image_data_b64, 'base64');
       const mime = String(input.login_popup_image_mime || 'image/png').trim();
-      await db.query('UPDATE website_settings SET login_popup_image_data = $1, login_popup_image_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+      await db.query('UPDATE website_settings SET login_popup_image_data = $1, login_popup_image_mime = $2, login_popup_enabled = TRUE, updated_at = now() WHERE id = 1', [buf, mime]);
     }
 
     // Handle dashboard popup image upload or reset
     if (input.reset_dashboard_popup) {
-      await db.query('UPDATE website_settings SET dashboard_popup_image_data = NULL, dashboard_popup_image_mime = NULL, updated_at = now() WHERE id = 1');
+      await db.query('UPDATE website_settings SET dashboard_popup_image_data = NULL, dashboard_popup_image_mime = NULL, dashboard_popup_enabled = FALSE, updated_at = now() WHERE id = 1');
     } else if (input.dashboard_popup_image_data_b64) {
       const buf = Buffer.from(input.dashboard_popup_image_data_b64, 'base64');
       const mime = String(input.dashboard_popup_image_mime || 'image/png').trim();
-      await db.query('UPDATE website_settings SET dashboard_popup_image_data = $1, dashboard_popup_image_mime = $2, updated_at = now() WHERE id = 1', [buf, mime]);
+      await db.query('UPDATE website_settings SET dashboard_popup_image_data = $1, dashboard_popup_image_mime = $2, dashboard_popup_enabled = TRUE, updated_at = now() WHERE id = 1', [buf, mime]);
     }
 
     sendJson(response, 200, { ok: true, message: 'Notification settings and media updated successfully.' });

@@ -60,17 +60,22 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     let dashboardPopupLink = '';
     let dashboardPopupFrequency = 'session';
     let hasDashboardPopup = false;
+    let dashboardPopupSrc = '/api/dashboard-popup-image';
+    let popupUpdatedAt = String(Date.now());
     try {
       const wsRes = await db.query(`
         SELECT news_ticker, news_ticker_enabled,
                dashboard_banner_enabled, dashboard_banner_data, dashboard_banner_mime,
                (dashboard_popup_image_data IS NOT NULL) AS has_dashboard_popup,
                dashboard_popup_enabled, dashboard_popup_link, dashboard_popup_frequency,
-               website_name
+               (login_popup_image_data IS NOT NULL) AS has_login_popup,
+               login_popup_enabled, login_popup_link,
+               updated_at, website_name
         FROM website_settings WHERE id = 1 LIMIT 1
       `);
       if (wsRes.rowCount > 0) {
         const row = wsRes.rows[0];
+        if (row.updated_at) popupUpdatedAt = String(row.updated_at);
         if (row.news_ticker && row.news_ticker.trim()) {
           newsTickerText = row.news_ticker.trim();
         }
@@ -87,10 +92,23 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
             : Buffer.from(row.dashboard_banner_data).toString('base64');
           dashboardBannerSrc = `data:${mime};base64,${b64}`;
         }
-        hasDashboardPopup = Boolean(row.has_dashboard_popup);
-        dashboardPopupEnabled = Boolean(row.dashboard_popup_enabled);
-        dashboardPopupLink = row.dashboard_popup_link || '';
-        dashboardPopupFrequency = row.dashboard_popup_frequency || 'session';
+
+        // Smart popup detection: show dashboard popup, or fallback to website/login popup
+        const hasDashImg = Boolean(row.has_dashboard_popup || row.dashboard_popup_image_data);
+        const hasLoginImg = Boolean(row.has_login_popup || row.login_popup_image_data);
+        if (hasDashImg) {
+          hasDashboardPopup = true;
+          dashboardPopupEnabled = row.dashboard_popup_enabled !== false;
+          dashboardPopupLink = row.dashboard_popup_link || '';
+          dashboardPopupFrequency = row.dashboard_popup_frequency || 'session';
+          dashboardPopupSrc = '/api/dashboard-popup-image';
+        } else if (hasLoginImg) {
+          hasDashboardPopup = true;
+          dashboardPopupEnabled = row.login_popup_enabled !== false;
+          dashboardPopupLink = row.login_popup_link || '';
+          dashboardPopupFrequency = 'session';
+          dashboardPopupSrc = '/api/login-popup-image';
+        }
       }
     } catch (_) {}
 
@@ -1223,11 +1241,11 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
 ${(hasDashboardPopup && dashboardPopupEnabled) ? `
 <!-- Dashboard Notice Popup Modal -->
-<div id="dashboardNoticeModal" style="display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.75);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
+<div id="dashboardNoticeModal" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.8);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
   <div style="position:relative;background:#ffffff;border-radius:12px;max-width:550px;width:100%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);overflow:hidden;animation:dashPopupFadeIn 0.25s ease-out;">
     <button type="button" id="closeDashboardNoticeModal" style="position:absolute;top:10px;right:10px;z-index:10;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.65);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;transition:background 0.2s;" aria-label="Close">&times;</button>
     ${dashboardPopupLink ? `<a href="${escapeHtml(dashboardPopupLink)}" target="_blank" rel="noopener noreferrer" style="display:block;cursor:pointer;">` : ''}
-      <img src="/api/dashboard-popup-image" alt="Dashboard Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
+      <img src="${dashboardPopupSrc}?v=${encodeURIComponent(popupUpdatedAt)}" alt="Dashboard Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
     ${dashboardPopupLink ? `</a>` : ''}
   </div>
 </div>
@@ -1237,13 +1255,24 @@ ${(hasDashboardPopup && dashboardPopupEnabled) ? `
     var c = document.getElementById('closeDashboardNoticeModal');
     if (!m || !c) return;
     var freq = ${JSON.stringify(dashboardPopupFrequency || 'session')};
+    var popupKey = 'dashboard_popup_seen_' + ${JSON.stringify(popupUpdatedAt)};
     if (freq === 'session') {
-      if (sessionStorage.getItem('dashboard_popup_seen')) return;
-      sessionStorage.setItem('dashboard_popup_seen', '1');
+      if (sessionStorage.getItem(popupKey)) {
+        m.style.display = 'none';
+        return;
+      }
     }
     m.style.display = 'flex';
-    c.onclick = function() { m.style.display = 'none'; };
-    m.onclick = function(e) { if (e.target === m) m.style.display = 'none'; };
+    function dismiss() {
+      m.style.display = 'none';
+      try {
+        if (freq === 'session') {
+          sessionStorage.setItem(popupKey, '1');
+        }
+      } catch (_) {}
+    }
+    c.onclick = dismiss;
+    m.onclick = function(e) { if (e.target === m) dismiss(); };
   })();
 </script>
 <style>

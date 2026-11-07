@@ -267,7 +267,10 @@ async function serveAdminUi(urlPath, method, response) {
                     login_side_image_enabled,
                     (login_popup_image_data IS NOT NULL) AS has_popup,
                     login_popup_enabled,
-                    login_popup_link
+                    login_popup_link,
+                    (dashboard_popup_image_data IS NOT NULL) AS has_dashboard_popup,
+                    dashboard_popup_enabled,
+                    dashboard_popup_link
              FROM website_settings WHERE id = 1 LIMIT 1`
           );
           if (res.rowCount > 0) {
@@ -275,17 +278,20 @@ async function serveAdminUi(urlPath, method, response) {
             if (row.login_side_image_enabled === false) {
               htmlBody = htmlBody.replace(/<\/head>/i, `<style>.login-right-pane, .w-80.bg-style { display: none !important; } .w-40.h-100vh { flex: 0 0 100% !important; width: 100% !important; margin: auto !important; max-width: 480px !important; }</style>\n</head>`);
             }
-            if (row.has_popup && row.login_popup_enabled) {
-              const link = row.login_popup_link ? String(row.login_popup_link).trim() : '';
+            const hasPopup = Boolean(row.has_popup || row.has_dashboard_popup);
+            const isPopupEnabled = row.has_popup ? (row.login_popup_enabled !== false) : (row.dashboard_popup_enabled !== false);
+            if (hasPopup && isPopupEnabled) {
+              const link = row.has_popup ? (row.login_popup_link ? String(row.login_popup_link).trim() : '') : (row.dashboard_popup_link ? String(row.dashboard_popup_link).trim() : '');
               const linkOpen = link ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer" style="display:block;cursor:pointer;">` : '';
               const linkClose = link ? `</a>` : '';
+              const imgSrc = row.has_popup ? '/api/login-popup-image' : '/api/dashboard-popup-image';
               const popupHtml = `
               <!-- Login Notice Modal -->
-              <div id="loginNoticeModal" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.75);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
+              <div id="loginNoticeModal" style="display:flex;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(15,23,42,0.8);z-index:999999;align-items:center;justify-content:center;padding:16px;-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);">
                 <div style="position:relative;background:#ffffff;border-radius:12px;max-width:550px;width:100%;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);overflow:hidden;">
                   <button type="button" id="closeLoginNoticeModal" style="position:absolute;top:10px;right:10px;z-index:10;width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,0.65);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;line-height:1;" aria-label="Close">&times;</button>
                   ${linkOpen}
-                    <img src="/api/login-popup-image" alt="Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
+                    <img src="${imgSrc}" alt="Notice" style="width:100%;height:auto;display:block;max-height:80vh;object-fit:contain;">
                   ${linkClose}
                 </div>
               </div>

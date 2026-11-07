@@ -4727,18 +4727,20 @@ async function handleRequest(request, response) {
         return;
       }
 
-      if (url.pathname === '/api/login-popup-image') {
+      if (url.pathname === '/api/login-popup-image' || url.pathname === '/api/homepage-popup-image') {
         try {
-          const res = await db.query('SELECT login_popup_image_data, login_popup_image_mime FROM website_settings WHERE id = 1');
+          const res = await db.query('SELECT login_popup_image_data, login_popup_image_mime, dashboard_popup_image_data, dashboard_popup_image_mime FROM website_settings WHERE id = 1');
           const row = res.rows[0];
-          if (row && row.login_popup_image_data) {
+          const imgData = row?.login_popup_image_data || row?.dashboard_popup_image_data;
+          const imgMime = row?.login_popup_image_mime || row?.dashboard_popup_image_mime || 'image/png';
+          if (imgData) {
             response.writeHead(200, {
-              'content-type': row.login_popup_image_mime || 'image/png',
-              'content-length': row.login_popup_image_data.length,
+              'content-type': imgMime,
+              'content-length': imgData.length,
               'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
               'x-content-type-options': 'nosniff',
             });
-            response.end(row.login_popup_image_data);
+            response.end(imgData);
             statusCode = 200;
             return;
           }
@@ -4756,16 +4758,18 @@ async function handleRequest(request, response) {
 
       if (url.pathname === '/api/dashboard-popup-image') {
         try {
-          const res = await db.query('SELECT dashboard_popup_image_data, dashboard_popup_image_mime FROM website_settings WHERE id = 1');
+          const res = await db.query('SELECT dashboard_popup_image_data, dashboard_popup_image_mime, login_popup_image_data, login_popup_image_mime FROM website_settings WHERE id = 1');
           const row = res.rows[0];
-          if (row && row.dashboard_popup_image_data) {
+          const imgData = row?.dashboard_popup_image_data || row?.login_popup_image_data;
+          const imgMime = row?.dashboard_popup_image_mime || row?.login_popup_image_mime || 'image/png';
+          if (imgData) {
             response.writeHead(200, {
-              'content-type': row.dashboard_popup_image_mime || 'image/png',
-              'content-length': row.dashboard_popup_image_data.length,
+              'content-type': imgMime,
+              'content-length': imgData.length,
               'cache-control': 'public, max-age=3600, stale-while-revalidate=86400',
               'x-content-type-options': 'nosniff',
             });
-            response.end(row.dashboard_popup_image_data);
+            response.end(imgData);
             statusCode = 200;
             return;
           }
