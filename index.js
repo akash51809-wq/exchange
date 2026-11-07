@@ -2340,8 +2340,18 @@ async function logoutUser(request, response) {
   checkSameOrigin(request);
   const token = readSessionToken(request);
   const adminToken = readSessionToken(request, ADMIN_SESSION_COOKIE);
+  let sessionRole = null;
   if (token) {
     const tokenHash = crypto.createHash('sha256').update(token).digest();
+    try {
+      const uRes = await db.query(
+        `SELECT u.role FROM user_sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = $1 LIMIT 1`,
+        [tokenHash]
+      );
+      if (uRes.rowCount > 0) {
+        sessionRole = uRes.rows[0].role;
+      }
+    } catch (_) {}
     invalidateSessionCache('user:' + tokenHash.toString('hex'));
     invalidateSessionCache('admin:' + tokenHash.toString('hex'));
     await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]);
@@ -2358,7 +2368,8 @@ async function logoutUser(request, response) {
     });
     return;
   }
-  sendJson(response, 200, { message: 'Logged out successfully.' }, {
+  const redirectTarget = sessionRole === 'admin' ? '/admin/login' : '/';
+  sendJson(response, 200, { message: 'Logged out successfully.', redirect: redirectTarget }, {
     'set-cookie': [
       sessionCookie('', 0),
       adminSessionCookie('', 0),
@@ -4050,7 +4061,7 @@ const AUTH_CLIENT_JS = `
   document.querySelectorAll('a').forEach((anchor) => {
     if (anchor.textContent.trim().toLowerCase() === 'sign out') {
       anchor.id = 'logout-button';
-      anchor.href = '/login';
+      anchor.href = '/logout';
     }
   });
 
@@ -4058,10 +4069,10 @@ const AUTH_CLIENT_JS = `
   if (logoutButton) logoutButton.addEventListener('click', async (event) => {
     event.preventDefault();
     try {
-      await post('/api/auth/logout', {});
-      location.assign('/login');
+      const res = await post('/api/auth/logout', {});
+      location.assign(res?.redirect || '/');
     } catch (error) {
-      message(error.message, true);
+      location.assign('/');
     }
   });
 })();
@@ -4903,6 +4914,48 @@ async function handleRequest(request, response) {
         statusCode = 301;
         const query = url.search || '';
         response.writeHead(statusCode, { location: legacyRedirects[url.pathname] + query });
+        response.end();
+        return;
+      }
+
+      if (url.pathname === '/logout' || url.pathname === '/user/logout') {
+        const token = readSessionToken(request);
+        if (token) {
+          const tokenHash = crypto.createHash('sha256').update(token).digest();
+          invalidateSessionCache('user:' + tokenHash.toString('hex'));
+          invalidateSessionCache('admin:' + tokenHash.toString('hex'));
+          await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]).catch(() => {});
+          await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
+        }
+        statusCode = 302;
+        response.writeHead(statusCode, {
+          location: '/',
+          'set-cookie': [
+            sessionCookie('', 0),
+            adminSessionCookie('', 0),
+          ],
+        });
+        response.end();
+        return;
+      }
+
+      if (url.pathname === '/admin/logout') {
+        const token = readSessionToken(request);
+        if (token) {
+          const tokenHash = crypto.createHash('sha256').update(token).digest();
+          invalidateSessionCache('user:' + tokenHash.toString('hex'));
+          invalidateSessionCache('admin:' + tokenHash.toString('hex'));
+          await db.query('UPDATE user_sessions SET revoked_at = now() WHERE token_hash = $1 AND revoked_at IS NULL', [tokenHash]).catch(() => {});
+          await db.query('UPDATE user_login_logs SET logout_at = now() WHERE session_token_hash = $1 AND logout_at IS NULL', [tokenHash]).catch(() => {});
+        }
+        statusCode = 302;
+        response.writeHead(statusCode, {
+          location: '/admin/login',
+          'set-cookie': [
+            sessionCookie('', 0),
+            adminSessionCookie('', 0),
+          ],
+        });
         response.end();
         return;
       }
