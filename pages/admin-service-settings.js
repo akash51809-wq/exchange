@@ -3861,11 +3861,11 @@ module.exports = function createAdminServiceSettingsPage({
       );
       if (notifRes.rowCount > 0) {
         const notif = notifRes.rows[0];
-        if (notif.has_login_popup && notif.login_popup_enabled !== false) {
-          notif.login_popup_enabled = true;
+        if (notif.has_login_popup) {
+          notif.login_popup_enabled = notif.login_popup_enabled !== false;
         }
-        if (notif.has_dashboard_popup && notif.dashboard_popup_enabled !== false) {
-          notif.dashboard_popup_enabled = true;
+        if (notif.has_dashboard_popup) {
+          notif.dashboard_popup_enabled = notif.dashboard_popup_enabled !== false;
         }
         result.notifications = notif;
       }
@@ -4764,11 +4764,11 @@ module.exports = function createAdminServiceSettingsPage({
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_data BYTEA;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_mime TEXT;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_enabled BOOLEAN DEFAULT TRUE;
-      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT TRUE;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_data BYTEA;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_mime TEXT;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_link TEXT;
-      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT FALSE;
+      ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT TRUE;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_data BYTEA;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_mime TEXT;
       ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_link TEXT;
@@ -4779,9 +4779,9 @@ module.exports = function createAdminServiceSettingsPage({
     const newsTickerEnabled = input.newsTickerEnabled !== false;
     const dashboardBannerEnabled = input.dashboardBannerEnabled !== false;
     const loginSideImageEnabled = input.loginSideImageEnabled !== false;
-    const loginPopupEnabled = Boolean(input.loginPopupEnabled);
+    const loginPopupEnabled = input.reset_login_popup ? false : (input.loginPopupEnabled !== false);
     const loginPopupLink = String(input.loginPopupLink || '').trim();
-    const dashboardPopupEnabled = Boolean(input.dashboardPopupEnabled);
+    const dashboardPopupEnabled = input.reset_dashboard_popup ? false : (input.dashboardPopupEnabled !== false);
     const dashboardPopupFrequency = String(input.dashboardPopupFrequency || 'session').trim();
     const dashboardPopupLink = String(input.dashboardPopupLink || '').trim();
 

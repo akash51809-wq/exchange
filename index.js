@@ -1098,15 +1098,17 @@ const DATABASE_SCHEMA = `
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_data BYTEA;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_mime TEXT;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_side_image_enabled BOOLEAN DEFAULT TRUE;
-  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT FALSE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_enabled BOOLEAN DEFAULT TRUE;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_data BYTEA;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_image_mime TEXT;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS login_popup_link TEXT;
-  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT FALSE;
+  ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_enabled BOOLEAN DEFAULT TRUE;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_data BYTEA;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_image_mime TEXT;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_link TEXT;
   ALTER TABLE website_settings ADD COLUMN IF NOT EXISTS dashboard_popup_frequency TEXT DEFAULT 'session';
+  UPDATE website_settings SET login_popup_enabled = TRUE WHERE login_popup_image_data IS NOT NULL AND login_popup_enabled IS NOT TRUE;
+  UPDATE website_settings SET dashboard_popup_enabled = TRUE WHERE dashboard_popup_image_data IS NOT NULL AND dashboard_popup_enabled IS NOT TRUE;
 
   ALTER TABLE wallets ADD COLUMN IF NOT EXISTS lien_balance_minor BIGINT NOT NULL DEFAULT 0 CHECK (lien_balance_minor >= 0);
 

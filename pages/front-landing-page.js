@@ -26,7 +26,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           metaTitle: r.meta_title || 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
           metaDescription: r.meta_description || 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
           hasPopup: Boolean(r.login_popup_image_data || r.dashboard_popup_image_data),
-          popupEnabled: (r.login_popup_enabled !== false && r.login_popup_image_data) || (r.dashboard_popup_enabled !== false && r.dashboard_popup_image_data),
+          popupEnabled: Boolean((r.login_popup_image_data || r.dashboard_popup_image_data) && (r.login_popup_enabled === true || r.dashboard_popup_enabled === true || (r.login_popup_enabled !== false && r.dashboard_popup_enabled !== false))),
           popupLink: r.login_popup_link || r.dashboard_popup_link || '',
           popupSrc: r.login_popup_image_data ? '/api/login-popup-image' : '/api/dashboard-popup-image',
           popupUpdatedAt: r.updated_at ? String(r.updated_at) : String(Date.now()),
