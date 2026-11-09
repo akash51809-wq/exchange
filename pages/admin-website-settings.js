@@ -448,30 +448,142 @@ module.exports = function createAdminWebsiteSettingsPage({
         tabTitlePreview.textContent = this.value || 'Exchange';
       });
 
-      // Live Logo Preview on client-side selection
-      logoInput.addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (file) {
+      let compressedLogo = null;
+      let compressedFavicon = null;
+
+      function compressImageFile(file, options) {
+        options = options || {};
+        return new Promise((resolve, reject) => {
+          if (!file) return resolve(null);
+          const isSvg = file.type === 'image/svg+xml' || (file.name && file.name.toLowerCase().endsWith('.svg'));
+          const isIco = file.type === 'image/x-icon' || (file.name && file.name.toLowerCase().endsWith('.ico'));
+          if (isSvg || isIco) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const res = String(reader.result || '');
+              const b64 = res.split(',')[1] || '';
+              resolve({
+                base64: b64,
+                mime: file.type || (isSvg ? 'image/svg+xml' : 'image/x-icon'),
+                dataUrl: res,
+                originalSize: file.size,
+                compressedSize: file.size,
+                savingsPct: 0
+              });
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+            return;
+          }
+
+          const maxWidth = options.maxWidth || 800;
+          const maxHeight = options.maxHeight || 600;
+          const quality = typeof options.quality === 'number' ? options.quality : 0.85;
+          const keepPng = Boolean(options.keepPng);
+
           const reader = new FileReader();
-          reader.onload = function(evt) {
-            logoPreviewLight.src = evt.target.result;
-            logoPreviewDark.src = evt.target.result;
-            document.getElementById('reset_logo').checked = false;
+          reader.onerror = reject;
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onerror = () => {
+              const res = String(e.target.result || '');
+              resolve({
+                base64: res.split(',')[1] || '',
+                mime: file.type || 'image/png',
+                dataUrl: res,
+                originalSize: file.size,
+                compressedSize: file.size,
+                savingsPct: 0
+              });
+            };
+            img.onload = () => {
+              let w = img.width;
+              let h = img.height;
+              if (w > maxWidth || h > maxHeight) {
+                const ratio = Math.min(maxWidth / w, maxHeight / h);
+                w = Math.round(w * ratio);
+                h = Math.round(h * ratio);
+              }
+              const canvas = document.createElement('canvas');
+              canvas.width = w;
+              canvas.height = h;
+              const ctx = canvas.getContext('2d');
+              ctx.imageSmoothingEnabled = true;
+              ctx.imageSmoothingQuality = 'high';
+              ctx.drawImage(img, 0, 0, w, h);
+
+              const targetMime = (keepPng && file.type === 'image/png') ? 'image/png' : 'image/webp';
+              let dataUrl = '';
+              let finalMime = targetMime;
+              try {
+                dataUrl = canvas.toDataURL(targetMime, quality);
+                if (!dataUrl.startsWith('data:' + targetMime)) {
+                  dataUrl = canvas.toDataURL('image/jpeg', quality);
+                  finalMime = 'image/jpeg';
+                }
+              } catch (_) {
+                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                finalMime = 'image/jpeg';
+              }
+
+              const b64 = dataUrl.split(',')[1] || '';
+              const compSize = Math.round((b64.length * 3) / 4);
+              const savingsPct = file.size > compSize ? Math.round((1 - compSize / file.size) * 100) : 0;
+
+              resolve({
+                base64: b64,
+                mime: finalMime,
+                dataUrl: dataUrl,
+                originalSize: file.size,
+                compressedSize: compSize,
+                savingsPct: savingsPct,
+                width: w,
+                height: h
+              });
+            };
+            img.src = e.target.result;
           };
           reader.readAsDataURL(file);
+        });
+      }
+
+      // Live Logo Preview on client-side selection with auto-compression
+      logoInput.addEventListener('change', async function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          try {
+            compressedLogo = await compressImageFile(file, { maxWidth: 600, maxHeight: 200, quality: 0.9, keepPng: true });
+            logoPreviewLight.src = compressedLogo.dataUrl;
+            logoPreviewDark.src = compressedLogo.dataUrl;
+            document.getElementById('reset_logo').checked = false;
+          } catch (_) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              logoPreviewLight.src = evt.target.result;
+              logoPreviewDark.src = evt.target.result;
+              document.getElementById('reset_logo').checked = false;
+            };
+            reader.readAsDataURL(file);
+          }
         }
       });
 
-      // Live Favicon Preview
-      faviconInput.addEventListener('change', function(e) {
+      // Live Favicon Preview with auto-compression
+      faviconInput.addEventListener('change', async function(e) {
         const file = e.target.files[0];
         if (file) {
-          const reader = new FileReader();
-          reader.onload = function(evt) {
-            faviconPreviewImg.src = evt.target.result;
+          try {
+            compressedFavicon = await compressImageFile(file, { maxWidth: 128, maxHeight: 128, quality: 0.9 });
+            faviconPreviewImg.src = compressedFavicon.dataUrl;
             document.getElementById('reset_favicon').checked = false;
-          };
-          reader.readAsDataURL(file);
+          } catch (_) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              faviconPreviewImg.src = evt.target.result;
+              document.getElementById('reset_favicon').checked = false;
+            };
+            reader.readAsDataURL(file);
+          }
         }
       });
 
@@ -510,18 +622,20 @@ module.exports = function createAdminWebsiteSettingsPage({
             reset_favicon: formData.get('reset_favicon') === '1',
           };
 
-          // Read logo file if provided
+          // Read logo file if provided (with auto-compression)
           const logoFile = logoInput.files[0];
           if (logoFile) {
-            payload.logo_data_b64 = await readFileAsBase64(logoFile);
-            payload.logo_mime = logoFile.type || 'image/png';
+            const comp = compressedLogo || await compressImageFile(logoFile, { maxWidth: 600, maxHeight: 200, quality: 0.9, keepPng: true });
+            payload.logo_data_b64 = comp.base64;
+            payload.logo_mime = comp.mime;
           }
 
-          // Read favicon file if provided
+          // Read favicon file if provided (with auto-compression)
           const faviconFile = faviconInput.files[0];
           if (faviconFile) {
-            payload.favicon_data_b64 = await readFileAsBase64(faviconFile);
-            payload.favicon_mime = faviconFile.type || 'image/x-icon';
+            const comp = compressedFavicon || await compressImageFile(faviconFile, { maxWidth: 128, maxHeight: 128, quality: 0.9 });
+            payload.favicon_data_b64 = comp.base64;
+            payload.favicon_mime = comp.mime;
           }
 
           const res = await fetch('/api/admin/settings/website', {

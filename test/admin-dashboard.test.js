@@ -143,7 +143,30 @@ function createMockDb(customQueries = {}) {
         };
       }
 
-
+      // 10 & 11. Seller API requests
+      if (/FROM seller_api_integration_requests ir/i.test(s)) {
+        return {
+          rows: [
+            {
+              id: '11111111-1111-1111-1111-111111111111',
+              user_id: '22222222-2222-2222-2222-222222222222',
+              api_website: 'api.rechargepartner.com',
+              api_username: 'partner_api',
+              status: 'pending',
+              created_at: new Date().toISOString(),
+              user_name: 'Test Seller Partner',
+              user_username: 'seller99',
+            },
+          ],
+          rowCount: 1,
+        };
+      }
+      if (/FROM seller_api_integration_requests/i.test(s)) {
+        return {
+          rows: [{ count: 3, pending_count: 2, in_progress_count: 1 }],
+          rowCount: 1,
+        };
+      }
 
       return { rows: [], rowCount: 0 };
     },
@@ -210,6 +233,17 @@ test('Feature: Admin Dashboard - Renders 6 Pending metrics, Today Core Highlight
   assert.match(capturedHtml, /Pending Bank Approval/i);
   assert.match(capturedHtml, /\/admin\/payment\/bank-approval\?status=pending/);
   assert.match(capturedHtml, />6</); // count 6
+
+  // 7. Pending Seller API Request
+  assert.match(capturedHtml, /Seller API Request/i);
+  assert.match(capturedHtml, /\/admin\/seller-api\/requests/);
+  assert.match(capturedHtml, />3</); // count 3
+  assert.match(capturedHtml, /2 Pending/);
+
+  // Seller API Integration Requests Card Widget
+  assert.match(capturedHtml, /Seller API Integration Requests/i);
+  assert.match(capturedHtml, /Test Seller Partner/);
+  assert.match(capturedHtml, /api\.rechargepartner\.com/);
 
   // 3. Today Core Metrics
   // Today Transaction

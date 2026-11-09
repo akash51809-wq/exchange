@@ -279,25 +279,57 @@ function prepareAddBank() {
   document.getElementById('bankLogoPreview').style.display = 'none';
 }
 
-const logoFileInput = document.getElementById('bankLogoFile');
-if (logoFileInput) {
-  logoFileInput.addEventListener('change', () => {
-    const file = logoFileInput.files && logoFileInput.files[0];
-    if (!file) {
-      document.getElementById('bankLogoPreview').style.display = 'none';
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      alert('Bank logo must be under 2 MB.');
-      logoFileInput.value = '';
+let compressedBankLogo = null;
+
+function compressBankImage(file) {
+  return new Promise((resolve) => {
+    if (!file) return resolve(null);
+    if (file.type === 'image/svg+xml' || (file.name && file.name.endsWith('.svg'))) {
+      const r = new FileReader();
+      r.onload = () => resolve({ base64: String(r.result).split(',')[1] || '', mime: 'image/svg+xml', dataUrl: r.result });
+      r.readAsDataURL(file);
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
-      document.getElementById('bankLogoPreviewImg').src = reader.result;
-      document.getElementById('bankLogoPreview').style.display = 'block';
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onerror = () => {
+        resolve({ base64: String(e.target.result).split(',')[1] || '', mime: file.type || 'image/png', dataUrl: e.target.result });
+      };
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const max = 300;
+        if (w > max || h > max) {
+          const ratio = Math.min(max / w, max / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/png', 0.9);
+        resolve({ base64: dataUrl.split(',')[1] || '', mime: 'image/png', dataUrl: dataUrl });
+      };
+      img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+  });
+}
+
+const logoFileInput = document.getElementById('bankLogoFile');
+if (logoFileInput) {
+  logoFileInput.addEventListener('change', async () => {
+    const file = logoFileInput.files && logoFileInput.files[0];
+    if (!file) {
+      document.getElementById('bankLogoPreview').style.display = 'none';
+      compressedBankLogo = null;
+      return;
+    }
+    compressedBankLogo = await compressBankImage(file);
+    document.getElementById('bankLogoPreviewImg').src = compressedBankLogo.dataUrl;
+    document.getElementById('bankLogoPreview').style.display = 'block';
   });
 }
 
@@ -395,14 +427,9 @@ document.getElementById('bankForm').addEventListener('submit', async (e) => {
 
   const fileInput = document.getElementById('bankLogoFile');
   if (fileInput && fileInput.files && fileInput.files[0]) {
-    const file = fileInput.files[0];
-    payload.logo_mime = file.type || 'image/png';
-    payload.logo_data_b64 = await new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(String(r.result).split(',')[1]);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
+    const comp = compressedBankLogo || await compressBankImage(fileInput.files[0]);
+    payload.logo_mime = comp.mime;
+    payload.logo_data_b64 = comp.base64;
   }
 
   const url = bankId ? \`/api/admin/payment/banks/\${bankId}\` : '/api/admin/payment/banks';

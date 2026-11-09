@@ -3566,17 +3566,128 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
-    // Setup media file preview with drag-and-drop
-    function setupFilePreview(inputId, imgId, resetBoxId, dropAreaId) {
+    const compressedMediaCache = {};
+
+    function compressImageFile(file, options) {
+      options = options || {};
+      return new Promise((resolve, reject) => {
+        if (!file) return resolve(null);
+        const isSvg = file.type === 'image/svg+xml' || (file.name && file.name.toLowerCase().endsWith('.svg'));
+        const isIco = file.type === 'image/x-icon' || (file.name && file.name.toLowerCase().endsWith('.ico'));
+        if (isSvg || isIco) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = String(reader.result || '');
+            const b64 = res.split(',')[1] || '';
+            resolve({
+              base64: b64,
+              mime: file.type || (isSvg ? 'image/svg+xml' : 'image/x-icon'),
+              dataUrl: res,
+              originalSize: file.size,
+              compressedSize: file.size,
+              savingsPct: 0
+            });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+          return;
+        }
+
+        const maxWidth = options.maxWidth || 1600;
+        const maxHeight = options.maxHeight || 1200;
+        const quality = typeof options.quality === 'number' ? options.quality : 0.82;
+        const keepPng = Boolean(options.keepPng);
+
+        const reader = new FileReader();
+        reader.onerror = reject;
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onerror = () => {
+            const res = String(e.target.result || '');
+            resolve({
+              base64: res.split(',')[1] || '',
+              mime: file.type || 'image/png',
+              dataUrl: res,
+              originalSize: file.size,
+              compressedSize: file.size,
+              savingsPct: 0
+            });
+          };
+          img.onload = () => {
+            let w = img.width;
+            let h = img.height;
+            if (w > maxWidth || h > maxHeight) {
+              const ratio = Math.min(maxWidth / w, maxHeight / h);
+              w = Math.round(w * ratio);
+              h = Math.round(h * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, w, h);
+
+            const targetMime = (keepPng && file.type === 'image/png') ? 'image/png' : 'image/webp';
+            let dataUrl = '';
+            let finalMime = targetMime;
+            try {
+              dataUrl = canvas.toDataURL(targetMime, quality);
+              if (!dataUrl.startsWith('data:' + targetMime)) {
+                dataUrl = canvas.toDataURL('image/jpeg', quality);
+                finalMime = 'image/jpeg';
+              }
+            } catch (_) {
+              dataUrl = canvas.toDataURL('image/jpeg', quality);
+              finalMime = 'image/jpeg';
+            }
+
+            const b64 = dataUrl.split(',')[1] || '';
+            const compSize = Math.round((b64.length * 3) / 4);
+            const savingsPct = file.size > compSize ? Math.round((1 - compSize / file.size) * 100) : 0;
+
+            resolve({
+              base64: b64,
+              mime: finalMime,
+              dataUrl: dataUrl,
+              originalSize: file.size,
+              compressedSize: compSize,
+              savingsPct: savingsPct,
+              width: w,
+              height: h
+            });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Setup media file preview with drag-and-drop & auto-compression
+    function setupFilePreview(inputId, imgId, resetBoxId, dropAreaId, compressOpts) {
       const input = document.getElementById(inputId);
       const img = document.getElementById(imgId);
       const dropArea = dropAreaId ? document.getElementById(dropAreaId) : null;
 
-      function handleFile(file) {
+      async function handleFile(file) {
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          if (img) img.src = evt.target.result;
+        let badgeEl = document.getElementById(inputId + '_opt_badge');
+        if (!badgeEl && dropArea) {
+          badgeEl = document.createElement('div');
+          badgeEl.id = inputId + '_opt_badge';
+          badgeEl.className = 'mt-2 p-2 rounded small text-info bg-light border';
+          dropArea.parentNode.insertBefore(badgeEl, dropArea.nextSibling);
+        }
+        if (badgeEl) {
+          badgeEl.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Optimizing and reducing image for fast display...';
+          badgeEl.className = 'mt-2 p-2 rounded small text-info bg-light border';
+        }
+
+        try {
+          const comp = await compressImageFile(file, compressOpts);
+          compressedMediaCache[inputId] = comp;
+          if (img) img.src = comp.dataUrl;
           if (resetBoxId) {
             const resetBox = document.getElementById(resetBoxId);
             if (resetBox) resetBox.checked = false;
@@ -3593,8 +3704,21 @@ module.exports = function createAdminServiceSettingsPage({
             const lbl = document.getElementById('dashboardPopupEnabledLabel');
             if (lbl) lbl.textContent = 'Popup Enabled';
           }
-        };
-        reader.readAsDataURL(file);
+
+          if (badgeEl) {
+            const origKb = (comp.originalSize / 1024).toFixed(0);
+            const compKb = (comp.compressedSize / 1024).toFixed(0);
+            badgeEl.className = 'mt-2 p-2 rounded small text-success bg-light border border-success';
+            badgeEl.innerHTML = '<i class="fa fa-bolt mr-1"></i> <b>Auto-Reduced for Fast Display:</b> ' + origKb + ' KB &rarr; <b>' + compKb + ' KB</b> (' + comp.savingsPct + '% reduction, ' + (comp.width || '') + 'x' + (comp.height || '') + 'px ' + (comp.mime.split('/')[1] || '').toUpperCase() + ')';
+          }
+        } catch (err) {
+          console.error('Compression error:', err);
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            if (img) img.src = evt.target.result;
+          };
+          reader.readAsDataURL(file);
+        }
       }
 
       if (input) {
@@ -3637,10 +3761,10 @@ module.exports = function createAdminServiceSettingsPage({
       }
     }
 
-    setupFilePreview('dashboard_banner_file', 'banner-preview-img', 'reset_dashboard_banner', 'banner-drop-area');
-    setupFilePreview('login_side_image_file', 'login-side-preview-img', 'reset_login_side_image', 'login-side-drop-area');
-    setupFilePreview('login_popup_image_file', 'login-popup-preview-img', 'reset_login_popup', 'login-popup-drop-area');
-    setupFilePreview('dashboard_popup_image_file', 'dashboard-popup-preview-img', 'reset_dashboard_popup', 'dashboard-popup-drop-area');
+    setupFilePreview('dashboard_banner_file', 'banner-preview-img', 'reset_dashboard_banner', 'banner-drop-area', { maxWidth: 1920, maxHeight: 600, quality: 0.85 });
+    setupFilePreview('login_side_image_file', 'login-side-preview-img', 'reset_login_side_image', 'login-side-drop-area', { maxWidth: 1080, maxHeight: 1600, quality: 0.85 });
+    setupFilePreview('login_popup_image_file', 'login-popup-preview-img', 'reset_login_popup', 'login-popup-drop-area', { maxWidth: 800, maxHeight: 900, quality: 0.85 });
+    setupFilePreview('dashboard_popup_image_file', 'dashboard-popup-preview-img', 'reset_dashboard_popup', 'dashboard-popup-drop-area', { maxWidth: 800, maxHeight: 900, quality: 0.85 });
 
     // Save Notifications Form
     const notificationForm = document.getElementById('notificationForm');
@@ -3673,27 +3797,31 @@ module.exports = function createAdminServiceSettingsPage({
 
           const bannerFile = document.getElementById('dashboard_banner_file')?.files[0];
           if (bannerFile) {
-            payload.dashboard_banner_data_b64 = await readFileAsBase64(bannerFile);
-            payload.dashboard_banner_mime = bannerFile.type || 'image/png';
+            const comp = compressedMediaCache['dashboard_banner_file'] || await compressImageFile(bannerFile, { maxWidth: 1920, maxHeight: 600, quality: 0.85 });
+            payload.dashboard_banner_data_b64 = comp.base64;
+            payload.dashboard_banner_mime = comp.mime;
           }
 
           const loginSideFile = document.getElementById('login_side_image_file')?.files[0];
           if (loginSideFile) {
-            payload.login_side_image_data_b64 = await readFileAsBase64(loginSideFile);
-            payload.login_side_image_mime = loginSideFile.type || 'image/png';
+            const comp = compressedMediaCache['login_side_image_file'] || await compressImageFile(loginSideFile, { maxWidth: 1080, maxHeight: 1600, quality: 0.85 });
+            payload.login_side_image_data_b64 = comp.base64;
+            payload.login_side_image_mime = comp.mime;
           }
 
           const loginPopupFile = document.getElementById('login_popup_image_file')?.files[0];
           if (loginPopupFile) {
-            payload.login_popup_image_data_b64 = await readFileAsBase64(loginPopupFile);
-            payload.login_popup_image_mime = loginPopupFile.type || 'image/png';
+            const comp = compressedMediaCache['login_popup_image_file'] || await compressImageFile(loginPopupFile, { maxWidth: 800, maxHeight: 900, quality: 0.85 });
+            payload.login_popup_image_data_b64 = comp.base64;
+            payload.login_popup_image_mime = comp.mime;
             payload.loginPopupEnabled = true;
           }
 
           const dashPopupFile = document.getElementById('dashboard_popup_image_file')?.files[0];
           if (dashPopupFile) {
-            payload.dashboard_popup_image_data_b64 = await readFileAsBase64(dashPopupFile);
-            payload.dashboard_popup_image_mime = dashPopupFile.type || 'image/png';
+            const comp = compressedMediaCache['dashboard_popup_image_file'] || await compressImageFile(dashPopupFile, { maxWidth: 800, maxHeight: 900, quality: 0.85 });
+            payload.dashboard_popup_image_data_b64 = comp.base64;
+            payload.dashboard_popup_image_mime = comp.mime;
             payload.dashboardPopupEnabled = true;
           }
 
@@ -3721,6 +3849,9 @@ module.exports = function createAdminServiceSettingsPage({
           ['dashboard_banner_file', 'login_side_image_file', 'login_popup_image_file', 'dashboard_popup_image_file'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
+            delete compressedMediaCache[id];
+            const badgeEl = document.getElementById(id + '_opt_badge');
+            if (badgeEl) badgeEl.remove();
           });
 
           // Reload settings after short delay to refresh status badges

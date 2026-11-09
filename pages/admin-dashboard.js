@@ -61,6 +61,8 @@ module.exports = function createAdminDashboardPage({
       todayTxnsRes,
       todayRedeemRes,
       operatorSummaryRes,
+      pendingSellerApiRes,
+      recentSellerApiRes,
     ] = await Promise.all([
       // 1. Pending Recharge
       db.query(`
@@ -179,6 +181,28 @@ module.exports = function createAdminDashboardPage({
         GROUP BY 1, 2
         ORDER BY total_val DESC
       `, [startOfDay, endOfDay]).catch(() => ({ rows: [] })),
+
+      // 10. Pending & In Progress Seller API Requests
+      db.query(`
+        SELECT
+          COUNT(*)::int AS count,
+          COUNT(*) FILTER (WHERE LOWER(status) = 'pending')::int AS pending_count,
+          COUNT(*) FILTER (WHERE LOWER(status) = 'in_progress')::int AS in_progress_count
+        FROM seller_api_integration_requests
+        WHERE LOWER(status) IN ('pending', 'in_progress')
+      `).catch(() => ({ rows: [{ count: 0, pending_count: 0, in_progress_count: 0 }] })),
+
+      // 11. Recent Seller API Requests for Dashboard Widget
+      db.query(`
+        SELECT ir.id, ir.user_id, ir.api_website, ir.api_username, ir.status, ir.created_at,
+               u.name AS user_name, u.username AS user_username
+        FROM seller_api_integration_requests ir
+        JOIN users u ON u.id = ir.user_id
+        ORDER BY 
+          CASE WHEN ir.status = 'pending' THEN 0 WHEN ir.status = 'in_progress' THEN 1 ELSE 2 END,
+          ir.created_at DESC
+        LIMIT 5
+      `).catch(() => ({ rows: [] })),
     ]);
 
     // Data extraction
@@ -188,6 +212,8 @@ module.exports = function createAdminDashboardPage({
     const pPayout = pendingPayoutRes.rows[0] || { count: 0, amount_minor: 0 };
     const pKyc = pendingKycRes.rows[0] || { count: 0 };
     const pBank = pendingBankRes.rows[0] || { count: 0 };
+    const pSellerApi = (pendingSellerApiRes && pendingSellerApiRes.rows[0]) || { count: 0, pending_count: 0, in_progress_count: 0 };
+    const recentSellerApiRows = (recentSellerApiRes && recentSellerApiRes.rows) || [];
 
     const todayTxn = todayTxnsRes.rows[0] || {};
     const totalTxns = Number(todayTxn.total_txns || 0);
@@ -294,6 +320,40 @@ module.exports = function createAdminDashboardPage({
     const grandAvgTicket = grandOpTotalCount > 0 ? (Number(grandOpTotalValMinor) / (grandOpTotalCount * 100)).toFixed(2) : '0.00';
     const grandMarginPct = grandOpSuccessValMinor > 0n ? (Number(grandOpMarginMinor * 10000n / grandOpSuccessValMinor) / 100).toFixed(2) : '0.00';
 
+    const recentSellerApiHtml = recentSellerApiRows.length > 0
+      ? recentSellerApiRows.map((r, i) => {
+        let badge = '<span class="badge badge-warning text-dark px-2 py-1"><i class="fa fa-clock-o mr-1"></i> Pending</span>';
+        if (r.status === 'in_progress') {
+          badge = '<span class="badge badge-info px-2 py-1"><i class="fa fa-spinner fa-spin mr-1"></i> In Progress</span>';
+        } else if (r.status === 'approved') {
+          badge = '<span class="badge badge-success px-2 py-1"><i class="fa fa-check-circle mr-1"></i> Approved</span>';
+        } else if (r.status === 'rejected') {
+          badge = '<span class="badge badge-danger px-2 py-1"><i class="fa fa-times-circle mr-1"></i> Rejected</span>';
+        }
+        const createdStr = new Date(r.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+        return `<tr>
+          <td class="text-center font-weight-bold text-muted">${i + 1}</td>
+          <td>
+            <div class="font-weight-bold text-dark">${escapeHtml(r.user_name || 'Client User')}</div>
+            <div class="text-muted small">${escapeHtml(r.user_username)}</div>
+          </td>
+          <td>
+            <span class="font-monospace text-primary text-truncate d-inline-block font-weight-bold" style="max-width:220px;" title="${escapeHtml(r.api_website)}">
+              ${escapeHtml(r.api_website)}
+            </span>
+            ${r.api_username ? `<div class="text-muted small">Username: ${escapeHtml(r.api_username)}</div>` : ''}
+          </td>
+          <td>${badge}</td>
+          <td class="small text-muted text-nowrap"><i class="fa fa-clock-o mr-1"></i>${escapeHtml(createdStr)}</td>
+          <td class="text-center">
+            <a href="/admin/seller-api/requests" class="btn btn-xs btn-outline-primary py-0 px-2" title="Process Integration Request">
+              Review &rarr;
+            </a>
+          </td>
+        </tr>`;
+      }).join('')
+      : '<tr><td colspan="6" class="text-center py-3 text-muted"><i class="fa fa-plug fa-lg mr-2 text-muted"></i>No active seller API integration requests.</td></tr>';
+
     const rawHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -387,10 +447,10 @@ module.exports = function createAdminDashboardPage({
       color: #0f172a;
     }
 
-    /* Pending Row Grid - 6 columns compact */
+    /* Pending Row Grid - 7 columns compact */
     .pending-grid {
       display: grid;
-      grid-template-columns: repeat(6, 1fr);
+      grid-template-columns: repeat(7, 1fr);
       gap: 8px;
       margin-bottom: 8px;
     }
@@ -596,7 +656,10 @@ module.exports = function createAdminDashboardPage({
     }
 
     /* Responsiveness */
-    @media (max-width: 1200px) {
+    @media (max-width: 1400px) {
+      .pending-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 992px) {
       .pending-grid { grid-template-columns: repeat(3, 1fr); }
       .core-grid { grid-template-columns: 1fr; }
       .operator-table-container { max-height: 400px; }
@@ -702,6 +765,18 @@ module.exports = function createAdminDashboardPage({
                 <span class="pending-tile-sub">Bank Approvals</span>
               </div>
             </a>
+
+            <!-- 7. Pending Seller API Requests -->
+            <a href="/admin/seller-api/requests" class="pending-tile" style="border-top: 3px solid #ec4899;" title="View Seller API Integration Requests">
+              <div class="pending-tile-top">
+                <span class="pending-tile-title">Seller API Request</span>
+                <span class="pending-tile-icon" style="background:#fce7f3; color:#db2777;"><i class="fa fa-plug"></i></span>
+              </div>
+              <div class="pending-tile-bottom">
+                <span class="pending-count-badge ${pSellerApi.count > 0 ? 'text-danger font-weight-bold' : 'text-dark'}">${pSellerApi.count}</span>
+                <span class="pending-tile-sub">${pSellerApi.pending_count > 0 ? pSellerApi.pending_count + ' Pending' : (pSellerApi.in_progress_count > 0 ? pSellerApi.in_progress_count + ' In Progress' : 'Seller API')}</span>
+              </div>
+            </a>
           </div>
 
           <!-- 2. TODAY CORE METRICS ROW (Today Transaction, Today Purchase, Today Redeem) -->
@@ -771,7 +846,42 @@ module.exports = function createAdminDashboardPage({
             </div>
           </div>
 
-          <!-- 3. TODAY OPERATOR-WISE SUMMARY & % WISE -->
+          <!-- 3. SELLER API INTEGRATION REQUESTS -->
+          <div class="operator-card mb-3" style="border-top: 3px solid #ec4899;">
+            <div class="operator-header">
+              <h3 class="operator-title" style="color:#db2777;">
+                <i class="fa fa-plug mr-1"></i> Seller API Integration Requests
+                <span class="badge badge-light border ml-2 text-dark font-weight-normal" style="font-size:11px;">
+                  <b>${pSellerApi.count}</b> active (${pSellerApi.pending_count} pending, ${pSellerApi.in_progress_count} in-progress)
+                </span>
+              </h3>
+              <div class="d-flex align-items-center gap-2">
+                <a href="/admin/seller-api/requests" class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size:11px;">
+                  Manage All Seller API Requests &rarr;
+                </a>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-sm table-hover table-compact table-bordered mb-0">
+                <thead>
+                  <tr style="background:#f8fafc;">
+                    <th class="text-center" style="width:36px;">#</th>
+                    <th>User / Client</th>
+                    <th>API Website / Username</th>
+                    <th>Status</th>
+                    <th>Requested At</th>
+                    <th class="text-center" style="width:100px;">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recentSellerApiHtml}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 4. TODAY OPERATOR-WISE SUMMARY & % WISE -->
           <div class="operator-card">
             <div class="operator-header">
               <h3 class="operator-title">
