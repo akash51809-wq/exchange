@@ -2830,9 +2830,11 @@ module.exports = function createAdminServiceSettingsPage({
       }
     });
 
-    // Generate Secret Key
+    // Generate Secret Key using cryptographically secure random values
     document.getElementById('btnGenSecretKey')?.addEventListener('click', () => {
-      const randomSecret = 'sec_' + Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 8);
+      const arr = new Uint8Array(16);
+      (window.crypto || window.msCrypto).getRandomValues(arr);
+      const randomSecret = 'sec_' + Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
       const secretInput = document.getElementById('incomingSmsSecretKey');
       if (secretInput) secretInput.value = randomSecret;
     });

@@ -907,6 +907,11 @@ const DATABASE_SCHEMA = `
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_last_sent_at TIMESTAMPTZ;
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_response TEXT;
 
+  CREATE INDEX IF NOT EXISTS idx_recharge_orders_seller_created ON recharge_orders (seller_user_id, created_at DESC) WHERE seller_user_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_recharge_orders_operator_created ON recharge_orders (operator_id, created_at DESC) WHERE operator_id IS NOT NULL;
+  CREATE INDEX IF NOT EXISTS idx_recharge_orders_status ON recharge_orders (status, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_recharge_orders_mobile ON recharge_orders (mobile_number) WHERE mobile_number IS NOT NULL;
+
   CREATE TABLE IF NOT EXISTS recharge_disputes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     order_id UUID NOT NULL REFERENCES recharge_orders(id) ON DELETE CASCADE,
@@ -6849,7 +6854,7 @@ async function handleRequest(request, response) {
         const admin = await getSession(request);
         if (!admin) throw httpError('login required', 401);
         if (admin.role !== 'admin') throw httpError('admin access required', 403);
-        const input = await readJson(request, 35_000_000);
+        const input = await readJson(request, 12_000_000);
         await handleSaveNotificationSettings(request, response, input);
         statusCode = response.statusCode || 200;
         return;
@@ -8736,7 +8741,7 @@ async function handleRequest(request, response) {
         const session = await getSession(request);
         if (!session) throw httpError('login required', 401);
 
-        const input = await readJson(request, 35_000_000);
+        const input = await readJson(request, 12_000_000);
         const aadharNumber = String(input.aadharNumber || input.aadhar_number || '').replace(/\s+/g, '').trim();
         const panNumber = String(input.panNumber || input.pan_number || '').replace(/\s+/g, '').trim().toUpperCase();
         const gstNumber = String(input.gstNumber || input.gst_number || '').replace(/\s+/g, '').trim().toUpperCase();
@@ -9083,3 +9088,12 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     setTimeout(() => server.closeAllConnections(), 5_000).unref();
   });
 }
+
+// Global exception and rejection handlers to prevent process crash
+process.on('uncaughtException', (error) => {
+  console.error('[CRITICAL] Uncaught exception in process:', error && (error.stack || error.message || error));
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[CRITICAL] Unhandled promise rejection:', reason && (reason.stack || reason.message || reason));
+});
