@@ -4652,8 +4652,12 @@ async function handleRequest(request, response) {
         statusCode = 200;
         return;
       }
-      if (url.pathname === '/' || url.pathname === '/home') {
-        await sendFrontLandingPage(request, response);
+      if (['/', '/home', '/about', '/about-us', '/contact', '/contact-us', '/terms', '/terms-and-conditions'].includes(url.pathname)) {
+        let activePage = 'home';
+        if (url.pathname.startsWith('/about')) activePage = 'about';
+        else if (url.pathname.startsWith('/contact')) activePage = 'contact';
+        else if (url.pathname.startsWith('/terms')) activePage = 'terms';
+        await sendFrontLandingPage(request, response, activePage);
         statusCode = 200;
         return;
       }
