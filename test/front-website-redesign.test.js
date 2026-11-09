@@ -97,7 +97,7 @@ describe('Front Website Redesign - Saffron & Navy Theme, Bold Fonts & Subpages',
       writeHead() {},
       end(html) { aboutHtml = html.toString('utf8'); },
     }, 'about');
-    assert.match(aboutHtml, /const initialPage = 'about';/i);
+    assert.match(aboutHtml, /(?:const|var)\s+initialPage\s*=\s*'about';/i);
 
     // Test Contact initial view
     let contactHtml = '';
@@ -105,7 +105,7 @@ describe('Front Website Redesign - Saffron & Navy Theme, Bold Fonts & Subpages',
       writeHead() {},
       end(html) { contactHtml = html.toString('utf8'); },
     }, 'contact');
-    assert.match(contactHtml, /const initialPage = 'contact';/i);
+    assert.match(contactHtml, /(?:const|var)\s+initialPage\s*=\s*'contact';/i);
 
     // Test Terms initial view
     let termsHtml = '';
@@ -113,7 +113,7 @@ describe('Front Website Redesign - Saffron & Navy Theme, Bold Fonts & Subpages',
       writeHead() {},
       end(html) { termsHtml = html.toString('utf8'); },
     }, 'terms');
-    assert.match(termsHtml, /const initialPage = 'terms';/i);
+    assert.match(termsHtml, /(?:const|var)\s+initialPage\s*=\s*'terms';/i);
   });
 
 });

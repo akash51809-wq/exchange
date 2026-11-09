@@ -84,6 +84,8 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="/assets/plugins/web-fonts/icons.css">
+  <link rel="stylesheet" href="/assets/plugins/web-fonts/font-awesome/font-awesome.min.css">
   <style>
     :root {
       /* Royal Indian Saffron & Matching Navy Palette */
@@ -218,7 +220,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       position: sticky;
       top: 0;
       z-index: 1000;
-      background: rgba(255, 255, 255, 0.94);
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border-light);
@@ -311,7 +313,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     }
     .nav-link.active {
       background: linear-gradient(135deg, var(--saffron-main), var(--saffron-dark));
-      color: #FFFFFF;
+      color: #FFFFFF !important;
       box-shadow: 0 4px 16px var(--saffron-glow);
     }
 
@@ -390,20 +392,20 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       padding: 6px;
     }
 
-    /* Main Container & View Sections */
+    /* Main Container & View Sections (Visible by default via server active-view) */
     .main-wrapper {
       min-height: 80vh;
+      display: block;
+      width: 100%;
     }
     .page-view {
       display: none;
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity 0.35s ease, transform 0.35s ease;
+      width: 100%;
     }
     .page-view.active-view {
-      display: block;
-      opacity: 1;
-      transform: translateY(0);
+      display: block !important;
+      opacity: 1 !important;
+      visibility: visible !important;
     }
 
     /* ========================================================
@@ -1085,6 +1087,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       color: #94A3B8;
       padding: 70px 0 30px;
       border-top: 4px solid var(--saffron-main);
+      margin-top: 50px;
     }
     .footer-container {
       max-width: 1300px;
@@ -1313,7 +1316,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
   <!-- Main Navigation Header -->
   <header class="navbar" id="mainNavbar">
     <div class="nav-container">
-      <a href="/" class="nav-brand" onclick="navigatePage('home', event)">
+      <a href="/" class="nav-brand" onclick="window.navigatePage('home', event)">
         <img src="/api/logo" alt="${escapeHtml(s.websiteName)}" class="nav-logo-img" onerror="this.style.display='none'; document.getElementById('logoFallbackBadge').style.display='flex';">
         <div class="nav-logo-badge" id="logoFallbackBadge" style="display:none;"><i class="fa fa-bolt"></i></div>
         <div class="nav-brand-text">
@@ -1325,22 +1328,22 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       <!-- Desktop Navigation Menu Tabs -->
       <ul class="nav-menu" id="navMenu">
         <li class="nav-item">
-          <a class="nav-link" id="nav-home" onclick="navigatePage('home', event)">
+          <a href="/" class="nav-link ${validInitial === 'home' ? 'active' : ''}" id="nav-home" onclick="window.navigatePage('home', event)">
             <i class="fa fa-home"></i> Home
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="nav-about" onclick="navigatePage('about', event)">
+          <a href="/about" class="nav-link ${validInitial === 'about' ? 'active' : ''}" id="nav-about" onclick="window.navigatePage('about', event)">
             <i class="fa fa-info-circle"></i> About Us
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="nav-contact" onclick="navigatePage('contact', event)">
+          <a href="/contact" class="nav-link ${validInitial === 'contact' ? 'active' : ''}" id="nav-contact" onclick="window.navigatePage('contact', event)">
             <i class="fa fa-envelope"></i> Contact Us
           </a>
         </li>
         <li class="nav-item">
-          <a class="nav-link" id="nav-terms" onclick="navigatePage('terms', event)">
+          <a href="/terms" class="nav-link ${validInitial === 'terms' ? 'active' : ''}" id="nav-terms" onclick="window.navigatePage('terms', event)">
             <i class="fa fa-shield"></i> Terms & Condition
           </a>
         </li>
@@ -1351,27 +1354,27 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         <a href="/user/login" class="btn btn-saffron btn-sm">
           <i class="fa fa-user"></i> Login <i class="fa fa-arrow-right"></i>
         </a>
-        <button class="mobile-toggle" id="mobileToggle" onclick="toggleMobileMenu()" aria-label="Toggle Menu">
+        <button class="mobile-toggle" id="mobileToggle" onclick="window.toggleMobileMenu()" aria-label="Toggle Menu">
           <i class="fa fa-bars"></i>
         </button>
       </div>
     </div>
   </header>
 
-  <!-- Main Page Views Container -->
+  <!-- Main Page Views Container (Pre-rendered active-view to eliminate blank white screen) -->
   <main class="main-wrapper">
 
     <!-- ========================================================
          VIEW 1: HOME PAGE
          ======================================================== -->
-    <div id="view-home" class="page-view">
+    <div id="view-home" class="page-view ${validInitial === 'home' ? 'active-view' : ''}">
       
       <!-- Hero Section -->
       <section class="hero-section">
         <div class="hero-container">
           <div class="hero-left">
             <div class="hero-pill">
-              <i class="fa fa-bolt text-saffron"></i> INDIA'S PREMIER B2B LAPU RECHARGE EXCHANGE
+              <i class="fa fa-bolt"></i> INDIA'S PREMIER B2B LAPU RECHARGE EXCHANGE
             </div>
             <h1 class="hero-title">
               Next-Gen Multi-Recharge & <br>
@@ -1571,7 +1574,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
             <div class="calc-left">
               <div class="calc-input-group">
                 <label class="calc-label" for="calcOperatorSelect">Select Telecom Operator</label>
-                <select class="calc-select" id="calcOperatorSelect" onchange="calculateMargin()">
+                <select class="calc-select" id="calcOperatorSelect" onchange="window.calculateMargin()">
                   <option value="4.2">Airtel Prepaid (Avg. 4.2%)</option>
                   <option value="4.0" selected>Jio Telecom (Avg. 4.0%)</option>
                   <option value="4.8">Vi Vodafone Idea (Avg. 4.8%)</option>
@@ -1582,10 +1585,10 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
               </div>
               <div class="calc-input-group">
                 <label class="calc-label" for="calcAmountInput">Daily Recharge Turnover (₹)</label>
-                <input type="number" class="calc-input" id="calcAmountInput" value="50000" min="500" step="500" oninput="calculateMargin()">
+                <input type="number" class="calc-input" id="calcAmountInput" value="50000" min="500" step="500" oninput="window.calculateMargin()">
               </div>
               <div style="font-size:13px; color:var(--text-muted); font-weight:600;">
-                <i class="fa fa-info-circle text-saffron"></i> Margins are automatically credited to your wallet in real-time per transaction.
+                <i class="fa fa-info-circle" style="color:var(--saffron-main);"></i> Margins are automatically credited to your wallet in real-time per transaction.
               </div>
             </div>
             <div class="calc-result-box">
@@ -1650,7 +1653,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     <!-- ========================================================
          VIEW 2: ABOUT US PAGE
          ======================================================== -->
-    <div id="view-about" class="page-view">
+    <div id="view-about" class="page-view ${validInitial === 'about' ? 'active-view' : ''}">
       <div class="page-hero">
         <div class="section-container">
           <h1 class="page-hero-title">About ${escapeHtml(s.websiteName)}</h1>
@@ -1676,7 +1679,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
             </div>
             <div>
               <div class="hero-card" style="background:#FFFFFF; color:var(--text-body); border:1px solid var(--border-card);">
-                <h3 style="color:var(--navy-dark); font-size:22px; margin-bottom:15px;"><i class="fa fa-bullseye text-saffron"></i> Our Core Pillars</h3>
+                <h3 style="color:var(--navy-dark); font-size:22px; margin-bottom:15px;"><i class="fa fa-bullseye" style="color:var(--saffron-main);"></i> Our Core Pillars</h3>
                 <div style="display:flex; flex-direction:column; gap:16px;">
                   <div style="display:flex; gap:12px; align-items:flex-start;">
                     <div style="background:#FFF4EC; color:var(--saffron-main); width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0;"><i class="fa fa-check"></i></div>
@@ -1725,7 +1728,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     <!-- ========================================================
          VIEW 3: CONTACT US PAGE
          ======================================================== -->
-    <div id="view-contact" class="page-view">
+    <div id="view-contact" class="page-view ${validInitial === 'contact' ? 'active-view' : ''}">
       <div class="page-hero">
         <div class="section-container">
           <h1 class="page-hero-title">Contact & Help Support</h1>
@@ -1787,7 +1790,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
               <h3 style="font-size:22px; color:var(--navy-dark); margin-bottom:10px;">Send Us a Message</h3>
               <p style="font-size:14px; color:var(--text-muted); margin-bottom:24px;">Fill in your details below and our operations desk will get back to you immediately.</p>
               
-              <form id="contactInquiryForm" onsubmit="handleContactSubmit(event)">
+              <form id="contactInquiryForm" onsubmit="window.handleContactSubmit(event)">
                 <div class="form-group">
                   <label class="form-label" for="contactName">Your Full Name / Business Name *</label>
                   <input type="text" class="form-control" id="contactName" required placeholder="e.g. Ramesh Kumar (Easy Recharge)">
@@ -1832,7 +1835,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     <!-- ========================================================
          VIEW 4: TERMS & CONDITIONS PAGE
          ======================================================== -->
-    <div id="view-terms" class="page-view">
+    <div id="view-terms" class="page-view ${validInitial === 'terms' ? 'active-view' : ''}">
       <div class="page-hero">
         <div class="section-container">
           <h1 class="page-hero-title">Terms & Conditions</h1>
@@ -1922,10 +1925,10 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         <div>
           <h4 class="footer-title">Navigation</h4>
           <ul class="footer-links">
-            <li><a class="footer-link-item" onclick="navigatePage('home', event)"><i class="fa fa-angle-right"></i> Home</a></li>
-            <li><a class="footer-link-item" onclick="navigatePage('about', event)"><i class="fa fa-angle-right"></i> About Us</a></li>
-            <li><a class="footer-link-item" onclick="navigatePage('contact', event)"><i class="fa fa-angle-right"></i> Contact Us</a></li>
-            <li><a class="footer-link-item" onclick="navigatePage('terms', event)"><i class="fa fa-angle-right"></i> Terms & Condition</a></li>
+            <li><a class="footer-link-item" onclick="window.navigatePage('home', event)"><i class="fa fa-angle-right"></i> Home</a></li>
+            <li><a class="footer-link-item" onclick="window.navigatePage('about', event)"><i class="fa fa-angle-right"></i> About Us</a></li>
+            <li><a class="footer-link-item" onclick="window.navigatePage('contact', event)"><i class="fa fa-angle-right"></i> Contact Us</a></li>
+            <li><a class="footer-link-item" onclick="window.navigatePage('terms', event)"><i class="fa fa-angle-right"></i> Terms & Condition</a></li>
             <li><a href="/user/login" class="footer-link-item"><i class="fa fa-angle-right"></i> User Login</a></li>
           </ul>
         </div>
@@ -1933,27 +1936,27 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         <div>
           <h4 class="footer-title">B2B Solutions</h4>
           <ul class="footer-links">
-            <li class="footer-link-item"><i class="fa fa-check text-saffron"></i> Multi-Recharge API</li>
-            <li class="footer-link-item"><i class="fa fa-check text-saffron"></i> LAPU Stock Swapping</li>
-            <li class="footer-link-item"><i class="fa fa-check text-saffron"></i> Dual Wallet Accounting</li>
-            <li class="footer-link-item"><i class="fa fa-check text-saffron"></i> Real-time Ledger</li>
-            <li class="footer-link-item"><i class="fa fa-check text-saffron"></i> Auto SMS Reconciliation</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Multi-Recharge API</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> LAPU Stock Swapping</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Dual Wallet Accounting</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Real-time Ledger</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Auto SMS Reconciliation</li>
           </ul>
         </div>
 
         <div>
           <h4 class="footer-title">Contact Office</h4>
           <p style="font-size:14px; line-height:1.6; margin-bottom:12px; color:#CBD5E1;">
-            <i class="fa fa-map-marker-alt text-saffron"></i> ${escapeHtml(s.officeAddress)}
+            <i class="fa fa-map-marker-alt" style="color:var(--saffron-main);"></i> ${escapeHtml(s.officeAddress)}
           </p>
           <p style="font-size:14px; margin-bottom:8px; color:#CBD5E1;">
-            <i class="fa fa-phone text-saffron"></i> <a href="tel:${escapeHtml(cleanPhone)}" style="color:#FFF;">${escapeHtml(s.supportPhone)}</a>
+            <i class="fa fa-phone" style="color:var(--saffron-main);"></i> <a href="tel:${escapeHtml(cleanPhone)}" style="color:#FFF;">${escapeHtml(s.supportPhone)}</a>
           </p>
           <p style="font-size:14px; margin-bottom:8px; color:#CBD5E1;">
-            <i class="fa fa-envelope text-saffron"></i> <a href="mailto:${escapeHtml(s.supportEmail)}" style="color:#FFF;">${escapeHtml(s.supportEmail)}</a>
+            <i class="fa fa-envelope" style="color:var(--saffron-main);"></i> <a href="mailto:${escapeHtml(s.supportEmail)}" style="color:#FFF;">${escapeHtml(s.supportEmail)}</a>
           </p>
           <p style="font-size:13px; color:#94A3B8; margin-top:10px;">
-            <i class="fa fa-clock text-saffron"></i> ${escapeHtml(s.workingHours)}
+            <i class="fa fa-clock" style="color:var(--saffron-main);"></i> ${escapeHtml(s.workingHours)}
           </p>
         </div>
       </div>
@@ -1981,15 +1984,15 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
   <script>
     (function() {
       // 1. Initial Page View Setup
-      const initialPage = '${validInitial}';
+      var initialPage = '${validInitial}';
       
       function showView(pageName) {
-        const pages = ['home', 'about', 'contact', 'terms'];
-        const target = pages.includes(pageName) ? pageName : 'home';
+        var pages = ['home', 'about', 'contact', 'terms'];
+        var target = pages.indexOf(pageName) !== -1 ? pageName : 'home';
         
-        pages.forEach(p => {
-          const el = document.getElementById('view-' + p);
-          const navEl = document.getElementById('nav-' + p);
+        pages.forEach(function(p) {
+          var el = document.getElementById('view-' + p);
+          var navEl = document.getElementById('nav-' + p);
           if (el) {
             if (p === target) {
               el.classList.add('active-view');
@@ -2007,7 +2010,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         });
 
         // Close mobile menu if open
-        const navMenu = document.getElementById('navMenu');
+        var navMenu = document.getElementById('navMenu');
         if (navMenu) navMenu.classList.remove('mobile-open');
 
         // Scroll smoothly to top
@@ -2015,29 +2018,30 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       }
 
       window.navigatePage = function(pageName, event) {
-        if (event) event.preventDefault();
+        if (event && typeof event.preventDefault === 'function') event.preventDefault();
         showView(pageName);
-        const path = pageName === 'home' ? '/' : '/' + pageName;
-        window.history.pushState({ page: pageName }, '', path);
+        var path = pageName === 'home' ? '/' : '/' + pageName;
+        if (window.history && typeof window.history.pushState === 'function') {
+          window.history.pushState({ page: pageName }, '', path);
+        }
       };
 
       window.addEventListener('popstate', function(e) {
         if (e.state && e.state.page) {
           showView(e.state.page);
         } else {
-          // Check pathname
-          const p = window.location.pathname.replace('/', '') || 'home';
+          var p = window.location.pathname.replace('/', '').toLowerCase() || 'home';
           showView(p);
         }
       });
 
       // Detect URL pathname on load
-      const currentPath = window.location.pathname.replace('/', '').toLowerCase();
-      if (['about', 'about-us'].includes(currentPath)) {
+      var currentPath = window.location.pathname.replace('/', '').toLowerCase();
+      if (['about', 'about-us'].indexOf(currentPath) !== -1) {
         showView('about');
-      } else if (['contact', 'contact-us'].includes(currentPath)) {
+      } else if (['contact', 'contact-us'].indexOf(currentPath) !== -1) {
         showView('contact');
-      } else if (['terms', 'terms-and-conditions'].includes(currentPath)) {
+      } else if (['terms', 'terms-and-conditions'].indexOf(currentPath) !== -1) {
         showView('terms');
       } else {
         showView(initialPage);
@@ -2045,24 +2049,24 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
 
       // 2. Mobile Menu Toggle
       window.toggleMobileMenu = function() {
-        const m = document.getElementById('navMenu');
+        var m = document.getElementById('navMenu');
         if (m) m.classList.toggle('mobile-open');
       };
 
       // 3. Margin Calculator Logic
       window.calculateMargin = function() {
-        const opSelect = document.getElementById('calcOperatorSelect');
-        const amtInput = document.getElementById('calcAmountInput');
-        const monthlyEl = document.getElementById('calcMonthlyResult');
-        const dailySubEl = document.getElementById('calcDailySub');
+        var opSelect = document.getElementById('calcOperatorSelect');
+        var amtInput = document.getElementById('calcAmountInput');
+        var monthlyEl = document.getElementById('calcMonthlyResult');
+        var dailySubEl = document.getElementById('calcDailySub');
         
         if (!opSelect || !amtInput || !monthlyEl) return;
         
-        const rate = parseFloat(opSelect.value) || 4.0;
-        const dailyTurnover = parseFloat(amtInput.value) || 0;
+        var rate = parseFloat(opSelect.value) || 4.0;
+        var dailyTurnover = parseFloat(amtInput.value) || 0;
         
-        const dailyCommission = (dailyTurnover * rate) / 100;
-        const monthlyCommission = dailyCommission * 30;
+        var dailyCommission = (dailyTurnover * rate) / 100;
+        var monthlyCommission = dailyCommission * 30;
 
         monthlyEl.textContent = '₹' + Math.round(monthlyCommission).toLocaleString('en-IN');
         if (dailySubEl) {
@@ -2072,28 +2076,31 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
 
       // 4. Contact Us WhatsApp Forwarding
       window.handleContactSubmit = function(e) {
-        e.preventDefault();
-        const name = document.getElementById('contactName')?.value || '';
-        const mobile = document.getElementById('contactMobile')?.value || '';
-        const email = document.getElementById('contactEmail')?.value || '';
-        const subject = document.getElementById('contactSubject')?.value || 'General Inquiry';
-        const msg = document.getElementById('contactMessage')?.value || '';
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        var name = (document.getElementById('contactName') || {}).value || '';
+        var mobile = (document.getElementById('contactMobile') || {}).value || '';
+        var email = (document.getElementById('contactEmail') || {}).value || '';
+        var subject = (document.getElementById('contactSubject') || {}).value || 'General Inquiry';
+        var msg = (document.getElementById('contactMessage') || {}).value || '';
 
-        const text = 'Hello ${escapeHtml(s.websiteName)},\n\n' +
-                     '*Inquiry From Website*\n' +
-                     '• *Name:* ' + name + '\n' +
-                     '• *Mobile:* ' + mobile + '\n' +
-                     (email ? '• *Email:* ' + email + '\n' : '') +
-                     '• *Topic:* ' + subject + '\n' +
-                     '• *Message:* ' + msg;
+        var lines = [
+          'Hello ' + ${JSON.stringify(s.websiteName)} + ',',
+          '',
+          '*Inquiry From Website*',
+          '• *Name:* ' + name,
+          '• *Mobile:* ' + mobile,
+          (email ? '• *Email:* ' + email : ''),
+          '• *Topic:* ' + subject,
+          '• *Message:* ' + msg
+        ].filter(Boolean);
 
-        const waUrl = 'https://wa.me/${escapeHtml(cleanWhatsapp)}?text=' + encodeURIComponent(text);
+        var waUrl = 'https://wa.me/${escapeHtml(cleanWhatsapp)}?text=' + encodeURIComponent(lines.join('\\n'));
         window.open(waUrl, '_blank');
       };
 
       // 5. Sticky Navbar Shadow
       window.addEventListener('scroll', function() {
-        const nb = document.getElementById('mainNavbar');
+        var nb = document.getElementById('mainNavbar');
         if (!nb) return;
         if (window.scrollY > 20) {
           nb.classList.add('scrolled');
@@ -2103,21 +2110,22 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       });
 
       // 6. Homepage Notice Popup Logic
-      const modal = document.getElementById('homeNoticeModal');
-      const closeBtn = document.getElementById('closeHomeNoticeModal');
+      var modal = document.getElementById('homeNoticeModal');
+      var closeBtn = document.getElementById('closeHomeNoticeModal');
       if (modal && closeBtn) {
-        const popupKey = 'popup_shown_${escapeHtml(s.popupUpdatedAt)}';
-        const alreadyShown = sessionStorage.getItem(popupKey);
+        var popupKey = 'popup_shown_${escapeHtml(s.popupUpdatedAt)}';
+        var alreadyShown = null;
+        try { alreadyShown = sessionStorage.getItem(popupKey); } catch (_) {}
         if (!alreadyShown) {
-          setTimeout(() => {
+          setTimeout(function() {
             modal.style.display = 'flex';
-            sessionStorage.setItem(popupKey, 'true');
+            try { sessionStorage.setItem(popupKey, 'true'); } catch (_) {}
           }, 600);
         }
-        closeBtn.addEventListener('click', () => {
+        closeBtn.addEventListener('click', function() {
           modal.style.display = 'none';
         });
-        modal.addEventListener('click', (ev) => {
+        modal.addEventListener('click', function(ev) {
           if (ev.target === modal) modal.style.display = 'none';
         });
       }
