@@ -1226,6 +1226,39 @@ const DATABASE_SCHEMA = `
   CREATE INDEX IF NOT EXISTS idx_developer_api_templates_active ON developer_api_templates (is_active, name);
 `;
 
+async function enforceSupabaseSecurityHardening(client) {
+  // Enforce Row-Level Security on all public tables and revoke public API roles (anon, authenticated)
+  // to protect against unauthorized Supabase PostgREST access (Supabase Security Advisor)
+  await client.query(`
+    DO $$
+    DECLARE
+      r RECORD;
+    BEGIN
+      FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+        EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' ENABLE ROW LEVEL SECURITY;';
+      END LOOP;
+
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon;
+        REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM anon;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON ROUTINES FROM anon;
+      END IF;
+
+      IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        REVOKE ALL ON ALL TABLES IN SCHEMA public FROM authenticated;
+        REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM authenticated;
+        REVOKE ALL ON ALL ROUTINES IN SCHEMA public FROM authenticated;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM authenticated;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM authenticated;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON ROUTINES FROM authenticated;
+      END IF;
+    END $$;
+  `);
+}
+
 async function initializeDatabase() {
   const dbUrl = getDatabaseUrl();
   if (!dbUrl) {
@@ -1240,6 +1273,7 @@ async function initializeDatabase() {
     await client.query(DATABASE_SCHEMA);
     await seedNotificationTemplates(client);
     await seedDeveloperApiTemplates(client);
+    await enforceSupabaseSecurityHardening(client);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');
