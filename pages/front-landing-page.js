@@ -3,6 +3,15 @@
 const { escapeHtml } = require('../lib/page-utils');
 
 module.exports = function createFrontLandingPage({ db, sendJson }) {
+  function stripLapu(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/\bLAPU\s+Stock\b/gi, 'Recharge Stock')
+      .replace(/\bLAPU\b/gi, 'Recharge')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
   /**
    * Helper: Get current website settings from database
    */
@@ -12,8 +21,8 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       if (res.rows[0]) {
         const r = res.rows[0];
         return {
-          websiteName: r.website_name || 'Easy Recharge Solution',
-          websiteTagline: r.website_tagline || "India's Leading B2B Multi-Recharge & LAPU Stock Exchange Platform",
+          websiteName: stripLapu(r.website_name) || 'Easy Recharge Solution',
+          websiteTagline: stripLapu(r.website_tagline) || "India's Leading B2B Multi-Recharge & Stock Exchange Platform",
           logoUrl: '/api/logo',
           faviconUrl: '/api/favicon',
           supportPhone: r.support_phone || '+91 93358 19686',
@@ -21,11 +30,11 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           supportEmail: r.support_email || 'easyrechargesolution@gmail.com',
           officeAddress: r.office_address || 'Meerapur, Prayagraj, Uttar Pradesh, India',
           workingHours: r.working_hours || '24x7 Customer & Stock Support',
-          footerAbout: r.footer_about || 'Empowering telecom retailers and master distributors across India with lightning-fast multi-recharge services, automated LAPU stock swapping, and bank-grade APIs.',
+          footerAbout: stripLapu(r.footer_about) || 'Empowering telecom retailers and master distributors across India with lightning-fast multi-recharge services, automated stock swapping, and bank-grade APIs.',
           socialTelegram: r.social_telegram || '',
-          metaTitle: r.meta_title || 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
-          metaDescription: r.meta_description || 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
-          newsTicker: r.news_ticker || 'Welcome to Easy Recharge Solution - India\'s premier B2B multi-recharge trading platform.',
+          metaTitle: stripLapu(r.meta_title) || 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
+          metaDescription: stripLapu(r.meta_description) || 'Instant Mobile, DTH, Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
+          newsTicker: stripLapu(r.news_ticker) || 'Welcome to Easy Recharge Solution - India\'s premier B2B multi-recharge trading platform.',
           newsTickerEnabled: r.news_ticker_enabled !== false,
           hasPopup: Boolean(r.login_popup_image_data || r.dashboard_popup_image_data),
           popupEnabled: Boolean((r.login_popup_image_data || r.dashboard_popup_image_data) && (r.login_popup_enabled === true || r.dashboard_popup_enabled === true || (r.login_popup_enabled !== false && r.dashboard_popup_enabled !== false))),
@@ -37,7 +46,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     } catch (_) {}
     return {
       websiteName: 'Easy Recharge Solution',
-      websiteTagline: "India's Leading B2B Multi-Recharge & LAPU Stock Exchange Platform",
+      websiteTagline: "India's Leading B2B Multi-Recharge & Stock Exchange Platform",
       logoUrl: '/api/logo',
       faviconUrl: '/api/favicon',
       supportPhone: '+91 93358 19686',
@@ -45,10 +54,10 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       supportEmail: 'easyrechargesolution@gmail.com',
       officeAddress: 'Meerapur, Prayagraj, Uttar Pradesh, India',
       workingHours: '24x7 Customer & Stock Support',
-      footerAbout: 'Empowering telecom retailers and master distributors across India with lightning-fast multi-recharge services, automated LAPU stock swapping, and bank-grade APIs.',
+      footerAbout: 'Empowering telecom retailers and master distributors across India with lightning-fast multi-recharge services, automated stock swapping, and bank-grade APIs.',
       socialTelegram: '',
       metaTitle: 'Easy Recharge Solution | B2B Recharge & Stock Exchange',
-      metaDescription: 'Instant Mobile, DTH, LAPU Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
+      metaDescription: 'Instant Mobile, DTH, Stock Exchange & Utility Recharge API Platform with 99.99% uptime.',
       newsTicker: 'Welcome to Easy Recharge Solution - India\'s premier B2B multi-recharge trading platform.',
       newsTickerEnabled: true,
       hasPopup: false,
@@ -200,8 +209,27 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     .topbar-right {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
       white-space: nowrap;
+    }
+    .topbar-clock-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(11, 19, 43, 0.36);
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      padding: 3px 12px;
+      border-radius: var(--radius-pill);
+      font-family: 'Outfit', 'Courier New', monospace;
+      font-size: 12.5px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      color: #FFFFFF;
+      box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+    .topbar-clock-wrap i {
+      color: #FDE047;
+      font-size: 13px;
     }
     .topbar-link {
       display: inline-flex;
@@ -224,11 +252,11 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       backdrop-filter: blur(14px);
       -webkit-backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border-light);
-      padding: 14px 0;
+      padding: 10px 0;
       transition: all 0.3s ease;
     }
     .navbar.scrolled {
-      padding: 10px 0;
+      padding: 8px 0;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
     }
     .nav-container {
@@ -243,17 +271,23 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
     .nav-brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
       font-weight: 900;
       font-size: 20px;
       color: var(--navy-dark);
       letter-spacing: -0.02em;
     }
     .nav-logo-img {
-      height: 42px;
-      max-width: 160px;
+      height: 58px;
+      max-height: 64px;
+      max-width: 260px;
       object-fit: contain;
-      border-radius: 6px;
+      border-radius: 8px;
+      display: block;
+      transition: transform 0.25s ease;
+    }
+    .nav-logo-img:hover {
+      transform: scale(1.02);
     }
     .nav-logo-badge {
       width: 40px;
@@ -732,30 +766,40 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       transform: translateY(-4px);
       box-shadow: var(--shadow-hover);
     }
-    .op-icon-pill {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
+    .op-logo-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 16px;
       margin: 0 auto 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
-      font-weight: 900;
-      color: #FFFFFF;
+      overflow: hidden;
+      background: #FFFFFF;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+    .op-card:hover .op-logo-wrap {
+      transform: scale(1.08);
+      box-shadow: 0 8px 20px rgba(255, 107, 0, 0.22);
+    }
+    .op-logo-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
     .op-name {
       font-weight: 800;
       font-size: 14.5px;
       color: var(--navy-dark);
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
     .op-margin {
       font-size: 12px;
       font-weight: 800;
       color: var(--saffron-main);
       background: #FFF4EC;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: var(--radius-pill);
       display: inline-block;
     }
@@ -1259,8 +1303,12 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       .hero-title {
         font-size: 38px;
       }
-      .topbar-right {
+      .topbar-hide-mobile {
         display: none;
+      }
+      .nav-logo-img {
+        height: 48px;
+        max-width: 210px;
       }
     }
 
@@ -1289,6 +1337,10 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
       .calc-box, .contact-form-card, .terms-card {
         padding: 24px 18px;
       }
+      .topbar-clock-wrap {
+        font-size: 11px;
+        padding: 2px 8px;
+      }
     }
   </style>
 </head>
@@ -1302,13 +1354,17 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         <div class="topbar-ticker">${escapeHtml(s.newsTicker)}</div>
       </div>
       <div class="topbar-right">
-        <a href="tel:${escapeHtml(cleanPhone)}" class="topbar-link">
+        <div class="topbar-clock-wrap" title="Indian Standard Time (UTC +5:30)">
+          <i class="fa fa-clock-o"></i>
+          <span id="liveIstClock">--:--:-- IST (+5:30)</span>
+        </div>
+        <a href="tel:${escapeHtml(cleanPhone)}" class="topbar-link topbar-hide-mobile">
           <i class="fa fa-phone"></i> ${escapeHtml(s.supportPhone)}
         </a>
-        <a href="https://wa.me/${escapeHtml(cleanWhatsapp)}" target="_blank" rel="noopener" class="topbar-link">
+        <a href="https://wa.me/${escapeHtml(cleanWhatsapp)}" target="_blank" rel="noopener" class="topbar-link topbar-hide-mobile">
           <i class="fa-brands fa-whatsapp"></i> WhatsApp
         </a>
-        <span class="topbar-link"><i class="fa fa-clock-o"></i> ${escapeHtml(s.workingHours)}</span>
+        <span class="topbar-link topbar-hide-mobile"><i class="fa fa-headset"></i> ${escapeHtml(s.workingHours)}</span>
       </div>
     </div>
   </div>
@@ -1317,12 +1373,9 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
   <header class="navbar" id="mainNavbar">
     <div class="nav-container">
       <a href="/" class="nav-brand" onclick="window.navigatePage('home', event)">
-        <img src="/api/logo" alt="${escapeHtml(s.websiteName)}" class="nav-logo-img" onerror="this.style.display='none'; document.getElementById('logoFallbackBadge').style.display='flex';">
+        <img src="/api/logo" alt="${escapeHtml(s.websiteName)}" class="nav-logo-img" onerror="this.style.display='none'; document.getElementById('logoFallbackBadge').style.display='flex'; document.getElementById('logoFallbackName').style.display='inline-block';">
         <div class="nav-logo-badge" id="logoFallbackBadge" style="display:none;"><i class="fa fa-bolt"></i></div>
-        <div class="nav-brand-text">
-          <span class="nav-brand-title">${escapeHtml(s.websiteName)}</span>
-          <span class="nav-brand-sub">Recharge Exchange</span>
-        </div>
+        <span class="nav-brand-title" id="logoFallbackName" style="display:none;">${escapeHtml(s.websiteName)}</span>
       </a>
 
       <!-- Desktop Navigation Menu Tabs -->
@@ -1374,11 +1427,11 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
         <div class="hero-container">
           <div class="hero-left">
             <div class="hero-pill">
-              <i class="fa fa-bolt"></i> INDIA'S PREMIER B2B LAPU RECHARGE EXCHANGE
+              <i class="fa fa-bolt"></i> INDIA'S PREMIER B2B RECHARGE EXCHANGE
             </div>
             <h1 class="hero-title">
               Next-Gen Multi-Recharge & <br>
-              <span class="hero-title-highlight">Automated LAPU Exchange</span>
+              <span class="hero-title-highlight">Automated Exchange</span>
             </h1>
             <p class="hero-desc">
               ${escapeHtml(s.websiteTagline)}. Experience bank-grade waterfall routing, 99.99% uptime, dual wallet isolation, and lightning-fast recharge execution.
@@ -1427,7 +1480,9 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
               </div>
               <div class="live-feed-list">
                 <div class="live-feed-item">
-                  <div class="feed-op-logo" style="background:#EF4444;">AT</div>
+                  <div class="feed-op-logo" style="background:#E40000; padding:0; overflow:hidden;">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;display:block;" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#E40000"/><path d="M50 22C34 22 22 34 22 50c0 12 7 22 18 26l2-9c-6-3-11-9-11-17 0-10 8-18 19-18s19 8 19 18c0 7-4 13-10 16l5 9c9-5 15-15 15-25 0-16-12-28-29-28z" fill="#fff"/><circle cx="50" cy="50" r="8" fill="#fff"/></svg>
+                  </div>
                   <div class="feed-details">
                     <div class="feed-title">Airtel Prepaid - UP East</div>
                     <div class="feed-sub">Routed to Top Seller (Waterfall Step 1)</div>
@@ -1438,10 +1493,12 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
                   </div>
                 </div>
                 <div class="live-feed-item">
-                  <div class="feed-op-logo" style="background:#2563EB;">JIO</div>
+                  <div class="feed-op-logo" style="background:#0A2885; padding:0; overflow:hidden;">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;display:block;" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#0A2885"/><circle cx="50" cy="50" r="34" fill="#D32F2F"/><text x="50" y="60" font-family="Arial,sans-serif" font-weight="900" font-size="32" fill="#fff" text-anchor="middle" font-style="italic">Jio</text></svg>
+                  </div>
                   <div class="feed-details">
                     <div class="feed-title">Jio 5G Unlimited - Delhi NCR</div>
-                    <div class="feed-sub">LAPU Balance Pre-Debited & Delivered</div>
+                    <div class="feed-sub">Stock Balance Pre-Debited & Delivered</div>
                   </div>
                   <div class="feed-right">
                     <div class="feed-amt">₹666</div>
@@ -1449,7 +1506,9 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
                   </div>
                 </div>
                 <div class="live-feed-item">
-                  <div class="feed-op-logo" style="background:#D97706;">VI</div>
+                  <div class="feed-op-logo" style="background:#E60000; padding:0; overflow:hidden;">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;display:block;" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#E60000"/><text x="42" y="68" font-family="Arial,sans-serif" font-weight="900" font-size="44" fill="#fff" text-anchor="middle">V</text><text x="68" y="68" font-family="Arial,sans-serif" font-weight="900" font-size="44" fill="#fff" text-anchor="middle">ı</text><circle cx="68" cy="30" r="6" fill="#FFCC00"/></svg>
+                  </div>
                   <div class="feed-details">
                     <div class="feed-title">Vi Hero Unlimited - Maharashtra</div>
                     <div class="feed-sub">Auto Fallback Matchmaker Activated</div>
@@ -1460,7 +1519,9 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
                   </div>
                 </div>
                 <div class="live-feed-item">
-                  <div class="feed-op-logo" style="background:#059669;">DTH</div>
+                  <div class="feed-op-logo" style="background:#3B1D59; padding:0; overflow:hidden;">
+                    <svg viewBox="0 0 100 100" style="width:100%;height:100%;display:block;" xmlns="http://www.w3.org/2000/svg"><rect width="100" height="100" fill="#3B1D59"/><text x="50" y="46" font-family="Arial,sans-serif" font-weight="900" font-size="20" fill="#fff" text-anchor="middle">TATA</text><text x="50" y="74" font-family="Arial,sans-serif" font-weight="900" font-size="24" fill="#00E5FF" text-anchor="middle">play</text></svg>
+                  </div>
                   <div class="feed-details">
                     <div class="feed-title">Tata Play Ultra Pack</div>
                     <div class="feed-sub">Instant Heavy Refresh Confirmed</div>
@@ -1486,32 +1547,85 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           </div>
           <div class="operators-grid">
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#E11D48;"><i class="fa fa-mobile-alt"></i></div>
+              <div class="op-logo-wrap" title="Airtel">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="18" fill="#E40000"/>
+                  <path d="M50 18 C32 18 19 31 19 48 C19 61 27 72 39 76 L41 66 C34 63 29 56 29 48 C29 36 38 27 50 27 C62 27 71 36 71 48 C71 55 67 61 61 65 L66 74 C75 68 81 59 81 48 C81 31 68 18 50 18 Z" fill="#FFFFFF"/>
+                  <circle cx="50" cy="48" r="9" fill="#FFFFFF"/>
+                  <text x="50" y="92" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="14" fill="#FFFFFF" text-anchor="middle" letter-spacing="-0.4">airtel</text>
+                </svg>
+              </div>
               <div class="op-name">Airtel</div>
               <div class="op-margin">Up to 4.2%</div>
             </div>
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#2563EB;"><i class="fa fa-wifi"></i></div>
+              <div class="op-logo-wrap" title="Jio Telecom">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="18" fill="#0A2885"/>
+                  <circle cx="50" cy="44" r="26" fill="#D32F2F"/>
+                  <text x="50" y="53" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="25" fill="#FFFFFF" text-anchor="middle" font-style="italic">Jio</text>
+                  <text x="50" y="88" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="11.5" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.2">JIO DIGITAL</text>
+                </svg>
+              </div>
               <div class="op-name">Jio Telecom</div>
               <div class="op-margin">Up to 4.0%</div>
             </div>
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#EA580C;"><i class="fa fa-signal"></i></div>
+              <div class="op-logo-wrap" title="Vi (Vodafone Idea)">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="18" fill="#E60000"/>
+                  <text x="43" y="64" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="44" fill="#FFFFFF" text-anchor="middle">V</text>
+                  <text x="66" y="64" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="44" fill="#FFFFFF" text-anchor="middle">ı</text>
+                  <circle cx="66" cy="29" r="6" fill="#FFCC00"/>
+                  <text x="50" y="88" font-family="'Outfit', Arial, sans-serif" font-weight="800" font-size="10" fill="#FFCC00" text-anchor="middle" letter-spacing="0.4">VODAFONE IDEA</text>
+                </svg>
+              </div>
               <div class="op-name">Vi (Vodafone Idea)</div>
               <div class="op-margin">Up to 4.8%</div>
             </div>
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#16A34A;"><i class="fa fa-broadcast-tower"></i></div>
+              <div class="op-logo-wrap" title="BSNL Prepaid">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="18" fill="#004F9E"/>
+                  <circle cx="50" cy="40" r="23" fill="#FFFFFF"/>
+                  <path d="M36 33 Q50 47 64 33 Q50 55 36 33 Z" fill="#004F9E"/>
+                  <path d="M38 41 Q50 52 62 41 Q50 61 38 41 Z" fill="#ED1C24"/>
+                  <text x="50" y="79" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="18" fill="#FFFFFF" text-anchor="middle" letter-spacing="1">BSNL</text>
+                  <text x="50" y="92" font-family="'Outfit', Arial, sans-serif" font-weight="700" font-size="8.5" fill="#FDE047" text-anchor="middle">Connecting India</text>
+                </svg>
+              </div>
               <div class="op-name">BSNL Prepaid</div>
               <div class="op-margin">Up to 5.5%</div>
             </div>
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#7C3AED;"><i class="fa fa-tv"></i></div>
+              <div class="op-logo-wrap" title="Tata Play DTH">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <defs>
+                    <linearGradient id="tataLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#3B1D59"/>
+                      <stop offset="100%" stop-color="#9C27B0"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="100" height="100" rx="18" fill="url(#tataLogoGrad)"/>
+                  <text x="50" y="38" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="16" fill="#FFFFFF" text-anchor="middle" letter-spacing="1.2">TATA</text>
+                  <text x="45" y="64" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="22" fill="#00E5FF" text-anchor="middle" letter-spacing="0.5">play</text>
+                  <polygon points="71,53 81,59 71,65" fill="#00E5FF"/>
+                  <text x="50" y="88" font-family="'Outfit', Arial, sans-serif" font-weight="700" font-size="9.5" fill="#FFFFFF" text-anchor="middle" letter-spacing="0.5">DTH SERVICE</text>
+                </svg>
+              </div>
               <div class="op-name">Tata Play DTH</div>
               <div class="op-margin">Up to 4.1%</div>
             </div>
             <div class="op-card">
-              <div class="op-icon-pill" style="background:#D97706;"><i class="fa fa-satellite-dish"></i></div>
+              <div class="op-logo-wrap" title="Dish TV / D2H">
+                <svg viewBox="0 0 100 100" class="op-logo-svg" xmlns="http://www.w3.org/2000/svg">
+                  <rect width="100" height="100" rx="18" fill="#FFF1F2" stroke="#E11D48" stroke-width="4"/>
+                  <text x="36" y="48" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="22" fill="#E11D48" text-anchor="middle">dish</text>
+                  <text x="68" y="48" font-family="'Outfit', Arial, sans-serif" font-weight="900" font-size="22" fill="#2563EB" text-anchor="middle">tv</text>
+                  <path d="M24 57 Q50 70 76 57" stroke="#E11D48" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+                  <text x="50" y="85" font-family="'Outfit', Arial, sans-serif" font-weight="800" font-size="10" fill="#475569" text-anchor="middle" letter-spacing="0.5">D2H SATELLITE</text>
+                </svg>
+              </div>
               <div class="op-name">Dish TV / D2H</div>
               <div class="op-margin">Up to 4.5%</div>
             </div>
@@ -1525,7 +1639,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           <div class="section-header">
             <span class="section-tag">Enterprise Architecture</span>
             <h2 class="section-title">Engineered for Telecom Leadership</h2>
-            <p class="section-desc">Purpose-built trading platform designed specifically for Master Distributors, Sellers with high LAPU limits, and API Buyers.</p>
+            <p class="section-desc">Purpose-built trading platform designed specifically for Master Distributors, High-Volume Sellers, and API Buyers.</p>
           </div>
           <div class="features-grid">
             <div class="feature-card">
@@ -1668,7 +1782,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
               <span class="section-tag">Our Vision & Mission</span>
               <h2 class="about-lead-title">Transforming Telecom Liquidity & Retail Reach</h2>
               <p class="about-paragraph">
-                Founded with a mission to eliminate manual stock delays and margin discrepancies in India's fast-moving telecom ecosystem, <strong>${escapeHtml(s.websiteName)}</strong> provides an institutional-grade marketplace connecting retailers, master distributors, and LAPU holders.
+                Founded with a mission to eliminate manual stock delays and margin discrepancies in India's fast-moving telecom ecosystem, <strong>${escapeHtml(s.websiteName)}</strong> provides an institutional-grade marketplace connecting retailers, master distributors, and stock providers.
               </p>
               <p class="about-paragraph">
                 ${escapeHtml(s.footerAbout)}
@@ -1811,7 +1925,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
                   <label class="form-label" for="contactSubject">Inquiry Topic</label>
                   <select class="form-control" id="contactSubject">
                     <option value="General Retailer Inquiry">New Retailer Registration</option>
-                    <option value="Seller LAPU Integration">Seller / LAPU Integration</option>
+                    <option value="Seller API Integration">Seller / API Integration</option>
                     <option value="API Webhooks & Integration">API Webhooks & Integration</option>
                     <option value="Wallet Topup & Settlement">Wallet Topup & Settlement</option>
                   </select>
@@ -1857,7 +1971,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
             <div class="terms-section">
               <h3 class="terms-section-title"><span class="terms-section-num">2</span> Account Eligibility & KYC Verification</h3>
               <p class="terms-text">
-                To access recharge services, LAPU selling features, and payout facilities, users must complete Know-Your-Customer (KYC) verification by submitting genuine identity documentation, including Aadhaar Card, PAN Card, and active Indian Bank Account details. Providing falsified information will result in immediate suspension.
+                To access recharge services, selling features, and payout facilities, users must complete Know-Your-Customer (KYC) verification by submitting genuine identity documentation, including Aadhaar Card, PAN Card, and active Indian Bank Account details. Providing falsified information will result in immediate suspension.
               </p>
             </div>
 
@@ -1868,7 +1982,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
               </p>
               <ul class="terms-list">
                 <li><strong>Buyer Wallet:</strong> Exclusively utilized for funding incoming recharges and API purchases. Funds are pre-debited under row-level database locks prior to provider dispatch.</li>
-                <li><strong>Seller Wallet:</strong> Dedicated to accumulating earnings from fulfilled recharge orders and LAPU liquidity.</li>
+                <li><strong>Seller Wallet:</strong> Dedicated to accumulating earnings from fulfilled recharge orders and stock liquidity.</li>
                 <li><strong>Exchange Delay & Holding:</strong> Seller earnings are subject to admin-configured holding durations to ensure customer dispute resolution and reconciliation.</li>
               </ul>
             </div>
@@ -1937,7 +2051,7 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           <h4 class="footer-title">B2B Solutions</h4>
           <ul class="footer-links">
             <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Multi-Recharge API</li>
-            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> LAPU Stock Swapping</li>
+            <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> High-Speed Stock Swapping</li>
             <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Dual Wallet Accounting</li>
             <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Real-time Ledger</li>
             <li class="footer-link-item"><i class="fa fa-check" style="color:var(--saffron-main);"></i> Auto SMS Reconciliation</li>
@@ -2129,6 +2243,27 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
           if (ev.target === modal) modal.style.display = 'none';
         });
       }
+
+      // 7. Live IST (+5:30) Digital Watch in Saffron Header
+      function updateLiveIstClock() {
+        var clockEl = document.getElementById('liveIstClock');
+        if (!clockEl) return;
+        var now = new Date();
+        var utcMs = now.getTime() + (now.getTimezoneOffset() * 60000);
+        var ist = new Date(utcMs + (3600000 * 5.5));
+        var h = ist.getHours();
+        var m = ist.getMinutes();
+        var sec = ist.getSeconds();
+        var ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12;
+        if (h === 0) h = 12;
+        var hStr = h < 10 ? '0' + h : String(h);
+        var mStr = m < 10 ? '0' + m : String(m);
+        var sStr = sec < 10 ? '0' + sec : String(sec);
+        clockEl.textContent = hStr + ':' + mStr + ':' + sStr + ' ' + ampm + ' IST (+5:30)';
+      }
+      updateLiveIstClock();
+      setInterval(updateLiveIstClock, 1000);
     })();
   </script>
 </body>

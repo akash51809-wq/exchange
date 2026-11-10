@@ -1,6 +1,8 @@
 'use strict';
 
-const { escapeHtml } = require('../lib/page-utils');
+const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
+const { renderUserNavigation } = require('../config/user-panel-menu');
+const { getWalletMode } = require('../lib/wallet-helper');
 const { addPanelChrome } = require('../lib/panel-chrome');
 
 module.exports = function createUserKycPage({ db }) {
@@ -63,6 +65,9 @@ module.exports = function createUserKycPage({ db }) {
       statusBadgeHtml = '<span class="badge badge-secondary px-3 py-2 font-weight-bold" style="font-size:13px;background:#64748b;color:#fff;"><i class="fa fa-info-circle mr-1"></i> KYC Not Submitted</span>';
       statusMessage = 'Please complete your KYC by submitting your GST number, Aadhaar number (front &amp; back photos), and PAN number (photo).';
     }
+
+    const walletMode = await getWalletMode(db).catch(() => 'single');
+    const navigation = renderUserNavigation(walletMode, '/kyc');
 
     const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -149,6 +154,7 @@ module.exports = function createUserKycPage({ db }) {
 <body>
   <div class="page">
     <div class="page-main">
+      ${navigation}
       <div class="page-container">
 
         <!-- Page Header -->
@@ -555,11 +561,16 @@ module.exports = function createUserKycPage({ db }) {
 
   })();
   </script>
+  <script src="/assets/js/jquery-3.5.1.min.js"></script>
+  <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
+  <script src="/auth-client.js"></script>
 </body>
 </html>`;
 
+    const fullHtml = useFullWidthContainers(html);
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db, currentPath: '/kyc' }));
+    response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: '/kyc' }));
   }
 
   return { sendUserKycPage };

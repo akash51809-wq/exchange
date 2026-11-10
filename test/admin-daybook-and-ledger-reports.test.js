@@ -431,7 +431,7 @@ test('Feature: Admin Reports menu is divided into 2 columns & User/Admin menus h
   assert.match(userMenuHtml, /fa fa-shopping-cart.*Buyer/i, 'User Buyer has icon');
   assert.match(userMenuHtml, /fa fa-shopping-bag.*Seller/i, 'User Seller has icon');
   assert.match(userMenuHtml, /fa fa-bar-chart.*User Report/i, 'User Report has icon');
-  assert.match(userMenuHtml, /fa fa-bell.*Alerts Setting/i, 'User Alerts Setting has icon');
+  assert.doesNotMatch(userMenuHtml, /Alerts Setting/i, 'User Alerts Setting menu is removed');
   assert.match(userMenuHtml, /fa fa-file-text-o.*Invoice/i, 'User Invoice has icon');
   assert.match(userMenuHtml, /fa fa-cogs.*Setting/i, 'User Setting has icon');
   assert.match(userMenuHtml, /sub-menu two-columns/i, 'User Seller dropdown renders with sub-menu two-columns');

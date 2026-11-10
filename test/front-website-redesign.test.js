@@ -77,6 +77,15 @@ describe('Front Website Redesign - Saffron & Navy Theme, Bold Fonts & Subpages',
     assert.match(capturedHtml, /id="calcOperatorSelect"/i, 'Must have Margin Calculator operator select');
     assert.match(capturedHtml, /id="calcAmountInput"/i, 'Must have Margin Calculator amount input');
     assert.match(capturedHtml, /id="contactInquiryForm"/i, 'Must have Contact inquiry form');
+
+    // 6. Refined Homepage Branding, Clock, Operator Logos & LAPU Cleanup
+    assert.match(capturedHtml, /Automated Exchange/i, 'Hero highlight must read Automated Exchange');
+    assert.doesNotMatch(capturedHtml, /\bLAPU\b/i, 'Homepage HTML must NOT contain any LAPU mentions');
+    assert.doesNotMatch(capturedHtml, /class="nav-brand-text"/i, 'Navbar must display logo only without duplicate brand text next to it');
+    assert.match(capturedHtml, /height:\s*58px/i, 'Logo image should be enlarged');
+    assert.match(capturedHtml, /id="liveIstClock"/i, 'Saffron top header must include Live IST digital clock');
+    assert.match(capturedHtml, /IST \(\+5:30\)/i, 'Clock must display +5:30 Indian Standard Time');
+    assert.match(capturedHtml, /class="op-logo-wrap"[\s\S]*class="op-logo-svg"/i, 'Operator grid must render real SVG operator logos');
   });
 
   it('Renders initial active view when subpath is visited directly (about, contact, terms)', async () => {

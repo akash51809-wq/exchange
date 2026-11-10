@@ -9,20 +9,660 @@
   <link rel="stylesheet" href="/assets/css/dark.css">
   <link rel="stylesheet" href="/assets/css/skins.css">
   <link rel="stylesheet" href="/assets/css/icons.css">
+  <style>
+    body {
+      background-color: #f0f3f8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .error-page-container {
+      padding: 16px 18px 44px;
+    }
+    .err-hero-card {
+      background: linear-gradient(135deg, #1b3576 0%, #2563eb 100%);
+      color: #ffffff;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 12px rgba(27, 53, 118, 0.16);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .err-hero-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 3px;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .err-hero-sub {
+      font-size: 12.5px;
+      opacity: 0.9;
+      margin: 0;
+    }
+    .err-filter-bar {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .err-filter-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .err-tab-btn {
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .err-tab-btn:hover {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    .err-tab-btn.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    }
+    .err-search-wrap {
+      position: relative;
+      min-width: 260px;
+      flex: 0 1 320px;
+    }
+    .err-search-wrap i {
+      position: absolute;
+      left: 11px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #64748b;
+      font-size: 13px;
+    }
+    .err-search-input {
+      padding-left: 32px !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      font-size: 12.5px !important;
+      border-radius: 6px !important;
+    }
+    .err-table-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      overflow: hidden;
+    }
+    .err-table thead th {
+      background: #1e293b;
+      color: #ffffff;
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 700;
+      padding: 11px 12px;
+      border: none;
+      white-space: nowrap;
+    }
+    .err-table tbody td {
+      padding: 10px 12px;
+      vertical-align: middle;
+      font-size: 12.5px;
+      color: #1e293b;
+      border-color: #e2e8f0;
+    }
+    .err-table tbody tr:hover {
+      background-color: #f8fafc;
+    }
+    .err-code-pill {
+      display: inline-block;
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 5px;
+      background: #fef2f2;
+      color: #b91c1c;
+      border: 1px solid #fecaca;
+      white-space: nowrap;
+    }
+    .err-code-pill.code-success {
+      background: #f0fdf4;
+      color: #15803d;
+      border-color: #bbf7d0;
+    }
+    .err-code-pill.code-pending {
+      background: #fffbeb;
+      color: #b45309;
+      border-color: #fde68a;
+    }
+    .err-cat-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #f1f5f9;
+      color: #475569;
+      border: 1px solid #cbd5e1;
+      white-space: nowrap;
+    }
+    .err-status-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      padding: 3px 9px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    .st-fail { background: #fee2e2; color: #b91c1c; }
+    .st-succ { background: #dcfce7; color: #15803d; }
+    .st-pend { background: #fef3c7; color: #92400e; }
+    .err-msg-code {
+      font-family: SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      color: #0f172a;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      padding: 3px 7px;
+      border-radius: 4px;
+      display: inline-block;
+      word-break: break-word;
+    }
+  </style>
 </head>
 <body>
-  <div class="page"><div class="page-main">
-    {{USER_MENU}}
-    <main class="main-content"><div class="container">
-      <div class="page-header"><h4 class="page-title">{{PAGE_TITLE}}</h4></div>
-      <section class="card"><div class="card-body">
-        <p>This page is ready for its design and functions.</p>
-      </div></section>
-    </div></main>
-  </div></div>
+  <div class="page">
+    <div class="page-main">
+      {{USER_MENU}}
+      <main class="main-content">
+        <div class="container-fluid error-page-container">
+
+          <!-- Top Header Banner -->
+          <div class="err-hero-card">
+            <div>
+              <h4 class="err-hero-title">
+                <i class="fa fa-exclamation-triangle"></i> API Response &amp; Error Code List
+              </h4>
+              <p class="err-hero-sub">Complete directory of API failure codes, error messages, exact reasons, and developer resolution guide.</p>
+            </div>
+            <div class="d-flex align-items-center flex-wrap" style="gap: 8px;">
+              <a href="/buyer/api-document" class="btn btn-sm btn-light font-weight-bold text-primary shadow-sm">
+                <i class="fa fa-book mr-1"></i> View API Document
+              </a>
+              <span class="badge badge-warning text-dark px-3 py-2 font-weight-bold" style="font-size: 12px;" id="errTotalBadge">
+                Showing 31 Codes
+              </span>
+            </div>
+          </div>
+
+          <!-- Filter Tabs & Search -->
+          <div class="err-filter-bar">
+            <div class="err-filter-tabs" id="errCategoryTabs">
+              <button type="button" class="err-tab-btn active" data-cat="all">All Codes</button>
+              <button type="button" class="err-tab-btn" data-cat="auth">Auth &amp; IP Security</button>
+              <button type="button" class="err-tab-btn" data-cat="recharge">Recharge &amp; Operator</button>
+              <button type="button" class="err-tab-btn" data-cat="wallet">Wallet &amp; Duplicate</button>
+              <button type="button" class="err-tab-btn" data-cat="dispute">Dispute &amp; Status</button>
+              <button type="button" class="err-tab-btn" data-cat="upstream">Upstream &amp; System</button>
+              <button type="button" class="err-tab-btn" data-cat="success">Success Codes</button>
+            </div>
+            <div class="err-search-wrap">
+              <i class="fa fa-search"></i>
+              <input type="text" id="errSearchInput" class="form-control err-search-input" placeholder="Search code, message or reason...">
+            </div>
+          </div>
+
+          <!-- Error List Table Card -->
+          <div class="err-table-card">
+            <div class="card-header bg-white border-bottom py-2 px-3 d-flex justify-content-between align-items-center">
+              <strong class="text-dark" style="font-size: 13.5px;">
+                <i class="fa fa-list-alt text-primary mr-1"></i> Standard API Error &amp; Response Specifications
+              </strong>
+              <span class="small text-muted">JSON / REST API Format</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover mb-0 err-table" id="errorCodeTable">
+                <thead>
+                  <tr>
+                    <th style="width: 50px;" class="text-center">#</th>
+                    <th style="width: 150px;">Error Code</th>
+                    <th style="width: 110px;" class="text-center">API Status</th>
+                    <th style="width: 145px;">Category</th>
+                    <th style="width: 280px;">API Response Message</th>
+                    <th>Detailed Reason &amp; Recommended Solution</th>
+                  </tr>
+                </thead>
+                <tbody id="errorTableBody">
+
+                  <!-- Authentication & IP Security -->
+                  <tr data-cat="auth">
+                    <td class="text-center font-weight-bold text-muted">1</td>
+                    <td><span class="err-code-pill">145</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Auth &amp; Security</span></td>
+                    <td><span class="err-msg-code">FAILED- Invalid API key</span></td>
+                    <td>
+                      <strong>Invalid Credentials:</strong> Registered <code>username</code> or <code>api_token</code> is missing, incorrect, or regenerated.<br>
+                      <small class="text-muted">Solution: Copy your active API token from IP Setting / API Document page.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="auth">
+                    <td class="text-center font-weight-bold text-muted">2</td>
+                    <td><span class="err-code-pill">106</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Auth &amp; Security</span></td>
+                    <td><span class="err-msg-code">FAILED- Account Suspended -Contact To Admin</span></td>
+                    <td>
+                      <strong>Account Suspended:</strong> User account is marked as suspended by Administrator.<br>
+                      <small class="text-muted">Solution: Contact support / administration desk to reactivate your account.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="auth">
+                    <td class="text-center font-weight-bold text-muted">3</td>
+                    <td><span class="err-code-pill">270</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Auth &amp; Security</span></td>
+                    <td><span class="err-msg-code">FAILED- Service has been temporarily suspended for Your account</span></td>
+                    <td>
+                      <strong>Service Blocked / Inactive:</strong> Account is blocked or service temporarily disabled (or inactive due to prolonged inactivity).<br>
+                      <small class="text-muted">Solution: Reach out to customer care to verify KYC and re-enable API service.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="auth">
+                    <td class="text-center font-weight-bold text-muted">4</td>
+                    <td><span class="err-code-pill">107</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Auth &amp; Security</span></td>
+                    <td><span class="err-msg-code">FAILED- IP not whitelisted</span></td>
+                    <td>
+                      <strong>Unauthorized Server IP:</strong> API request arrived from an IP address not approved in your whitelist.<br>
+                      <small class="text-muted">Solution: Add your outgoing server static IPv4 address under <em>Setting &rarr; IP Setting</em>.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="auth">
+                    <td class="text-center font-weight-bold text-muted">5</td>
+                    <td><span class="err-code-pill">ERR_RATE_LIMITED</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Auth &amp; Security</span></td>
+                    <td><span class="err-msg-code">Too many requests; rate limit exceeded</span></td>
+                    <td>
+                      <strong>Rate Limit Exceeded (HTTP 429):</strong> Burst requests per minute exceeded allowed API quota (Recharge / Status / Balance).<br>
+                      <small class="text-muted">Solution: Use webhooks/callbacks instead of aggressive status polling, and throttle traffic smoothly.</small>
+                    </td>
+                  </tr>
+
+                  <!-- Recharge & Operator Validation -->
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">6</td>
+                    <td><span class="err-code-pill">ERR_INVALID_NUMBER</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Recharge Validation</span></td>
+                    <td><span class="err-msg-code">Invalid mobile or account number</span></td>
+                    <td>
+                      <strong>Malformed Subscriber Number:</strong> Recharge <code>number</code> parameter is empty or contains invalid characters.<br>
+                      <small class="text-muted">Solution: Pass numeric subscriber ID / mobile number without spaces or symbols.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">7</td>
+                    <td><span class="err-code-pill">142</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Recharge Validation</span></td>
+                    <td><span class="err-msg-code">FAILED- Mobile length should be between {Min-Max}</span></td>
+                    <td>
+                      <strong>Invalid Number Digit Length:</strong> Mobile or DTH subscriber number length does not match operator's permitted digit count.<br>
+                      <small class="text-muted">Solution: Verify 10-digit mobile or operator-specific DTH/Utility subscriber ID length before calling API.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">8</td>
+                    <td><span class="err-code-pill">ERR_INVALID_AMOUNT</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Recharge Validation</span></td>
+                    <td><span class="err-msg-code">Invalid recharge amount</span></td>
+                    <td>
+                      <strong>Invalid Amount Parameter:</strong> Amount is missing, &le; 0, non-numeric, or has invalid decimal formatting.<br>
+                      <small class="text-muted">Solution: Send a valid positive amount in INR (e.g. <code>299</code> or <code>199.00</code>).</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">9</td>
+                    <td><span class="err-code-pill">242</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Recharge Validation</span></td>
+                    <td><span class="err-msg-code">FAILED- Bad Voucher or This Denomination Is Not Allowed</span></td>
+                    <td>
+                      <strong>Denomination / Plan Restricted:</strong> Requested amount is below operator minimum, above maximum limit, or listed in blocked/stopped denominations.<br>
+                      <small class="text-muted">Solution: Check valid recharge plans and operator min/max amount slab.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">10</td>
+                    <td><span class="err-code-pill">ERR_INVALID_OPERATOR</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Operator Config</span></td>
+                    <td><span class="err-msg-code">Operator code is required or could not be determined</span></td>
+                    <td>
+                      <strong>Missing Operator Parameter:</strong> Request lacks the <code>operator</code> code parameter.<br>
+                      <small class="text-muted">Solution: Include valid operator code (e.g. <code>AIRTEL</code>, <code>JIO</code>, <code>VI</code>, <code>BSNL</code>).</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">11</td>
+                    <td><span class="err-code-pill">ERR_OPERATOR_NOT_FOUND</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Operator Config</span></td>
+                    <td><span class="err-msg-code">Operator code is not registered or active</span></td>
+                    <td>
+                      <strong>Unrecognized Operator Code:</strong> Passed <code>operator</code> code does not match any active operator in platform.<br>
+                      <small class="text-muted">Solution: Query <code>/webservices/api/operators</code> or refer to the Operator Code table in API Docs.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">12</td>
+                    <td><span class="err-code-pill">161</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Operator Config</span></td>
+                    <td><span class="err-msg-code">invalid circle</span></td>
+                    <td>
+                      <strong>Unresolved Telecom Circle:</strong> Specified circle code or name could not be matched to a valid Indian telecom circle.<br>
+                      <small class="text-muted">Solution: Pass standard circle name/code or leave optional to auto-detect.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="recharge">
+                    <td class="text-center font-weight-bold text-muted">13</td>
+                    <td><span class="err-code-pill">160</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Routing &amp; Stock</span></td>
+                    <td><span class="err-msg-code">FAILED- No sellers available for selected margin</span></td>
+                    <td>
+                      <strong>No Eligible Seller Available:</strong> Either all sellers for this operator/circle failed in waterfall routing, have insufficient stock/balance, or your Buyer Margin expectation is higher than active seller offers.<br>
+                      <small class="text-muted">Solution: Adjust your expected margin under <em>Buyer &rarr; Buyer Margin</em> or retry after a short interval.</small>
+                    </td>
+                  </tr>
+
+                  <!-- Wallet & Duplicate Protection -->
+                  <tr data-cat="wallet">
+                    <td class="text-center font-weight-bold text-muted">14</td>
+                    <td><span class="err-code-pill">ERR_MISSING_REF_ID</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Duplicate Check</span></td>
+                    <td><span class="err-msg-code">Unique ref_id is required</span></td>
+                    <td>
+                      <strong>Missing Idempotency Reference:</strong> Request is missing client-generated <code>ref_id</code>.<br>
+                      <small class="text-muted">Solution: Always send a globally unique alphanumeric <code>ref_id</code> for every recharge attempt.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="wallet">
+                    <td class="text-center font-weight-bold text-muted">15</td>
+                    <td><span class="err-code-pill">109</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Duplicate Check</span></td>
+                    <td><span class="err-msg-code">FAILED- Duplicate Reference Id</span></td>
+                    <td>
+                      <strong>Duplicate Transaction Ref ID:</strong> A recharge order with this <code>ref_id</code> has already been recorded under your account.<br>
+                      <small class="text-muted">Solution: Generate a fresh unique <code>ref_id</code> for new transactions; use Status Check API for existing ones.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="wallet">
+                    <td class="text-center font-weight-bold text-muted">16</td>
+                    <td><span class="err-code-pill">110</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Duplicate Check</span></td>
+                    <td><span class="err-msg-code">FAILED- Same number and amount was already processed recently</span></td>
+                    <td>
+                      <strong>Duplicate Guard Triggered:</strong> Identical number + amount recharge submitted within repeat throttle window.<br>
+                      <small class="text-muted">Solution: Wait for duplicate window cooldown or verify previous transaction status before retrying.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="wallet">
+                    <td class="text-center font-weight-bold text-muted">17</td>
+                    <td><span class="err-code-pill">128</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Wallet Balance</span></td>
+                    <td><span class="err-msg-code">FAILED- Insufficient Fund</span></td>
+                    <td>
+                      <strong>Insufficient Wallet Balance:</strong> Usable balance in your Buyer Wallet (or Unified Wallet minus active lien) is lower than debit required.<br>
+                      <small class="text-muted">Solution: Submit a Wallet Topup Request or transfer funds from Seller Wallet to Buyer Wallet.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="wallet">
+                    <td class="text-center font-weight-bold text-muted">18</td>
+                    <td><span class="err-code-pill">ERR_WALLET_NOT_FOUND</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Wallet Balance</span></td>
+                    <td><span class="err-msg-code">Wallet account not found</span></td>
+                    <td>
+                      <strong>Missing Wallet Ledger:</strong> Active INR wallet record could not be located for user account.<br>
+                      <small class="text-muted">Solution: Contact Administrator to initialize wallet record.</small>
+                    </td>
+                  </tr>
+
+                  <!-- Dispute & Status Check -->
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">19</td>
+                    <td><span class="err-code-pill">ERR_MISSING_PARAM</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Status / Dispute</span></td>
+                    <td><span class="err-msg-code">Parameter ref_id or recharge_id is required</span></td>
+                    <td>
+                      <strong>Missing Order Identifier:</strong> Neither <code>ref_id</code> nor <code>recharge_id</code> was supplied in query/body.<br>
+                      <small class="text-muted">Solution: Pass at least one valid transaction reference parameter.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">20</td>
+                    <td><span class="err-code-pill">ERR_NOT_FOUND</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Status / Dispute</span></td>
+                    <td><span class="err-msg-code">Transaction not found for the given ref_id</span></td>
+                    <td>
+                      <strong>Order Not Found:</strong> No transaction exists matching the supplied <code>ref_id</code> or <code>recharge_id</code> under your account.<br>
+                      <small class="text-muted">Solution: Verify reference ID spelling and ownership.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">21</td>
+                    <td><span class="err-code-pill">111</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Dispute Rules</span></td>
+                    <td><span class="err-msg-code">FAILED- This transaction has already been refunded/failed</span></td>
+                    <td>
+                      <strong>Already Refunded / Failed:</strong> Disputes cannot be filed against transactions that have already failed or been refunded.<br>
+                      <small class="text-muted">Solution: Amount has already been returned to your Buyer Wallet.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">22</td>
+                    <td><span class="err-code-pill">114</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Dispute Rules</span></td>
+                    <td><span class="err-msg-code">FAILED- A dispute is already pending review</span></td>
+                    <td>
+                      <strong>Dispute Already Submitted:</strong> An active dispute ticket is already logged and awaiting review for this transaction.<br>
+                      <small class="text-muted">Solution: Check dispute status under <em>Buyer &rarr; Recharge Dispute</em>.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">23</td>
+                    <td><span class="err-code-pill">112</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Dispute Rules</span></td>
+                    <td><span class="err-msg-code">FAILED- Complaints cannot be accepted after validity period</span></td>
+                    <td>
+                      <strong>Dispute Window Expired:</strong> Allowed time limit (in hours/days configured by Admin) to file a dispute has elapsed.<br>
+                      <small class="text-muted">Solution: Raise complaints promptly within the active SLA window.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="dispute">
+                    <td class="text-center font-weight-bold text-muted">24</td>
+                    <td><span class="err-code-pill">113</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILED</span></td>
+                    <td><span class="err-cat-badge">Dispute Rules</span></td>
+                    <td><span class="err-msg-code">FAILED- Complain can only be submitted after minimum wait time</span></td>
+                    <td>
+                      <strong>Too Soon to Dispute:</strong> Minimum waiting minutes after transaction completion have not passed yet.<br>
+                      <small class="text-muted">Solution: Wait the required cooldown interval and resubmit complaint.</small>
+                    </td>
+                  </tr>
+
+                  <!-- Upstream Supplier & System Errors -->
+                  <tr data-cat="upstream">
+                    <td class="text-center font-weight-bold text-muted">25</td>
+                    <td><span class="err-code-pill">ERR_CALL</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Upstream / System</span></td>
+                    <td><span class="err-msg-code">Failed to communicate with supplier API</span></td>
+                    <td>
+                      <strong>Supplier Gateway Unreachable / Timeout:</strong> Network error or timeout occurred when forwarding request to upstream seller API. Waterfall engine automatically cascades to next available seller.<br>
+                      <small class="text-muted">Solution: Check Status API if order remains pending; failed orders auto-refund.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="upstream">
+                    <td class="text-center font-weight-bold text-muted">26</td>
+                    <td><span class="err-code-pill">EMPTY_RESPONSE</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Upstream / System</span></td>
+                    <td><span class="err-msg-code">Supplier API returned an empty response</span></td>
+                    <td>
+                      <strong>Empty Upstream Payload:</strong> Seller API closed connection or sent an empty HTTP body.<br>
+                      <small class="text-muted">Solution: System automatically routes to fallback seller or refunds buyer balance.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="upstream">
+                    <td class="text-center font-weight-bold text-muted">27</td>
+                    <td><span class="err-code-pill">HTML_ERROR_PAGE</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Upstream / System</span></td>
+                    <td><span class="err-msg-code">Supplier API returned an HTML error page</span></td>
+                    <td>
+                      <strong>Invalid Upstream Response Format:</strong> Seller endpoint returned HTML (e.g. 502/503/404 page) instead of expected JSON/XML.<br>
+                      <small class="text-muted">Solution: Request automatically fails over to secondary seller in waterfall.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="upstream">
+                    <td class="text-center font-weight-bold text-muted">28</td>
+                    <td><span class="err-code-pill">ERR_SERVICE_UNAVAILABLE</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">Operator Lookup</span></td>
+                    <td><span class="err-msg-code">Plan API / Operator Lookup service is not enabled</span></td>
+                    <td>
+                      <strong>Lookup Gateway Inactive:</strong> Operator auto-detection service is disabled or credentials missing.<br>
+                      <small class="text-muted">Solution: Pass explicit <code>operator</code> code in recharge API call or contact admin.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="upstream">
+                    <td class="text-center font-weight-bold text-muted">29</td>
+                    <td><span class="err-code-pill">ERR_SERVER</span></td>
+                    <td class="text-center"><span class="err-status-badge st-fail">FAILURE</span></td>
+                    <td><span class="err-cat-badge">System Error</span></td>
+                    <td><span class="err-msg-code">Internal server error processing request</span></td>
+                    <td>
+                      <strong>Unexpected Exception (HTTP 500):</strong> Server encountered an unexpected processing condition.<br>
+                      <small class="text-muted">Solution: Always verify status via Status Check API using your <code>ref_id</code> before retrying.</small>
+                    </td>
+                  </tr>
+
+                  <!-- Success & Accepted Response Codes -->
+                  <tr data-cat="success">
+                    <td class="text-center font-weight-bold text-muted">30</td>
+                    <td><span class="err-code-pill code-success">0</span></td>
+                    <td class="text-center"><span class="err-status-badge st-succ">SUCCESS</span></td>
+                    <td><span class="err-cat-badge">Success / Accepted</span></td>
+                    <td><span class="err-msg-code">Recharge request accepted / Transaction Details Retrieved</span></td>
+                    <td>
+                      <strong>Request Processed Successfully:</strong> Returned for successful Recharge, Pending Accepted, Status Check, Balance Check, and Operator Lookup.<br>
+                      <small class="text-muted">Note: Inspect <code>status</code> field (<code>SUCCESS</code> / <code>PENDING</code> / <code>FAILURE</code>) for final recharge result.</small>
+                    </td>
+                  </tr>
+                  <tr data-cat="success">
+                    <td class="text-center font-weight-bold text-muted">31</td>
+                    <td><span class="err-code-pill code-success">235</span></td>
+                    <td class="text-center"><span class="err-status-badge st-succ">SUCCESS</span></td>
+                    <td><span class="err-cat-badge">Dispute Accepted</span></td>
+                    <td><span class="err-msg-code">SUCCESS- Dispute Accepcted</span></td>
+                    <td>
+                      <strong>Dispute Ticket Registered:</strong> Complaint accepted and escalated for supplier/admin verification.<br>
+                      <small class="text-muted">Outcome will be delivered via callback webhook and Dispute report.</small>
+                    </td>
+                  </tr>
+
+                </tbody>
+              </table>
+            </div>
+            <div id="errNoMatch" class="text-center py-4 text-muted" style="display:none;">
+              <i class="fa fa-search mb-2 d-block" style="font-size: 22px;"></i>
+              <strong>No matching error codes found.</strong> Try clearing your search filter.
+            </div>
+          </div>
+
+        </div>
+      </main>
+    </div>
+  </div>
   <script src="/assets/js/jquery-3.5.1.min.js"></script>
   <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
   <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
+  <script>
+    (function() {
+      var activeCat = 'all';
+      var searchInput = document.getElementById('errSearchInput');
+      var rows = Array.prototype.slice.call(document.querySelectorAll('#errorTableBody tr'));
+      var badge = document.getElementById('errTotalBadge');
+      var noMatch = document.getElementById('errNoMatch');
+
+      function applyFilter() {
+        var q = (searchInput && searchInput.value ? searchInput.value : '').trim().toLowerCase();
+        var visibleCount = 0;
+        rows.forEach(function(tr) {
+          var rowCat = tr.getAttribute('data-cat') || '';
+          var catMatch = (activeCat === 'all' || rowCat === activeCat);
+          var textMatch = (!q || tr.textContent.toLowerCase().indexOf(q) !== -1);
+          if (catMatch && textMatch) {
+            tr.style.display = '';
+            visibleCount++;
+          } else {
+            tr.style.display = 'none';
+          }
+        });
+        if (badge) badge.textContent = 'Showing ' + visibleCount + ' Code' + (visibleCount === 1 ? '' : 's');
+        if (noMatch) noMatch.style.display = visibleCount === 0 ? 'block' : 'none';
+      }
+
+      document.querySelectorAll('#errCategoryTabs .err-tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('#errCategoryTabs .err-tab-btn').forEach(function(b) { b.classList.remove('active'); });
+          btn.classList.add('active');
+          activeCat = btn.getAttribute('data-cat') || 'all';
+          applyFilter();
+        });
+      });
+
+      if (searchInput) {
+        searchInput.addEventListener('input', applyFilter);
+      }
+      applyFilter();
+    })();
+  </script>
 </body>
 </html>

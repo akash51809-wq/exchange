@@ -52,7 +52,7 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     const usableSingleRupees = formatRupees(usableSingleMinor);
 
     // 2. Fetch news ticker, banner, and popup settings from website_settings
-    let newsTickerText = 'Welcome to Exchange Recharge & LAPU Trading Platform! Fast execution, automated LAPU stock swapping, and 24x7 real-time settlement. Keep your wallet balance updated for uninterrupted recharge transactions.';
+    let newsTickerText = 'Welcome to Exchange Multi-Recharge Trading Platform! Fast execution, automated stock swapping, and 24x7 real-time settlement. Keep your wallet balance updated for uninterrupted recharge transactions.';
     let newsTickerEnabled = true;
     let dashboardBannerEnabled = true;
     let dashboardBannerSrc = '/api/dashboard-banner';
@@ -424,19 +424,21 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
       color: #1e293b;
     }
     .user-dashboard-container {
-      padding: 16px 20px 48px;
+      padding: 10px 18px 38px;
     }
 
-    /* Top Horizontal Dashboard Banner (full width & clean responsive fit left-to-right) */
+    /* Top Horizontal Dashboard Banner (compact vertical height, clean responsive fit) */
     .user-dashboard-banner-container {
       width: 100% !important;
       max-width: 100% !important;
-      height: auto !important;
-      border-radius: 10px;
+      height: 120px !important;
+      max-height: 120px !important;
+      border-radius: 8px;
       overflow: hidden;
-      margin-bottom: 20px;
+      margin-top: 0 !important;
+      margin-bottom: 14px !important;
       border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.05);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.05);
       background: #ffffff;
       padding: 0 !important;
       display: block !important;
@@ -445,12 +447,20 @@ module.exports = function createPageModule({ db, adminUiRoot }) {
     .user-dashboard-banner-img {
       width: 100% !important;
       max-width: 100% !important;
-      height: auto !important;
-      max-height: none !important;
+      height: 120px !important;
+      max-height: 120px !important;
       display: block !important;
       object-fit: cover !important;
-      border-radius: 10px !important;
+      object-position: center !important;
+      border-radius: 8px !important;
       margin: 0 !important;
+    }
+    @media (max-width: 768px) {
+      .user-dashboard-banner-container,
+      .user-dashboard-banner-img {
+        height: 85px !important;
+        max-height: 85px !important;
+      }
     }
 
     /* Running News Bar directly touching below menu bar */
@@ -1283,6 +1293,7 @@ ${(hasDashboardPopup && dashboardPopupEnabled) ? `
 </style>
 ` : ''}
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
 <script src="/auth-client.js"></script>
 </body>
 </html>`;

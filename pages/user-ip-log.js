@@ -1,7 +1,8 @@
 'use strict';
 
-const { escapeHtml } = require('../lib/page-utils');
-const { getUserPanelMenu } = require('../config/user-panel-menu');
+const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
+const { getUserPanelMenu, renderUserNavigation } = require('../config/user-panel-menu');
+const { getWalletMode } = require('../lib/wallet-helper');
 const { addPanelChrome } = require('../lib/panel-chrome');
 
 module.exports = function createUserIpLogPage({ db, sendJson, httpError }) {
@@ -309,6 +310,9 @@ module.exports = function createUserIpLogPage({ db, sendJson, httpError }) {
       `;
     }).join('');
 
+    const walletMode = await getWalletMode(db).catch(() => 'single');
+    const navigation = renderUserNavigation(walletMode, '/report/ip-log');
+
     const pageHtml = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
@@ -337,11 +341,12 @@ module.exports = function createUserIpLogPage({ db, sendJson, httpError }) {
     .btn-xs { padding: 3px 7px; font-size: 11px; border-radius: 4px; line-height: 1.2; }
   </style>
 </head>
-<body class="app sidebar-mini">
+<body>
   <div class="page">
     <div class="page-main">
-      <main class="app-content content-wrapper">
-        <div class="page-container">
+      ${navigation}
+      <main class="main-content">
+        <div class="container-fluid px-3 page-container">
 
           <div class="d-flex align-items-center justify-content-between mb-3">
             <div>
@@ -491,6 +496,7 @@ module.exports = function createUserIpLogPage({ db, sendJson, httpError }) {
 
   <script src="/assets/js/jquery-3.5.1.min.js"></script>
   <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
+  <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
   <script>
     $(document).on('click', '.btn-inspect-log', function() {
@@ -511,14 +517,14 @@ module.exports = function createUserIpLogPage({ db, sendJson, httpError }) {
 </body>
 </html>`;
 
+    const fullHtml = useFullWidthContainers(pageHtml);
     // Apply Panel Chrome (renders top header, user menu, wallet balances)
-    const finalHtml = await addPanelChrome(pageHtml, {
+    const finalHtml = await addPanelChrome(fullHtml, {
       title: 'Login & IP Access Log - User Portal',
       currentPath: '/report/ip-log',
       role: user.role || 'user',
-      userName: user.name || user.username,
-      walletMode: 'separate',
-      balanceMinor: 0,
+      userId: user.id,
+      db,
     });
 
     response.writeHead(200, {

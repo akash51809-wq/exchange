@@ -144,7 +144,7 @@ const {
 } = require('./lib/wallet-helper');
 const createFrontLandingPage = require('./pages/front-landing-page');
 const { getDefaultLogoSvg, getDefaultFaviconSvg, getDefaultDashboardBannerSvg } = require('./lib/default-brand-assets');
-const { parseUserAgent, resolveLocation } = require('./lib/user-agent-parser');
+const { parseUserAgent, resolveLocation, resolveLocationAsync } = require('./lib/user-agent-parser');
 const createSystemChartPage = require('./pages/system-chart');
 const { sendNotFoundPage } = require('./pages/not-found');
 const createUserSettingIpPage = require('./pages/user-setting-ip');
@@ -2164,10 +2164,10 @@ async function loginUser(request, response) {
     : await argon2.hash(password || 'invalid-password', { type: argon2.argon2id, memoryCost: 19_456, timeCost: 2, parallelism: 1 }).then(() => false);
   if (!user || !passwordMatches) {
     try {
-      const clientIp = request.headers['x-forwarded-for'] ? String(request.headers['x-forwarded-for']).split(',')[0].trim() : clientAddress(request);
+      const clientIp = getClientIp(request) || clientAddress(request);
       const uaStr = String(request.headers['user-agent'] || '').slice(0, 500);
       const parsed = parseUserAgent(uaStr);
-      const loc = resolveLocation(clientIp, user || null);
+      const loc = await resolveLocationAsync(clientIp, request.headers);
       await db.query(
         `INSERT INTO user_login_logs (
           user_id, username, name, role, ip_address, user_agent,
@@ -2300,10 +2300,10 @@ async function loginUser(request, response) {
 
   // Record successful login in user_login_logs
   try {
-    const clientIp = request.headers['x-forwarded-for'] ? String(request.headers['x-forwarded-for']).split(',')[0].trim() : clientAddress(request);
+    const clientIp = getClientIp(request) || clientAddress(request);
     const uaStr = String(request.headers['user-agent'] || '').slice(0, 500);
     const parsed = parseUserAgent(uaStr);
-    const loc = resolveLocation(clientIp, user);
+    const loc = await resolveLocationAsync(clientIp, request.headers);
     await db.query(
       `INSERT INTO user_login_logs (
         user_id, username, name, role, ip_address, user_agent,
@@ -2645,9 +2645,10 @@ async function createFundRequest(request, response) {
   if (!bankRow) {
     throw httpError('Active bank details unavailable. Please contact administrator.', 400);
   }
-  const paymentModes = ['Bank Transfer', 'UPI', 'Cash Deposit'];
+  const paymentModes = ['NEFT', 'RTGS', 'IMPS', 'UPI', 'Cash in Bank', 'Bank Transfer', 'Cash Deposit'];
   if (!paymentModes.includes(input.paymentMode)) throw httpError('Invalid payment mode selected.', 400);
-  if (input.walletType !== 'Prepaid') throw httpError('Currently only Prepaid wallet is supported.', 400);
+  const walletType = String(input.walletType || 'Prepaid').trim() || 'Prepaid';
+  if (walletType !== 'Prepaid') throw httpError('Currently only Prepaid wallet is supported.', 400);
   const accountInput = String(input.accountNumber || '').trim();
   const accountNumber = accountInput ? accountInput.replace(/[\s-]/g, '').toUpperCase() : '';
   if (accountNumber && !/^[A-Z0-9]{5,34}$/.test(accountNumber)) throw httpError('Depositor account number format is invalid.', 400);

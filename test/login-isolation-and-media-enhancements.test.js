@@ -24,7 +24,7 @@ test('Submenu alignment: 2-column and standard dropdown items are strictly left-
   assert.match(userNav, /text-align:\s*left\s*!important/i);
 });
 
-test('User Dashboard Banner: container and image have height: auto, no clipping and max-height constraints removed', async () => {
+test('User Dashboard Banner: container and image have compact vertical height with responsive full width fit', async () => {
   const db = {
     async query() {
       return {
@@ -57,8 +57,8 @@ test('User Dashboard Banner: container and image have height: auto, no clipping 
 
   await userDashboard.sendUserDashboard({ id: 'u1', username: 'testuser', name: 'Test User', role: 'user' }, mockResponse);
 
-  // Check banner styles (full width left-to-right fit and no vertical clipping)
-  assert.match(capturedHtml, /\.user-dashboard-banner-container\s*\{[^}]*height:\s*auto\s*!important/s);
+  // Check banner styles (compact vertical height and full width left-to-right fit)
+  assert.match(capturedHtml, /\.user-dashboard-banner-container\s*\{[^}]*(?:height|max-height):\s*120px\s*!important/s);
   assert.match(capturedHtml, /\.user-dashboard-banner-img\s*\{[^}]*object-fit:\s*(?:cover|contain)\s*!important/s);
   assert.match(capturedHtml, /\.user-dashboard-banner-img\s*\{[^}]*width:\s*100%\s*!important/s);
 

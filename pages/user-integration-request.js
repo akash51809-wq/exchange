@@ -218,6 +218,7 @@ module.exports = function createUserIntegrationRequestPage({ db }) {
 
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
 <script src="/auth-client.js"></script>
 <script>
 document.getElementById('integrationForm').addEventListener('submit', async function(e) {

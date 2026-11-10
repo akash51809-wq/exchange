@@ -1,9 +1,10 @@
 'use strict';
 
-const { escapeHtml } = require('../lib/page-utils');
+const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { getWalletMode, getSellerAvailableBalances } = require('../lib/wallet-helper');
+const { getClientAmountWordsHelperScript } = require('../lib/amount-words');
 
 module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGeneralSettings }) {
 
@@ -392,6 +393,7 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGe
                           <button class="btn btn-outline-secondary" type="button" id="btnMaxBalance">Full Balance</button>
                         </div>
                       </div>
+                      <div id="payout-amount-words" class="mt-1 small font-weight-bold text-success" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; padding:4px 8px; border-radius:4px;"></div>
                       <small class="text-muted">Total Available Balance: ${formattedBalance}</small>
                     </div>
 
@@ -566,7 +568,9 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGe
   <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
   <script>
+  ${getClientAmountWordsHelperScript()}
   (function() {
+    bindAmountWordsDisplay('payoutAmount', 'payout-amount-words');
     const maxBalRupees = ${JSON.stringify(balanceRupees)};
     const timeWindowConfig = ${JSON.stringify(timeWindowInfo)};
     const amountLimitConfig = ${JSON.stringify(amountLimitInfo)};
@@ -620,6 +624,7 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGe
       btnMax.addEventListener('click', function() {
         const effectiveMax = getEffectiveMaxAmount();
         payoutAmountInput.value = effectiveMax > 0 ? effectiveMax.toFixed(2) : '0.00';
+        if (payoutAmountInput.__updateWordsDisplay) payoutAmountInput.__updateWordsDisplay();
       });
     }
 
@@ -788,6 +793,7 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGe
 </body>
 </html>`;
 
+    const fullHtml = useFullWidthContainers(html);
     response.writeHead(200, {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
@@ -796,7 +802,7 @@ module.exports = function createUserFundRedeemPage({ db, formatMinorUnits, getGe
       'referrer-policy': 'no-referrer',
       'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
     });
-    response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db }));
+    response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: '/fund/redeem' }));
   }
 
   return { sendUserFundRedeemPage };

@@ -7,6 +7,7 @@ const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { USER_PANEL_MENU, renderUserNavigation } = require('../config/user-panel-menu');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const { getWalletMode } = require('../lib/wallet-helper');
+const { getClientAmountWordsHelperScript } = require('../lib/amount-words');
 
 module.exports = function createPageModule({ db, formatMinorUnits, getGeneralSettings }) {
 async function sendWalletTopupRequestPage(user, response) {
@@ -104,7 +105,6 @@ async function sendWalletTopupRequestPage(user, response) {
   <link rel="stylesheet" href="/assets/css/dark.css">
   <link rel="stylesheet" href="/assets/css/skins.css">
   <link rel="stylesheet" href="/assets/css/icons.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     .font-monospace { font-family: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
     /* Remove scroll arrows from number input */
@@ -125,11 +125,13 @@ async function sendWalletTopupRequestPage(user, response) {
 
     <main class="main-content">
       <div class="container-fluid px-2">
-        <div class="page-header d-flex justify-content-between align-items-center mb-3">
-          <h4 class="page-title mb-0">Wallet Topup Request</h4>
-          <button type="button" class="btn btn-primary shadow-sm" data-toggle="modal" data-target="#wallet-topup-modal">
-            <i class="fa fa-plus-circle mr-1"></i> Fund Request
-          </button>
+        <div class="page-header d-flex justify-content-between align-items-center mb-3 flex-wrap" style="gap: 10px;">
+          <h4 class="page-title mb-0 font-weight-bold text-dark">Wallet Topup Request</h4>
+          <div class="page-rightheader d-flex align-items-center ml-auto" style="gap: 8px;">
+            <button type="button" class="btn btn-primary btn-sm font-weight-bold shadow-sm px-3" data-toggle="modal" data-target="#wallet-topup-modal">
+              <i class="fa fa-plus-circle mr-1"></i> Fund Request
+            </button>
+          </div>
         </div>
 
         ${isSeparate ? `
@@ -235,9 +237,11 @@ async function sendWalletTopupRequestPage(user, response) {
               <label for="topup-payment-mode" class="font-weight-bold">Payment Mode <span class="text-danger">*</span></label>
               <select id="topup-payment-mode" class="form-control" required>
                 <option value="">Select Payment Mode</option>
-                <option>Bank Transfer</option>
-                <option>UPI</option>
-                <option>Cash Deposit</option>
+                <option value="NEFT">NEFT</option>
+                <option value="RTGS">RTGS</option>
+                <option value="IMPS">IMPS</option>
+                <option value="UPI">UPI</option>
+                <option value="Cash in Bank">Cash in Bank</option>
               </select>
             </div>
             <div class="form-group col-md-6">
@@ -246,13 +250,8 @@ async function sendWalletTopupRequestPage(user, response) {
                 ${isMinFundEnabled ? `<span class="badge badge-info ml-1 font-weight-normal">Min ₹${minFundAmount.toFixed(2)}</span>` : ''}
               </label>
               <input id="topup-amount" type="number" class="form-control" min="${minFundAmount}" max="10000000" step="0.01" placeholder="${isMinFundEnabled ? `Min ₹${minFundAmount.toFixed(2)}, e.g. ${Math.max(500, Math.ceil(minFundAmount))}` : 'Enter amount manually, e.g. 5000'}" required>
+              <div id="topup-amount-words" class="mt-1 small font-weight-bold text-success" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; padding:4px 8px; border-radius:4px;"></div>
               ${isMinFundEnabled ? `<small class="form-text text-muted">Minimum fund request limit is <strong>₹${minFundAmount.toFixed(2)}</strong>. Maximum has no limit.</small>` : ''}
-            </div>
-            <div class="form-group col-md-12">
-              <label for="topup-wallet-type" class="font-weight-bold">Wallet Type <span class="text-danger">*</span></label>
-              <select id="topup-wallet-type" class="form-control" required>
-                <option>Prepaid</option>
-              </select>
             </div>
             <div class="form-group col-md-12">
               <label for="topup-transaction-id" class="font-weight-bold">UTR / Transaction Reference ID <span class="text-danger">*</span></label>
@@ -284,8 +283,12 @@ async function sendWalletTopupRequestPage(user, response) {
 
 <script src="/assets/js/jquery-3.5.1.min.js"></script>
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
 <script src="/auth-client.js"></script>
 <script>
+${getClientAmountWordsHelperScript()}
+bindAmountWordsDisplay('topup-amount', 'topup-amount-words');
+
 document.getElementById('topup-bank').addEventListener('change', function() {
   const sel = this.options[this.selectedIndex];
   document.getElementById('topup-deposit-account').value = sel ? (sel.dataset.account || '') : '';
@@ -361,7 +364,7 @@ form.addEventListener('submit', async function(event) {
         bankCode: bankName || bankId,
         paymentMode: document.getElementById('topup-payment-mode').value,
         amount: document.getElementById('topup-amount').value,
-        walletType: document.getElementById('topup-wallet-type').value,
+        walletType: 'Prepaid',
         transactionId: document.getElementById('topup-transaction-id').value,
         proof
       })
@@ -373,6 +376,8 @@ form.addEventListener('submit', async function(event) {
     form.reset();
     document.getElementById('topup-deposit-account').value = '';
     document.getElementById('topup-bank-logo').style.display = 'none';
+    const wordsEl = document.getElementById('topup-amount-words');
+    if (wordsEl) { wordsEl.textContent = ''; wordsEl.style.display = 'none'; }
     setTimeout(() => location.reload(), 1200);
   } catch (error) {
     message.className = 'mb-0 font-weight-bold text-danger';
@@ -384,6 +389,7 @@ form.addEventListener('submit', async function(event) {
 </body>
 </html>`;
 
+  const fullHtml = useFullWidthContainers(html);
   response.writeHead(200, {
     'content-type': 'text/html; charset=utf-8',
     'cache-control': 'no-store',
@@ -391,7 +397,7 @@ form.addEventListener('submit', async function(event) {
     'x-frame-options': 'DENY',
     'referrer-policy': 'no-referrer',
   });
-  response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db, currentPath: '/fund/wallet-topup-request' }));
+  response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: '/fund/wallet-topup-request' }));
 }
 
   return { sendWalletTopupRequestPage };

@@ -1,7 +1,8 @@
 'use strict';
 
-const { escapeHtml } = require('../lib/page-utils');
+const { escapeHtml, useFullWidthContainers } = require('../lib/page-utils');
 const { renderUserNavigation } = require('../config/user-panel-menu');
+const { getWalletMode } = require('../lib/wallet-helper');
 const { addPanelChrome } = require('../lib/panel-chrome');
 const {
   MONTHS,
@@ -31,6 +32,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
     const selectedMonth = String(searchParams.get('month') || defaultLast.month).trim().padStart(2, '0');
     const selectedMonthYear = `${selectedYear}-${selectedMonth}`;
     const statusFilter = String(searchParams.get('status') || 'all').trim().toLowerCase();
+    const walletMode = await getWalletMode(db).catch(() => 'single');
 
     const adminState = await getAdminState();
 
@@ -266,7 +268,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
 <body>
   <div class="page">
     <div class="page-main">
-      <div class="no-print">${renderUserNavigation('/invoice/buyer-gst-invoice')}</div>
+      <div class="no-print">${renderUserNavigation(walletMode, '/invoice/buyer-gst-invoice')}</div>
 
       <div class="page-container">
         <!-- Top Title Bar -->
@@ -350,10 +352,12 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
 
   <script src="/assets/js/jquery-3.5.1.min.js"></script>
   <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
+  <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
 </body>
 </html>`;
 
+      const fullHtml = useFullWidthContainers(html);
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
@@ -362,7 +366,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
         'referrer-policy': 'no-referrer',
         'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
       });
-      response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db }));
+      response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: '/invoice/buyer-gst-invoice' }));
       return;
     }
 
@@ -479,7 +483,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
 <body>
   <div class="page">
     <div class="page-main">
-      ${renderUserNavigation('/invoice/seller-gst-invoice')}
+      ${renderUserNavigation(walletMode, '/invoice/seller-gst-invoice')}
 
       <div class="page-container">
         <!-- Top Bar -->
@@ -693,9 +697,11 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
       });
     }
   </script>
+  <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
 </body>
 </html>`;
 
+      const fullHtml = useFullWidthContainers(html);
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
@@ -704,7 +710,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
         'referrer-policy': 'no-referrer',
         'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
       });
-      response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db }));
+      response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: '/invoice/seller-gst-invoice' }));
       return;
     }
 
@@ -750,7 +756,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
 <body>
   <div class="page">
     <div class="page-main">
-      ${renderUserNavigation(`/invoice/${type}-invoice`)}
+      ${renderUserNavigation(walletMode, `/invoice/${type}-invoice`)}
       <div class="page-container">
 
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
@@ -825,10 +831,12 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
 
   <script src="/assets/js/jquery-3.5.1.min.js"></script>
   <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
+  <script src="/assets/plugins/horizontal-menu/horizontal.js"></script>
   <script src="/auth-client.js"></script>
 </body>
 </html>`;
 
+      const fullHtml = useFullWidthContainers(html);
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'no-store',
@@ -837,7 +845,7 @@ module.exports = function createUserInvoicePages({ db, formatMinorUnits }) {
         'referrer-policy': 'no-referrer',
         'content-security-policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';",
       });
-      response.end(await addPanelChrome(html, { role: 'user', userId: user.id, db }));
+      response.end(await addPanelChrome(fullHtml, { role: 'user', userId: user.id, db, currentPath: `/invoice/${type}-invoice` }));
       return;
     }
   }

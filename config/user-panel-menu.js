@@ -33,7 +33,6 @@ const USER_PANEL_MENU = [
     { label: 'Fund Order', path: '/report/fund-order' },
     { label: 'Login & IP Log', path: '/report/ip-log' },
   ] },
-  { label: 'Alerts Setting', path: '/alerts-setting', icon: 'fa fa-bell' },
   { label: 'Invoice', path: '/invoice', icon: 'fa fa-file-text-o', items: [
     { label: 'Buyer GST Invoice', path: '/invoice/buyer-gst-invoice' },
     { label: 'Seller GST Invoice', path: '/invoice/seller-gst-invoice' },
@@ -93,7 +92,6 @@ function getUserPanelMenu(walletMode = 'single') {
       { label: 'Fund Order', path: '/report/fund-order' },
       { label: 'Login & IP Log', path: '/report/ip-log' },
     ] },
-    { label: 'Alerts Setting', path: '/alerts-setting', icon: 'fa fa-bell' },
     { label: 'Invoice', path: '/invoice', icon: 'fa fa-file-text-o', items: [
       { label: 'Buyer GST Invoice', path: '/invoice/buyer-gst-invoice' },
       { label: 'Seller GST Invoice', path: '/invoice/seller-gst-invoice' },
@@ -116,17 +114,18 @@ function getUserPanelMenu(walletMode = 'single') {
 const USER_PANEL_PAGES = new Map();
 const templateFor = (route) => `${route.split('/').filter(Boolean).join('-')}.html`;
 for (const item of getUserPanelMenu('separate')) {
-  if (item.path !== '/dashboard' && item.path !== '#') USER_PANEL_PAGES.set(item.path, { title: item.label, template: templateFor(item.path) });
-  for (const child of item.items || []) USER_PANEL_PAGES.set(child.path, { title: child.label, template: templateFor(child.path) });
+  if (item.path !== '/dashboard' && item.path !== '#') USER_PANEL_PAGES.set(item.path, { title: item.label, template: templateFor(item.path), path: item.path });
+  for (const child of item.items || []) USER_PANEL_PAGES.set(child.path, { title: child.label, template: templateFor(child.path), path: child.path });
 }
-USER_PANEL_PAGES.set('/kyc', { title: 'KYC Verification', template: 'kyc.html' });
-USER_PANEL_PAGES.set('/setting/kyc', { title: 'KYC Verification', template: 'kyc.html' });
-USER_PANEL_PAGES.set('/invoice/buyer-invoice', { title: 'Buyer GST Invoice', template: 'invoice-buyer-gst-invoice.html' });
-USER_PANEL_PAGES.set('/invoice/seller-invoice', { title: 'Seller GST Invoice', template: 'invoice-seller-gst-invoice.html' });
-USER_PANEL_PAGES.set('/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html' });
-USER_PANEL_PAGES.set('/user/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html' });
-USER_PANEL_PAGES.set('/help/integration-requests', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html' });
-USER_PANEL_PAGES.set('/help/integration-request', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html' });
+USER_PANEL_PAGES.set('/kyc', { title: 'KYC Verification', template: 'kyc.html', path: '/kyc' });
+USER_PANEL_PAGES.set('/setting/kyc', { title: 'KYC Verification', template: 'kyc.html', path: '/kyc' });
+USER_PANEL_PAGES.set('/user/setting/error-list', { title: 'API Error & Failure Code List', template: 'setting-error-list.html', path: '/setting/error-list' });
+USER_PANEL_PAGES.set('/invoice/buyer-invoice', { title: 'Buyer GST Invoice', template: 'invoice-buyer-gst-invoice.html', path: '/invoice/buyer-gst-invoice' });
+USER_PANEL_PAGES.set('/invoice/seller-invoice', { title: 'Seller GST Invoice', template: 'invoice-seller-gst-invoice.html', path: '/invoice/seller-gst-invoice' });
+USER_PANEL_PAGES.set('/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html', path: '/account/wallet-exchange' });
+USER_PANEL_PAGES.set('/user/account/wallet-exchange', { title: 'Exchange Wallet Balance', template: 'account-wallet-exchange.html', path: '/account/wallet-exchange' });
+USER_PANEL_PAGES.set('/help/integration-requests', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html', path: '/help/integration-requests' });
+USER_PANEL_PAGES.set('/help/integration-request', { title: 'Seller API Integration Requests', template: 'help-integration-requests.html', path: '/help/integration-requests' });
 
 function renderUserMenuList(walletMode = 'single', activePath = '') {
   const menu = getUserPanelMenu(walletMode);
@@ -171,7 +170,7 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
   return `<!-- Horizontal-menu -->
   <div class="sticky">
     <div class="horizontal-main hor-menu clearfix">
-      <div class="horizontal-mainwrapper container clearfix">
+      <div class="horizontal-mainwrapper container-fluid px-3 clearfix">
         <nav class="horizontalMenu clearfix">
           <ul class="horizontalMenu-list">${entries}</ul>
         </nav>
@@ -180,16 +179,75 @@ function renderUserNavigation(walletMode = 'single', activePath = '') {
   </div>
   <!-- Horizontal-menu end -->
   <style>
+    .sticky .horizontal-main {
+      width: 100% !important;
+      background: #29327f !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+    }
+    .sticky .horizontal-mainwrapper {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+      margin: 0 auto !important;
+    }
+    .sticky .horizontalMenu {
+      display: block !important;
+      width: 100% !important;
+    }
+    @media (min-width: 992px) {
+      .sticky .horizontalMenu > .horizontalMenu-list {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        list-style: none !important;
+      }
+      .sticky .horizontalMenu > .horizontalMenu-list > li {
+        float: none !important;
+        position: relative !important;
+        flex: 0 0 auto !important;
+      }
+      .sticky .horizontalMenu > .horizontalMenu-list > li > a {
+        padding: 11px 11px !important;
+        white-space: nowrap !important;
+        color: #cbd5e1 !important;
+        text-decoration: none !important;
+        line-height: 1.3 !important;
+      }
+      .sticky .horizontalMenu > .horizontalMenu-list > li > a:hover,
+      .sticky .horizontalMenu > .horizontalMenu-list > li > a.active {
+        color: #ffffff !important;
+        background: rgba(255, 255, 255, 0.1) !important;
+        border-radius: 4px;
+      }
+      .sticky .horizontalMenu > .horizontalMenu-list > li:hover > ul.sub-menu {
+        display: block !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+      }
+    }
     .horizontalMenu-list > li > a {
       font-weight: 700 !important;
-      font-size: 13.5px !important;
+      font-size: 13px !important;
       display: inline-flex !important;
       align-items: center !important;
       gap: 5px !important;
     }
-    .horizontalMenu-list > li > a > i.menu-icon {
-      font-size: 14px !important;
-      margin-right: 2px !important;
+    .horizontalMenu-list > li > a > i.menu-icon,
+    .horizontalMenu-list > li > a > i.fa,
+    .horizontalMenu-list > li > a > i.horizontal-icon {
+      font-family: FontAwesome !important;
+      font-style: normal !important;
+      font-weight: normal !important;
+      font-size: 13.5px !important;
+      line-height: 1 !important;
+      margin: 0 !important;
+      vertical-align: middle !important;
     }
     .horizontalMenu-list .sub-menu.two-columns {
       min-width: 480px !important;
