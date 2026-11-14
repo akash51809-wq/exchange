@@ -112,6 +112,7 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
     const query = `
       SELECT r.id, r.user_id AS buyer_user_id, r.seller_user_id, r.seller_api_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor, r.seller_margin_minor,
+             r.seller_margin_percent,
              r.status, r.idempotency_key, r.provider_reference, r.with_gst, r.created_at, r.updated_at,
              o.operator_code, u.username AS buyer_username, u.name AS buyer_name,
              sapi.name AS seller_api_name, sapi.short_name AS seller_api_short_name
@@ -163,6 +164,11 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
 
       const formattedAmount = `₹${formatMinorUnits(row.amount_minor)}`;
       const formattedMargin = `₹${formatMinorUnits(rowSellerMargin.toString())}`;
+      const sellerMarginPct = row.seller_margin_percent != null && Number(row.seller_margin_percent) > 0
+        ? Number(row.seller_margin_percent).toFixed(2)
+        : (row.amount_minor && Number(row.amount_minor) > 0 && rowSellerMargin > 0n
+          ? ((Number(rowSellerMargin) / Number(row.amount_minor)) * 100).toFixed(2)
+          : '0.00');
       const apiDisplayName = row.seller_api_name || row.seller_api_short_name || 'Direct / Internal';
       const durationHtml = formatDuration(row.created_at, row.updated_at, row.status);
 
@@ -199,7 +205,10 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
           <td class="font-monospace font-weight-bold text-dark">${escapeHtml(mobile)}</td>
           <td class="text-center"><span class="badge ${row.with_gst ? 'badge-primary' : 'badge-secondary'}">${row.with_gst ? 'With GST' : 'No GST'}</span></td>
           <td class="text-right font-weight-bold text-dark font-monospace">${formattedAmount}</td>
-          <td class="text-right font-weight-bold text-success font-monospace">${formattedMargin}</td>
+          <td class="text-right font-monospace" style="vertical-align:middle;">
+            <div class="font-weight-bold text-success" style="font-size:12px;">${sellerMarginPct}%</div>
+            <div class="text-muted" style="font-size:10px;">${formattedMargin}</div>
+          </td>
           <td class="text-center">${statusBadge}</td>
           <td class="small font-monospace text-muted" title="${escapeHtml(row.provider_reference || '')}">${escapeHtml(row.provider_reference ? (row.provider_reference.length > 15 ? row.provider_reference.slice(0, 15) + '...' : row.provider_reference) : '-')}</td>
           <td class="small font-monospace text-muted" title="${escapeHtml(row.idempotency_key || '')}">${escapeHtml(row.idempotency_key ? (row.idempotency_key.length > 15 ? row.idempotency_key.slice(0, 15) + '...' : row.idempotency_key) : '-')}</td>

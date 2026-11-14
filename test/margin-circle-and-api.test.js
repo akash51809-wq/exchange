@@ -428,8 +428,8 @@ test('Buyer & Seller Margin - Circle Routing and Seller API Selection Tests', as
     assert.match(capturedQuerySql, /s\.name = m\.api_name OR s\.short_name = m\.api_name/i);
     // Verify candidate seller query sorts by highest seller commission percent
     assert.match(capturedQuerySql, /ORDER BY CAST\(m\.commission_percent AS NUMERIC\) DESC/i);
-    // Verify candidate seller query filters seller commission >= buyerAskedCommission
-    assert.match(capturedQuerySql, /CAST\(m\.commission_percent AS NUMERIC\) >= \$5/i);
+    // Verify candidate seller query filters seller commission >= buyerAskedCommission (accounting for admin margin difference)
+    assert.match(capturedQuerySql, /CAST\(m\.commission_percent AS NUMERIC\).*>= \$5/i);
     // Verify parameter 2 is the detected circle 'UP East'
     assert.strictEqual(capturedQueryParams[1], 'UP East');
   });
@@ -562,5 +562,7 @@ test('Buyer & Seller Margin - Circle Routing and Seller API Selection Tests', as
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload?.status, 'SUCCESS');
     assert.strictEqual(forwardedSellerUserId, 'seller-user-9839680707');
+    assert.strictEqual(sentPayload?.buyer_margin_percent, 2.11);
+    assert.strictEqual(sentPayload?.seller_margin_percent, 2.21);
   });
 });

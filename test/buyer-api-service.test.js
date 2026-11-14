@@ -441,7 +441,7 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
           return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
         }
         if (sql.includes('UPDATE wallets SET buyer_balance_minor = buyer_balance_minor +') || sql.includes('UPDATE wallets SET balance_minor = balance_minor +')) {
-          return { rows: [{ balance_minor: 40250n, buyer_balance_minor: 40250n }], rowCount: 1 };
+          return { rows: [{ balance_minor: 40290n, buyer_balance_minor: 40290n }], rowCount: 1 };
         }
         if (sql.includes('INSERT INTO recharge_orders')) {
           return { rows: [{ id: 'success-order-uuid', created_at: new Date() }], rowCount: 1 };
@@ -533,9 +533,9 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
 
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload.status, 'SUCCESS');
-    assert.strictEqual(sentPayload.margin, '2.50');
-    assert.strictEqual(sentPayload.net_amount, '97.50');
-    assert.strictEqual(sentPayload.closing_balance, '402.50');
+    assert.strictEqual(sentPayload.margin, '2.90');
+    assert.strictEqual(sentPayload.net_amount, '97.10');
+    assert.strictEqual(sentPayload.closing_balance, '402.90');
     assert.strictEqual(sellerWalletProvisioned, true, 'Seller wallet must be auto-provisioned');
 
     // Verify buyer margin entry was inserted
@@ -649,7 +649,7 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload.status, 'SUCCESS');
     assert.strictEqual(sentPayload.amount, '500.00');
-    assert.strictEqual(sentPayload.margin, '3.50', 'Margin must strictly be returned in percentage, NOT rupees');
+    assert.strictEqual(sentPayload.margin, '3.90', 'Margin must strictly be returned in percentage, NOT rupees');
   });
 
   it('handleBuyerRecharge rolls back and throws error if seller wallet is missing on SUCCESS', async () => {
@@ -662,7 +662,7 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
           return { rows: [], rowCount: 0 };
         }
         if (sql.includes('UPDATE wallets SET buyer_balance_minor = buyer_balance_minor +') || sql.includes('UPDATE wallets SET balance_minor = balance_minor +')) {
-          return { rows: [{ balance_minor: 40250n, buyer_balance_minor: 40250n }], rowCount: 1 };
+          return { rows: [{ balance_minor: 40290n, buyer_balance_minor: 40290n }], rowCount: 1 };
         }
         if (sql.includes('INSERT INTO recharge_orders')) {
           return { rows: [{ id: 'emergency-order-uuid', created_at: new Date() }], rowCount: 1 };

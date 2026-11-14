@@ -92,6 +92,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
     const query = `
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor,
+             r.buyer_margin_percent,
              r.status, r.idempotency_key, r.provider_reference, r.with_gst,
              r.dispute_status, r.dispute_reason, r.dispute_resolution_note, r.dispute_created_at,
              r.created_at, o.operator_code
@@ -140,6 +141,11 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
 
       const formattedAmount = `₹${formatMinorUnits(row.amount_minor)}`;
       const formattedMargin = `₹${formatMinorUnits(row.margin_minor || '0')}`;
+      const marginPercent = row.buyer_margin_percent != null && Number(row.buyer_margin_percent) > 0
+        ? Number(row.buyer_margin_percent).toFixed(2)
+        : (row.amount_minor && Number(row.amount_minor) > 0 && row.margin_minor
+          ? ((Number(row.margin_minor) / Number(row.amount_minor)) * 100).toFixed(2)
+          : '0.00');
 
       // Dispute Action or Status Badge
       let disputeCell = '';
@@ -189,7 +195,10 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
           <td class="text-center"><span class="badge ${row.with_gst ? 'badge-primary' : 'badge-secondary'}">${row.with_gst ? 'With GST' : 'No GST'}</span></td>
           <td class="small text-muted font-monospace" style="white-space:nowrap;">${escapeHtml(formatDateTime(row.created_at))}</td>
           <td class="text-right font-weight-bold text-dark font-monospace">${formattedAmount}</td>
-          <td class="text-right font-weight-bold text-success font-monospace">${formattedMargin}</td>
+          <td class="text-right font-monospace" style="vertical-align:middle;">
+            <div class="font-weight-bold text-success" style="font-size:12px;">${marginPercent}%</div>
+            <div class="text-muted" style="font-size:10px;">${formattedMargin}</div>
+          </td>
           <td class="text-center">${statusBadge}</td>
           <td class="small font-monospace text-muted" title="${escapeHtml(row.provider_reference || '')}">${escapeHtml(row.provider_reference ? (row.provider_reference.length > 15 ? row.provider_reference.slice(0, 15) + '...' : row.provider_reference) : '-')}</td>
           <td class="small font-monospace text-muted" title="${escapeHtml(row.idempotency_key || '')}">${escapeHtml(row.idempotency_key ? (row.idempotency_key.length > 15 ? row.idempotency_key.slice(0, 15) + '...' : row.idempotency_key) : '-')}</td>

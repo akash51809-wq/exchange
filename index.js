@@ -906,6 +906,8 @@ const DATABASE_SCHEMA = `
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_attempts INT DEFAULT 0;
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_last_sent_at TIMESTAMPTZ;
   ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS callback_response TEXT;
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS buyer_margin_percent NUMERIC(8,4) DEFAULT 0;
+  ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS seller_margin_percent NUMERIC(8,4) DEFAULT 0;
 
   CREATE INDEX IF NOT EXISTS idx_recharge_orders_seller_created ON recharge_orders (seller_user_id, created_at DESC) WHERE seller_user_id IS NOT NULL;
   CREATE INDEX IF NOT EXISTS idx_recharge_orders_operator_created ON recharge_orders (operator_id, created_at DESC) WHERE operator_id IS NOT NULL;
