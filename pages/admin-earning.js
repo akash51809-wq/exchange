@@ -382,21 +382,43 @@ module.exports = function createAdminEarningPage({
       }
     }
 
-    // Compute Today's profit directly from DB for quick glance
+    // Compute Today's genuine transaction metrics directly from DB for the top KPI boxes
     let todayAdminProfit = 0;
+    let todaySuccessMinor = 0n;
+    let todaySuccessCount = 0;
+    let todayTotalMinor = 0n;
+    let todayTotalCount = 0;
+    let todayPendingCount = 0;
+    let todayFailedCount = 0;
+    let todayRefundedCount = 0;
+
     try {
       const todayRes = await db.query(
-        `SELECT COALESCE(SUM(amount_minor), 0) AS today_success_minor, COUNT(id) AS today_success_count
-         FROM recharge_orders
-         WHERE status = 'successful'
-           AND created_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Kolkata')`
+        `SELECT
+          COUNT(id) AS today_total_count,
+          COALESCE(SUM(amount_minor), 0) AS today_total_minor,
+          COUNT(id) FILTER (WHERE status = 'successful') AS today_success_count,
+          COALESCE(SUM(amount_minor) FILTER (WHERE status = 'successful'), 0) AS today_success_minor,
+          COUNT(id) FILTER (WHERE status IN ('pending', 'processing')) AS today_pending_count,
+          COUNT(id) FILTER (WHERE status = 'failed') AS today_failed_count,
+          COUNT(id) FILTER (WHERE status = 'refunded') AS today_refunded_count
+        FROM recharge_orders
+        WHERE timezone('Asia/Kolkata', created_at)::date = timezone('Asia/Kolkata', now())::date`
       );
       if (todayRes.rowCount > 0) {
-        const todayMinor = BigInt(todayRes.rows[0].today_success_minor || '0');
-        todayAdminProfit = (Number(todayMinor) / 100) * (effectiveMarginPercent / 100);
+        const row0 = todayRes.rows[0];
+        todayTotalCount = Number(row0.today_total_count || 0);
+        todayTotalMinor = BigInt(row0.today_total_minor || '0');
+        todaySuccessCount = Number(row0.today_success_count || 0);
+        todaySuccessMinor = BigInt(row0.today_success_minor || '0');
+        todayPendingCount = Number(row0.today_pending_count || 0);
+        todayFailedCount = Number(row0.today_failed_count || 0);
+        todayRefundedCount = Number(row0.today_refunded_count || 0);
+
+        todayAdminProfit = (Number(todaySuccessMinor) / 100) * (effectiveMarginPercent / 100);
       }
     } catch (tErr) {
-      console.warn('[Admin Earning] Today profit query error:', tErr.message);
+      console.warn('[Admin Earning] Today stats query error:', tErr.message);
     }
 
     // Party-wise stats list sorted by admin profit descending
@@ -407,7 +429,7 @@ module.exports = function createAdminEarningPage({
     // 7. Render Table Rows HTML
     function renderTableRowsHtml(items) {
       if (!items || items.length === 0) {
-        return `<tr><td colspan="13" class="text-center py-5 text-muted font-weight-bold">
+        return `<tr><td colspan="10" class="text-center py-5 text-muted font-weight-bold">
           <i class="fa fa-info-circle fa-2x d-block mb-2 text-primary" style="opacity:0.5;"></i>
           No transaction records found matching your filters.
         </td></tr>`;
@@ -442,15 +464,14 @@ module.exports = function createAdminEarningPage({
         // Format Profit Badge
         let profitDisplay = '';
         if (isSuccess) {
-          profitDisplay = `<span class="badge badge-success px-2 py-1 font-weight-bold" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:12.5px;">+₹${txnProfit.toFixed(2)}</span>`;
+          profitDisplay = `<span class="badge badge-success px-2 py-1 font-weight-bold" style="background:#dcfce7;color:#15803d;border:1px solid #86efac;font-size:13px;">+₹${txnProfit.toFixed(2)}</span>
+            <small class="d-block text-muted" style="font-size:10px;">@ ${effectiveMarginPercent.toFixed(2)}%</small>`;
         } else if (isPending) {
           profitDisplay = `<span class="badge badge-warning text-dark px-2 py-1" style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;" title="Unsettled until confirmed">₹${txnProfit.toFixed(2)} (Pend)</span>`;
         } else {
           profitDisplay = `<span class="badge badge-light text-muted px-2 py-1 border">₹0.00</span>`;
         }
 
-        const buyerComm = (Number(row.margin_minor || '0') / 100).toFixed(2);
-        const sellerMargin = (Number(row.seller_margin_minor || '0') / 100).toFixed(2);
         const systemRechargeId = 'RCH-' + row.id.slice(0, 8).toUpperCase();
 
         return `
@@ -494,42 +515,10 @@ module.exports = function createAdminEarningPage({
             <td>
               <strong class="text-dark font-weight-bold" style="font-size:13.5px;">₹${amtRupees.toFixed(2)}</strong>
             </td>
-            <td class="text-center">
-              <span class="badge badge-info px-2 py-1 font-weight-bold" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">
-                ${effectiveMarginPercent.toFixed(2)}%
-              </span>
-            </td>
             <td class="text-center font-weight-bold">
               ${profitDisplay}
             </td>
-            <td>
-              <div class="small text-muted">
-                <span>Buyer: ₹${buyerComm}</span><br>
-                <span>Seller: ₹${sellerMargin}</span>
-              </div>
-            </td>
             <td class="text-center">${statusBadge}</td>
-            <td class="text-center">
-              <button type="button" class="btn btn-xs btn-outline-primary font-weight-bold py-1 px-2 btn-show-detail"
-                      data-id="${row.id}"
-                      data-rch-id="${systemRechargeId}"
-                      data-ref-id="${escapeHtml(row.idempotency_key || '-')}"
-                      data-ope-id="${escapeHtml(row.provider_reference || '-')}"
-                      data-date="${escapeHtml(formatDateTime(row.created_at))}"
-                      data-buyer="${escapeHtml(row.buyer_name || row.buyer_username || 'N/A')} (@${escapeHtml(row.buyer_username || '')})"
-                      data-seller="${escapeHtml(row.seller_name || row.seller_username || 'Direct')} (@${escapeHtml(row.seller_username || 'direct')})"
-                      data-mobile="${escapeHtml(mobile)}"
-                      data-operator="${escapeHtml(row.operator_name || '-')} (${escapeHtml(row.circle_name || 'All')})"
-                      data-amount="${amtRupees.toFixed(2)}"
-                      data-margin-percent="${effectiveMarginPercent.toFixed(2)}"
-                      data-profit="${txnProfit.toFixed(2)}"
-                      data-buyer-comm="${buyerComm}"
-                      data-seller-margin="${sellerMargin}"
-                      data-status="${escapeHtml(row.status.toUpperCase())}"
-                      title="View Detailed Profit Audit Breakdown">
-                <i class="fa fa-eye mr-1"></i> Detail
-              </button>
-            </td>
           </tr>
         `;
       }).join('');
@@ -729,53 +718,55 @@ module.exports = function createAdminEarningPage({
             </div>
           </div>
 
-          <!-- Summary KPI Cards -->
+          <!-- Summary KPI Cards: Current Date Genuine Transaction Data -->
           <div class="row">
-            <!-- Total Admin Earning / Net Profit -->
+            <!-- Today's Admin Net Profit -->
             <div class="col-12 col-sm-6 col-lg-3">
               <div class="kpi-card border-accent-green">
                 <div class="kpi-label">
-                  <span>Total Admin Profit</span>
+                  <span>Today's Admin Net Profit</span>
                   <i class="fa fa-money text-success" style="font-size:16px;"></i>
                 </div>
-                <div class="kpi-value text-success font-monospace">₹${totalAdminProfit.toFixed(2)}</div>
-                <div class="kpi-subtext">Earned from ${totalSuccessCount} successful transactions</div>
+                <div class="kpi-value text-success font-monospace">+₹${todayAdminProfit.toFixed(2)}</div>
+                <div class="kpi-subtext">Earned from ${todaySuccessCount} successful txn(s) today</div>
               </div>
             </div>
 
-            <!-- Successful Recharge Volume -->
+            <!-- Today's Successful Volume -->
             <div class="col-12 col-sm-6 col-lg-3">
               <div class="kpi-card border-accent-blue">
                 <div class="kpi-label">
-                  <span>Successful Volume</span>
+                  <span>Today's Success Volume</span>
                   <i class="fa fa-check-circle text-primary" style="font-size:16px;"></i>
                 </div>
-                <div class="kpi-value text-primary font-monospace">₹${(Number(successVolumeMinor)/100).toFixed(2)}</div>
-                <div class="kpi-subtext">Total recharge turnover handled</div>
+                <div class="kpi-value text-primary font-monospace">₹${(Number(todaySuccessMinor)/100).toFixed(2)}</div>
+                <div class="kpi-subtext">${todaySuccessCount} successful recharge orders today</div>
               </div>
             </div>
 
-            <!-- Today's Admin Profit -->
+            <!-- Today's Total Txns & Turnover -->
             <div class="col-12 col-sm-6 col-lg-2">
               <div class="kpi-card border-accent-teal">
                 <div class="kpi-label">
-                  <span>Today's Profit</span>
+                  <span>Today's Total Txns</span>
                   <i class="fa fa-calendar-check-o text-info" style="font-size:16px;"></i>
                 </div>
-                <div class="kpi-value text-dark font-monospace">₹${todayAdminProfit.toFixed(2)}</div>
-                <div class="kpi-subtext">IST Midnight to present</div>
+                <div class="kpi-value text-dark font-monospace">${todayTotalCount} Txns</div>
+                <div class="kpi-subtext">Turnover: ₹${(Number(todayTotalMinor)/100).toFixed(2)}</div>
               </div>
             </div>
 
-            <!-- Pending Potential Profit -->
+            <!-- Today's Status Breakdown -->
             <div class="col-12 col-sm-6 col-lg-2">
               <div class="kpi-card border-accent-orange">
                 <div class="kpi-label">
-                  <span>Pending Potential</span>
-                  <i class="fa fa-clock-o text-warning" style="font-size:16px;"></i>
+                  <span>Today's Status</span>
+                  <i class="fa fa-pie-chart text-warning" style="font-size:16px;"></i>
                 </div>
-                <div class="kpi-value text-warning font-monospace">₹${pendingPotentialProfit.toFixed(2)}</div>
-                <div class="kpi-subtext">${totalPendingCount} pending order(s)</div>
+                <div class="kpi-value text-success font-monospace" style="font-size:17px;">
+                  ${todaySuccessCount} <small class="text-muted" style="font-size:12px;">Success</small>
+                </div>
+                <div class="kpi-subtext">${todayPendingCount} Pending | ${todayFailedCount} Failed</div>
               </div>
             </div>
 
@@ -783,7 +774,7 @@ module.exports = function createAdminEarningPage({
             <div class="col-12 col-sm-6 col-lg-2">
               <div class="kpi-card border-accent-purple">
                 <div class="kpi-label">
-                  <span>Margin Diff %</span>
+                  <span>Margin Diff Rate</span>
                   <i class="fa fa-sliders text-purple" style="font-size:16px;"></i>
                 </div>
                 <div class="kpi-value font-monospace" style="color:#7c3aed;">${effectiveMarginPercent.toFixed(2)}%</div>
@@ -909,95 +900,14 @@ module.exports = function createAdminEarningPage({
             </div>
           </div>
 
-          <!-- Summary Breakdown Accordion: Party-Wise & Operator-Wise -->
-          <div class="card summary-section-card mb-3">
-            <div class="card-header bg-white py-2 px-3 d-flex justify-content-between align-items-center">
-              <span class="font-weight-bold text-dark" style="cursor:pointer;" data-toggle="collapse" data-target="#summaryCollapsibleArea">
-                <i class="fa fa-pie-chart text-primary mr-1"></i> Detailed Earning Summaries (Party-Wise &amp; Operator-Wise)
-                <small class="text-muted ml-2">(Click to toggle views)</small>
-              </span>
-              <button class="btn btn-xs btn-outline-secondary" type="button" data-toggle="collapse" data-target="#summaryCollapsibleArea">
-                <i class="fa fa-chevron-down"></i>
-              </button>
-            </div>
-            <div class="collapse show" id="summaryCollapsibleArea">
-              <div class="card-body p-3">
-                <div class="row">
-                  <!-- Party-Wise Summary Table -->
-                  <div class="col-12 col-lg-7 mb-3">
-                    <h6 class="font-weight-bold text-dark mb-2">
-                      <i class="fa fa-users text-primary mr-1"></i> Party-Wise Earning Breakdown
-                    </h6>
-                    <div class="table-responsive border rounded" style="max-height: 260px; overflow-y: auto;">
-                      <table class="table table-sm table-striped mb-0" style="font-size:12px;">
-                        <thead>
-                          <tr>
-                            <th>Party Name &amp; User</th>
-                            <th>Role</th>
-                            <th class="text-right">Success Txns</th>
-                            <th class="text-right">Volume (₹)</th>
-                            <th class="text-right">Admin Profit (₹)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${partyStatsList.length === 0 ? '<tr><td colspan="5" class="text-center text-muted py-3">No party records found.</td></tr>' : partyStatsList.map((p) => `
-                            <tr>
-                              <td>
-                                <strong class="text-dark">${escapeHtml(p.name)}</strong>
-                                <small class="text-muted text-monospace d-block">@${escapeHtml(p.username)}</small>
-                              </td>
-                              <td><span class="badge badge-light border">${p.role}</span></td>
-                              <td class="text-right font-weight-bold">${p.successCount}</td>
-                              <td class="text-right font-monospace">₹${p.volume.toFixed(2)}</td>
-                              <td class="text-right font-monospace text-success font-weight-bold">+₹${p.adminProfit.toFixed(2)}</td>
-                            </tr>
-                          `).join('')}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <!-- Operator-Wise Summary Table -->
-                  <div class="col-12 col-lg-5 mb-3">
-                    <h6 class="font-weight-bold text-dark mb-2">
-                      <i class="fa fa-signal text-info mr-1"></i> Operator-Wise Earning Breakdown
-                    </h6>
-                    <div class="table-responsive border rounded" style="max-height: 260px; overflow-y: auto;">
-                      <table class="table table-sm table-striped mb-0" style="font-size:12px;">
-                        <thead>
-                          <tr>
-                            <th>Operator</th>
-                            <th class="text-right">Success Txns</th>
-                            <th class="text-right">Volume (₹)</th>
-                            <th class="text-right">Admin Profit (₹)</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${operatorStatsList.length === 0 ? '<tr><td colspan="4" class="text-center text-muted py-3">No operator records found.</td></tr>' : operatorStatsList.map((op) => `
-                            <tr>
-                              <td><strong class="text-dark">${escapeHtml(op.name)}</strong></td>
-                              <th class="text-right font-weight-bold">${op.count}</th>
-                              <td class="text-right font-monospace">₹${op.volume.toFixed(2)}</td>
-                              <td class="text-right font-monospace text-success font-weight-bold">+₹${op.profit.toFixed(2)}</td>
-                            </tr>
-                          `).join('')}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           <!-- Transactions Table Card -->
           <div class="card data-table-card">
             <div class="card-header bg-white py-3 px-3 d-flex justify-content-between align-items-center">
               <div>
                 <h5 class="font-weight-bold text-dark mb-0">
-                  <i class="fa fa-list text-primary mr-1"></i> Transaction-by-Transaction Profit Log
+                  <i class="fa fa-list text-primary mr-1"></i> Transaction Wise Admin Profit Report
                 </h5>
-                <small class="text-muted">Every transaction record showing recharge amount, setting margin difference, and exact admin profit.</small>
+                <small class="text-muted">Har recharge transaction me admin ko praapt hua genuine munafa aur transaction vivaran.</small>
               </div>
               <div class="d-flex" style="gap: 6px;">
                 <span class="badge badge-light border text-muted px-2 py-1 align-self-center">
@@ -1018,11 +928,8 @@ module.exports = function createAdminEarningPage({
                     <th>Operator &amp; Circle</th>
                     <th>Mobile No</th>
                     <th>Amount (₹)</th>
-                    <th class="text-center">Margin Diff</th>
-                    <th class="text-center">Admin Profit</th>
-                    <th>Margins (₹)</th>
+                    <th class="text-center">Admin Profit (₹)</th>
                     <th class="text-center">Status</th>
-                    <th class="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1034,71 +941,6 @@ module.exports = function createAdminEarningPage({
 
         </div>
       </main>
-    </div>
-  </div>
-
-  <!-- Modal: Transaction Profit & Ledger Breakdown -->
-  <div class="modal fade" id="modalProfitDetail" tabindex="-1" role="dialog" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-      <div class="modal-content">
-        <div class="modal-header bg-dark text-white">
-          <h5 class="modal-title font-weight-bold">
-            <i class="fa fa-calculator text-success mr-2"></i> Transaction Profit &amp; Margin Breakdown
-          </h5>
-          <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">&times;</button>
-        </div>
-        <div class="modal-body p-4">
-          <!-- Profit Spotlight Banner -->
-          <div class="alert alert-success d-flex align-items-center justify-content-between p-3 mb-4" style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;">
-            <div>
-              <span class="text-muted small text-uppercase font-weight-bold d-block">Admin Net Earning on this Txn</span>
-              <h2 class="text-success font-weight-bold font-monospace mb-0" id="modalAdminProfitHeading">+₹0.00</h2>
-            </div>
-            <div class="text-right">
-              <span class="badge badge-success px-2 py-1" style="font-size:13px;" id="modalMarginPercentBadge">Rate: 0.10%</span>
-              <small class="text-muted d-block mt-1">Calculated as Amount × Setting Margin %</small>
-            </div>
-          </div>
-
-          <!-- Financial Breakdown Table -->
-          <div class="row mb-3">
-            <div class="col-md-6 mb-3">
-              <h6 class="font-weight-bold text-dark border-bottom pb-1"><i class="fa fa-inr text-primary mr-1"></i> Financial Accounting</h6>
-              <table class="table table-sm table-bordered">
-                <tr><th class="bg-light" style="width:170px;">Recharge Amount</th><td class="font-weight-bold text-dark" id="modalAmount">₹0.00</td></tr>
-                <tr><th class="bg-light">Setting Margin Diff</th><td class="font-weight-bold text-primary" id="modalMarginPercent">0.10%</td></tr>
-                <tr><th class="bg-light">Admin Net Profit</th><td class="font-weight-bold text-success" id="modalAdminProfit">₹0.00</td></tr>
-                <tr><th class="bg-light">Buyer Margin Given</th><td class="text-muted" id="modalBuyerComm">₹0.00</td></tr>
-                <tr><th class="bg-light">Seller Margin Taken</th><td class="text-muted" id="modalSellerMargin">₹0.00</td></tr>
-                <tr><th class="bg-light">Current Status</th><td id="modalStatus">-</td></tr>
-              </table>
-            </div>
-
-            <div class="col-md-6 mb-3">
-              <h6 class="font-weight-bold text-dark border-bottom pb-1"><i class="fa fa-info-circle text-primary mr-1"></i> Parties &amp; Technical Info</h6>
-              <table class="table table-sm table-bordered">
-                <tr><th class="bg-light" style="width:150px;">Buyer Party</th><td id="modalBuyerParty">-</td></tr>
-                <tr><th class="bg-light">Seller Party</th><td id="modalSellerParty">-</td></tr>
-                <tr><th class="bg-light">Mobile Number</th><td class="font-monospace font-weight-bold" id="modalMobile">-</td></tr>
-                <tr><th class="bg-light">Operator &amp; Circle</th><td id="modalOperator">-</td></tr>
-                <tr><th class="bg-light">Operator Txn (Ope ID)</th><td class="font-monospace text-primary" id="modalOpeId">-</td></tr>
-                <tr><th class="bg-light">Client Ref ID</th><td class="font-monospace text-muted" id="modalRefId">-</td></tr>
-                <tr><th class="bg-light">Transaction Date</th><td id="modalDateTime">-</td></tr>
-              </table>
-            </div>
-          </div>
-
-          <div class="card bg-light border-0 p-3 mb-0">
-            <small class="text-muted">
-              <strong>Calculation Rule:</strong> Admin profit is determined by the <code>Margin Difference (%)</code> configured in admin settings. 
-              Formula: <code>Recharge Amount × (Margin Difference % / 100) = Admin Profit</code>.
-            </small>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -1143,33 +985,6 @@ module.exports = function createAdminEarningPage({
       }
       document.getElementById('earningFilterForm').submit();
     }
-
-    // Modal Details Viewer
-    $(document).on('click', '.btn-show-detail', function() {
-      const btn = $(this);
-      const isSuccess = btn.data('status') === 'SUCCESS';
-      const profitFormatted = isSuccess ? '+₹' + btn.data('profit') : '₹0.00 (' + btn.data('status') + ')';
-
-      $('#modalAdminProfitHeading').text(profitFormatted);
-      $('#modalMarginPercentBadge').text('Rate: ' + btn.data('margin-percent') + '%');
-
-      $('#modalAmount').text('₹' + btn.data('amount'));
-      $('#modalMarginPercent').text(btn.data('margin-percent') + '%');
-      $('#modalAdminProfit').text(isSuccess ? '+₹' + btn.data('profit') : '₹0.00');
-      $('#modalBuyerComm').text('₹' + btn.data('buyer-comm'));
-      $('#modalSellerMargin').text('₹' + btn.data('seller-margin'));
-      $('#modalStatus').html('<span class="badge ' + (isSuccess ? 'badge-success' : 'badge-secondary') + '">' + btn.data('status') + '</span>');
-
-      $('#modalBuyerParty').text(btn.data('buyer'));
-      $('#modalSellerParty').text(btn.data('seller'));
-      $('#modalMobile').text(btn.data('mobile'));
-      $('#modalOperator').text(btn.data('operator'));
-      $('#modalOpeId').text(btn.data('ope-id'));
-      $('#modalRefId').text(btn.data('ref-id'));
-      $('#modalDateTime').text(btn.data('date'));
-
-      $('#modalProfitDetail').modal('show');
-    });
   </script>
 </body>
 </html>`;
