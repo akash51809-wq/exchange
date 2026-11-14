@@ -98,15 +98,16 @@ module.exports = function createAdminRechargeReportPage({
       const amountFormatted = (Number(amtMinor) / 100).toFixed(2);
       const isSuccess = row.status === 'successful';
 
+      const amtNum = Number(amtMinor || 0n);
       const buyerMarginAmt = (Number(row.margin_minor || 0) / 100).toFixed(2);
       const buyerMarginPct = row.buyer_margin_percent != null && Number(row.buyer_margin_percent) > 0
         ? Number(row.buyer_margin_percent).toFixed(2)
-        : (amtMinor > 0 && row.margin_minor ? ((Number(row.margin_minor) / amtMinor) * 100).toFixed(2) : '0.00');
+        : (amtNum > 0 && row.margin_minor ? ((Number(row.margin_minor) / amtNum) * 100).toFixed(2) : '0.00');
 
       const sellerMarginAmt = (Number(row.seller_margin_minor || 0) / 100).toFixed(2);
       const sellerMarginPct = row.seller_margin_percent != null && Number(row.seller_margin_percent) > 0
         ? Number(row.seller_margin_percent).toFixed(2)
-        : (amtMinor > 0 && row.seller_margin_minor ? ((Number(row.seller_margin_minor) / amtMinor) * 100).toFixed(2) : '0.00');
+        : (amtNum > 0 && row.seller_margin_minor ? ((Number(row.seller_margin_minor) / amtNum) * 100).toFixed(2) : '0.00');
 
       return `
         <tr data-order-id="${row.id}">
