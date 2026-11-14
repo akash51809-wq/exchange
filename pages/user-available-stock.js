@@ -50,6 +50,7 @@ module.exports = function createUserAvailableStockPage({ db, formatMinorUnits, d
       'm.deleted_at IS NULL',
       'm.is_active = true',
       'm.is_admin_approved = true',
+      '(m.limit_type = \'unlimited\' OR m.limit_minor IS NULL OR m.limit_minor = 0 OR COALESCE(m.limit_used_minor, 0) < m.limit_minor)',
       `EXISTS (
         SELECT 1 FROM seller_api_settings s
         WHERE s.user_id = m.user_id

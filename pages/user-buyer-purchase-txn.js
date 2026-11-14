@@ -93,6 +93,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor,
              r.buyer_margin_percent,
+             COALESCE(r.request_received_at, (r.response_payload->'inbound_request'->>'received_at')::timestamptz, r.created_at) AS actual_received_at,
              r.status, r.idempotency_key, r.provider_reference, r.with_gst,
              r.dispute_status, r.dispute_reason, r.dispute_resolution_note, r.dispute_created_at,
              r.created_at, o.operator_code
@@ -193,7 +194,7 @@ module.exports = function createUserBuyerPurchaseTxnPage({ db, formatMinorUnits,
           <td><span class="badge badge-light border text-dark">${escapeHtml(row.circle_name || 'All')}</span></td>
           <td class="font-monospace font-weight-bold text-dark">${escapeHtml(mobile)}</td>
           <td class="text-center"><span class="badge ${row.with_gst ? 'badge-primary' : 'badge-secondary'}">${row.with_gst ? 'With GST' : 'No GST'}</span></td>
-          <td class="small text-muted font-monospace" style="white-space:nowrap;">${escapeHtml(formatDateTime(row.created_at))}</td>
+          <td class="small text-muted font-monospace" style="white-space:nowrap;">${escapeHtml(formatDateTime(row.actual_received_at || row.created_at))}</td>
           <td class="text-right font-weight-bold text-dark font-monospace">${formattedAmount}</td>
           <td class="text-right font-monospace" style="vertical-align:middle;">
             <div class="font-weight-bold text-success" style="font-size:12px;">${marginPercent}%</div>

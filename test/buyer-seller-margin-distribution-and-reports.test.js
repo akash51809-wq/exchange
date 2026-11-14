@@ -5,6 +5,7 @@ const assert = require('node:assert');
 const createBuyerApiService = require('../lib/buyer-api-service');
 const createUserBuyerPurchaseTxnPage = require('../pages/user-buyer-purchase-txn');
 const createUserSellerSalesTxnPage = require('../pages/user-seller-sales-txn');
+const createAdminRechargeReportPage = require('../pages/admin-recharge-report');
 
 test('Buyer & Seller Margin Distribution and Transaction Reports', async (t) => {
   await t.test('1. Buyer receives available margin (2.11%) when seller offers 2.21% and buyer min is 1.85%', async () => {
@@ -297,5 +298,298 @@ test('Buyer & Seller Margin Distribution and Transaction Reports', async (t) => 
     assert.ok(renderedHtml.includes('₹0.49'), 'Contains formatted seller margin amount ₹0.49');
     // Verify vertical layout (percentage on top, ₹ amount below)
     assert.match(renderedHtml, /<div class="font-weight-bold text-success"[^>]*>2\.21%<\/div>\s*<div class="text-muted"[^>]*>₹0\.49<\/div>/);
+  });
+
+  await t.test('4. Buyer Purchase Txn displays actual request received time', async () => {
+    const mockDb = {
+      query: async (sql) => {
+        if (sql.includes('FROM operator_definitions')) {
+          return { rows: [{ id: 'op-1', operator_name: 'Airtel' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM recharge_orders')) {
+          return {
+            rows: [{
+              id: 'order-received-at-test',
+              user_id: 'buyer-1',
+              seller_user_id: 'seller-1',
+              mobile_number: '7872476082',
+              operator_name: 'Airtel',
+              circle_name: 'UP East',
+              amount_minor: '2200',
+              margin_minor: '46',
+              cost_minor: '2154',
+              buyer_margin_percent: '2.1100',
+              status: 'successful',
+              idempotency_key: 'REF_TEST_REC',
+              provider_reference: 'OPR_TXN_REC',
+              with_gst: false,
+              created_at: new Date('2026-11-14T10:05:00Z'),
+              actual_received_at: new Date('2026-11-14T10:04:58Z'),
+              operator_code: 'AIRTEL',
+            }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    let renderedHtml = '';
+    const mockResponse = {
+      writeHead: () => {},
+      end: (content) => { renderedHtml = content; },
+    };
+
+    const { sendUserBuyerPurchaseTxnPage } = createUserBuyerPurchaseTxnPage({
+      db: mockDb,
+      formatMinorUnits: (minor) => (Number(minor) / 100).toFixed(2),
+      decryptMobile: (m) => m.toString(),
+      getSession: async () => ({ id: 'buyer-1', username: 'test_buyer' }),
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+    });
+
+    await sendUserBuyerPurchaseTxnPage({ id: 'buyer-1' }, mockResponse, new URLSearchParams());
+    assert.ok(renderedHtml.includes('34:58'), 'Renders actual received timestamp (34:58) instead of created_at (35:00)');
+    assert.ok(!renderedHtml.includes('35:00'), 'Does not render created_at timestamp');
+  });
+
+  await t.test('5. Waterfall routing skips seller when limit is exhausted (limit_used_minor >= limit_minor)', async () => {
+    let routedSellerUserId = null;
+    let sentStatusCode = null;
+    let sentPayload = null;
+
+    const mockDb = {
+      connect: async () => ({
+        query: async (sql, params) => {
+          if (sql.includes('INSERT INTO recharge_orders')) {
+            return { rows: [{ id: 'order-limit-test', created_at: new Date() }], rowCount: 1 };
+          }
+          return { rowCount: 1, rows: [{ id: 'wallet-1', balance_minor: '100000', buyer_balance_minor: '100000' }] };
+        },
+        release: () => {},
+      }),
+      query: async (sql, params) => {
+        if (sql.includes('SELECT u.id, u.username') || sql.includes('FROM users')) {
+          return { rows: [{ id: 'buyer-1', username: 'test_buyer', role: 'user', status: 'active' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-1',
+              operator_name: 'Airtel',
+              service_type: 'Mobile Recharge',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000,
+              maximum_amount_minor: 1000000,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: '100000', buyer_balance_minor: '100000' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          return { rows: [{ id: 'bm-1', commission_percent: '1.8500', with_gst: false, limit_minor: '0', limit_used_minor: '0' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM seller_margin_settings m') && sql.includes('INNER JOIN seller_api_settings s')) {
+          return {
+            rows: [
+              {
+                seller_margin_id: 'sm-exhausted',
+                user_id: 'seller-exhausted',
+                commission_percent: '2.5000',
+                operator_id: 'op-1',
+                circle_name: 'All',
+                limit_minor: '50000',
+                limit_used_minor: '50000',
+                limit_type: 'daily',
+                seller_api_id: 'api-ex',
+                api_name: 'API Ex',
+                api_mode: 'api',
+                config_ciphertext: 'enc',
+                with_gst: false,
+              },
+              {
+                seller_margin_id: 'sm-available',
+                user_id: 'seller-available',
+                commission_percent: '2.2100',
+                operator_id: 'op-1',
+                circle_name: 'All',
+                limit_minor: '50000',
+                limit_used_minor: '10000',
+                limit_type: 'daily',
+                seller_api_id: 'api-av',
+                api_name: 'API Av',
+                api_mode: 'api',
+                config_ciphertext: 'enc',
+                with_gst: false,
+              },
+            ],
+            rowCount: 2,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    const service = createBuyerApiService({
+      db: mockDb,
+      forwardRechargeToSeller: async ({ sellerApiRow }) => {
+        routedSellerUserId = sellerApiRow?.user_id;
+        return { ok: true, status: 'SUCCESS', supplierTxnId: 'SUP_AV_123', operatorTxnId: 'OPR_AV_123' };
+      },
+      encryptMobile: (m) => `enc:${m}`,
+      decryptMobile: (m) => m.replace('enc:', ''),
+      decryptSellerApiConfig: () => ({
+        recharge: {
+          url: 'https://gateway.example.com/recharge',
+          requestType: 'GET',
+          responseType: 'json',
+          parameters: [{ key: 'number', value: '{NUMBER}' }],
+        },
+      }),
+      decryptServiceConfig: () => ({ marginDifferencePercent: '0.10' }),
+      sendJson: (res, code, payload) => {
+        sentStatusCode = code;
+        sentPayload = payload;
+      },
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      formatMinorUnits: (minor) => (Number(minor) / 100).toFixed(2),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const mockUrl = new URL('http://localhost/webservices/api/recharge?username=test_buyer&token=tok&number=7872476082&amount=22&operator=AIRTEL&ref_id=REF_LIMIT_CHECK_1');
+
+    await service.handleBuyerRecharge(mockReq, mockRes, mockUrl);
+
+    assert.strictEqual(sentStatusCode, 200);
+    assert.strictEqual(routedSellerUserId, 'seller-available', 'Routed to seller with available limit, skipping exhausted seller');
+  });
+
+  await t.test('6. Seller Sales Txn displays Req Time, Resp Time, and calculated Used duration', async () => {
+    const mockDb = {
+      query: async (sql) => {
+        if (sql.includes('FROM operator_definitions')) {
+          return { rows: [{ id: 'op-1', operator_name: 'Airtel' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM recharge_orders')) {
+          return {
+            rows: [{
+              id: 'order-seller-dur-test',
+              buyer_user_id: 'buyer-1',
+              seller_user_id: 'seller-1',
+              seller_api_id: 'api-1',
+              mobile_number: '7872476082',
+              operator_name: 'Airtel',
+              circle_name: 'UP East',
+              amount_minor: '2200',
+              margin_minor: '46',
+              cost_minor: '2154',
+              seller_margin_minor: '49',
+              seller_margin_percent: '2.2100',
+              status: 'successful',
+              idempotency_key: 'REF_TEST_DUR',
+              provider_reference: 'OPR_TXN_DUR',
+              with_gst: false,
+              created_at: new Date('2026-11-14T10:00:00Z'),
+              actual_received_at: new Date('2026-11-14T10:00:00.000Z'),
+              actual_response_at: new Date('2026-11-14T10:00:01.850Z'),
+              actual_duration_ms: 1850,
+              operator_code: 'AIRTEL',
+              buyer_username: 'test_buyer',
+              buyer_name: 'Test Buyer',
+              seller_api_name: 'Rambhiya',
+            }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    let renderedHtml = '';
+    const mockResponse = {
+      writeHead: () => {},
+      end: (content) => { renderedHtml = content; },
+    };
+
+    const { sendUserSellerSalesTxnPage } = createUserSellerSalesTxnPage({
+      db: mockDb,
+      formatMinorUnits: (minor) => (Number(minor) / 100).toFixed(2),
+      formatDateTime: (iso) => new Date(iso).toISOString(),
+      decryptMobile: (m) => m.toString(),
+      getSession: async () => ({ id: 'seller-1', username: 'test_seller' }),
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+    });
+
+    await sendUserSellerSalesTxnPage({ id: 'seller-1' }, mockResponse, new URLSearchParams());
+
+    assert.ok(renderedHtml.includes('Actual Request Received Time'), 'Has Actual Request Received Time title');
+    assert.ok(renderedHtml.includes('Actual Response Time'), 'Has Actual Response Time title');
+    assert.ok(renderedHtml.includes('1.85s'), 'Has formatted duration in seconds');
+  });
+
+  await t.test('7. Admin Recharge Report displays Buyer received margin and Seller debited margin badges', async () => {
+    const mockDb = {
+      query: async (sql) => {
+        if (sql.includes('FROM operator_definitions')) {
+          return { rows: [{ id: 'op-1', operator_name: 'Airtel' }], rowCount: 1 };
+        }
+        if (sql.includes('SELECT r.id, r.user_id, r.seller_user_id') && sql.includes('FROM recharge_orders r')) {
+          return {
+            rows: [{
+              id: 'd91a92e1-4567-4890-abcd-ef0123456789',
+              user_id: 'buyer-uuid',
+              seller_user_id: 'seller-uuid',
+              mobile_number: '7872476082',
+              operator_name: 'Airtel',
+              operator_code: 'AIRTEL',
+              circle_name: 'UP East',
+              amount_minor: '2200',
+              margin_minor: '46',
+              cost_minor: '2154',
+              seller_margin_minor: '49',
+              buyer_margin_percent: '2.1100',
+              seller_margin_percent: '2.2100',
+              status: 'successful',
+              idempotency_key: 'REF_ADMIN_REP',
+              provider_reference: 'OPR_ADMIN_REP',
+              response_payload: { duration_ms: 1850 },
+              with_gst: false,
+              created_at: new Date('2026-11-14T10:00:00Z'),
+              updated_at: new Date('2026-11-14T10:00:02Z'),
+              buyer_username: 'buyer_vip',
+              buyer_name: 'VIP Buyer',
+              seller_username: 'seller_star',
+              seller_name: 'Star Seller',
+            }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    let renderedHtml = '';
+    const mockResponse = {
+      writeHead: () => {},
+      end: (content) => { renderedHtml = content; },
+    };
+
+    const { sendAdminRechargeReportPage } = createAdminRechargeReportPage({
+      db: mockDb,
+      formatMinorUnits: (minor) => (Number(minor) / 100).toFixed(2),
+      decryptMobile: (m) => m.toString(),
+      sendJson: () => {},
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+    });
+
+    await sendAdminRechargeReportPage({ id: 'admin-1', role: 'admin' }, mockResponse, new URLSearchParams());
+
+    assert.ok(renderedHtml.includes('Margin: 2.11% (₹0.46)'), 'Displays buyer received margin badge');
+    assert.ok(renderedHtml.includes('Margin: 2.21% (₹0.49)'), 'Displays seller debited margin badge');
   });
 });

@@ -98,6 +98,16 @@ module.exports = function createAdminRechargeReportPage({
       const amountFormatted = (Number(amtMinor) / 100).toFixed(2);
       const isSuccess = row.status === 'successful';
 
+      const buyerMarginAmt = (Number(row.margin_minor || 0) / 100).toFixed(2);
+      const buyerMarginPct = row.buyer_margin_percent != null && Number(row.buyer_margin_percent) > 0
+        ? Number(row.buyer_margin_percent).toFixed(2)
+        : (amtMinor > 0 && row.margin_minor ? ((Number(row.margin_minor) / amtMinor) * 100).toFixed(2) : '0.00');
+
+      const sellerMarginAmt = (Number(row.seller_margin_minor || 0) / 100).toFixed(2);
+      const sellerMarginPct = row.seller_margin_percent != null && Number(row.seller_margin_percent) > 0
+        ? Number(row.seller_margin_percent).toFixed(2)
+        : (amtMinor > 0 && row.seller_margin_minor ? ((Number(row.seller_margin_minor) / amtMinor) * 100).toFixed(2) : '0.00');
+
       return `
         <tr data-order-id="${row.id}">
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
@@ -118,13 +128,23 @@ module.exports = function createAdminRechargeReportPage({
             </span>
           </td>
           <td>
-            <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:95px;" title="${escapeHtml(row.buyer_name || '')}">${escapeHtml(row.buyer_name || row.buyer_username || 'N/A')}</span>
-            <small class="text-muted text-monospace d-block text-truncate" style="max-width:95px;">@${escapeHtml(row.buyer_username || 'n/a')}</small>
+            <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:115px;" title="${escapeHtml(row.buyer_name || '')}">${escapeHtml(row.buyer_name || row.buyer_username || 'N/A')}</span>
+            <small class="text-muted text-monospace d-block text-truncate" style="max-width:115px;">@${escapeHtml(row.buyer_username || 'n/a')}</small>
+            <div class="mt-1">
+              <span class="badge badge-success font-weight-bold px-1 py-0 text-white" style="font-size:9.5px;background:#10b981;" title="Buyer Received Margin: ${buyerMarginPct}% (₹${buyerMarginAmt})">
+                Margin: ${buyerMarginPct}% (₹${buyerMarginAmt})
+              </span>
+            </div>
           </td>
           <td>
             ${row.seller_user_id ? `
-              <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:95px;" title="${escapeHtml(row.seller_name || '')}">${escapeHtml(row.seller_name || row.seller_username || 'Seller')}</span>
-              <small class="text-muted text-monospace d-block text-truncate" style="max-width:95px;">@${escapeHtml(row.seller_username || 'n/a')}</small>
+              <span class="font-weight-bold text-dark d-block text-truncate" style="max-width:115px;" title="${escapeHtml(row.seller_name || '')}">${escapeHtml(row.seller_name || row.seller_username || 'Seller')}</span>
+              <small class="text-muted text-monospace d-block text-truncate" style="max-width:115px;">@${escapeHtml(row.seller_username || 'n/a')}</small>
+              <div class="mt-1">
+                <span class="badge badge-info font-weight-bold px-1 py-0 text-white" style="font-size:9.5px;background:#0284c7;" title="Seller Debited Margin: ${sellerMarginPct}% (₹${sellerMarginAmt})">
+                  Margin: ${sellerMarginPct}% (₹${sellerMarginAmt})
+                </span>
+              </div>
             ` : '<span class="badge badge-light border text-muted" style="font-size:9.5px;">Direct / None</span>'}
           </td>
           <td>
@@ -732,7 +752,8 @@ module.exports = function createAdminRechargeReportPage({
     const query = `
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.operator_code, r.circle_name, r.amount_minor, r.margin_minor,
-             r.cost_minor, r.seller_margin_minor, r.status, r.idempotency_key, r.provider_reference,
+             r.cost_minor, r.seller_margin_minor, r.buyer_margin_percent, r.seller_margin_percent,
+             r.status, r.idempotency_key, r.provider_reference,
              r.response_payload, r.with_gst, r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.created_at, r.updated_at,
              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name,
@@ -1036,7 +1057,8 @@ module.exports = function createAdminRechargeReportPage({
     const query = `
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.operator_code, r.circle_name, r.amount_minor, r.margin_minor,
-             r.cost_minor, r.seller_margin_minor, r.status, r.idempotency_key, r.provider_reference,
+             r.cost_minor, r.seller_margin_minor, r.buyer_margin_percent, r.seller_margin_percent,
+             r.status, r.idempotency_key, r.provider_reference,
              r.response_payload, r.with_gst, r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.created_at, r.updated_at,
              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name,
@@ -1261,7 +1283,8 @@ module.exports = function createAdminRechargeReportPage({
     const query = `
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.operator_code, r.circle_name, r.amount_minor, r.margin_minor,
-             r.cost_minor, r.seller_margin_minor, r.status, r.idempotency_key, r.provider_reference,
+             r.cost_minor, r.seller_margin_minor, r.buyer_margin_percent, r.seller_margin_percent,
+             r.status, r.idempotency_key, r.provider_reference,
              r.response_payload, r.with_gst, r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.created_at, r.updated_at,
              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name,
@@ -1442,7 +1465,8 @@ module.exports = function createAdminRechargeReportPage({
     const query = `
       SELECT r.id, r.user_id, r.seller_user_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.operator_code, r.circle_name, r.amount_minor, r.margin_minor,
-             r.cost_minor, r.seller_margin_minor, r.status, r.idempotency_key, r.provider_reference,
+             r.cost_minor, r.seller_margin_minor, r.buyer_margin_percent, r.seller_margin_percent,
+             r.status, r.idempotency_key, r.provider_reference,
              r.response_payload, r.with_gst, r.dispute_status, r.dispute_reason, r.dispute_resolution_note,
              r.created_at, r.updated_at,
              u_buyer.username AS buyer_username, u_buyer.name AS buyer_name,
@@ -1494,8 +1518,12 @@ module.exports = function createAdminRechargeReportPage({
       'Duration (Sec)',
       'Buyer Name',
       'Buyer ID',
+      'Buyer Margin (%)',
+      'Buyer Margin (INR)',
       'Seller Name',
       'Seller ID',
+      'Seller Margin (%)',
+      'Seller Margin (INR)',
       'Operator',
       'Circle',
       'Mobile Number',
@@ -1524,6 +1552,16 @@ module.exports = function createAdminRechargeReportPage({
       const opeId = row.provider_reference || '';
       const amountFormatted = (Number(row.amount_minor || 0) / 100).toFixed(2);
 
+      const bMarginAmt = (Number(row.margin_minor || 0) / 100).toFixed(2);
+      const bMarginPct = row.buyer_margin_percent != null && Number(row.buyer_margin_percent) > 0
+        ? Number(row.buyer_margin_percent).toFixed(2)
+        : (row.amount_minor > 0 && row.margin_minor ? ((Number(row.margin_minor) / Number(row.amount_minor)) * 100).toFixed(2) : '0.00');
+
+      const sMarginAmt = (Number(row.seller_margin_minor || 0) / 100).toFixed(2);
+      const sMarginPct = row.seller_margin_percent != null && Number(row.seller_margin_percent) > 0
+        ? Number(row.seller_margin_percent).toFixed(2)
+        : (row.amount_minor > 0 && row.seller_margin_minor ? ((Number(row.seller_margin_minor) / Number(row.amount_minor)) * 100).toFixed(2) : '0.00');
+
       const sanitize = (val) => `"${String(val || '').replace(/"/g, '""')}"`;
 
       return [
@@ -1532,8 +1570,12 @@ module.exports = function createAdminRechargeReportPage({
         sanitize(durationSec),
         sanitize(row.buyer_name || row.buyer_username || ''),
         sanitize(row.user_id),
+        sanitize(bMarginPct + '%'),
+        sanitize(bMarginAmt),
         sanitize(row.seller_name || row.seller_username || 'Direct'),
         sanitize(row.seller_user_id || ''),
+        sanitize(sMarginPct + '%'),
+        sanitize(sMarginAmt),
         sanitize(row.operator_name || row.operator_code || ''),
         sanitize(row.circle_name || 'All'),
         sanitize(mobile),

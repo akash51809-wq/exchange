@@ -41,20 +41,29 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
     }
   }
 
-  function formatDuration(createdIso, updatedIso, status) {
+  function formatDuration(createdIso, updatedIso, status, storedDurationMs) {
     if (status === 'pending' || status === 'processing') {
       return '<span class="text-warning"><i class="fa fa-hourglass-start mr-1"></i>Running...</span>';
     }
-    if (!createdIso) return '-';
-    const start = new Date(createdIso).getTime();
-    const end = updatedIso ? new Date(updatedIso).getTime() : start;
-    const diffMs = Math.max(0, end - start);
+    let diffMs = 0;
+    if (storedDurationMs != null && !isNaN(Number(storedDurationMs)) && Number(storedDurationMs) > 0) {
+      diffMs = Math.round(Number(storedDurationMs));
+    } else if (createdIso && updatedIso) {
+      const start = new Date(createdIso).getTime();
+      const end = new Date(updatedIso).getTime();
+      diffMs = Math.max(0, end - start);
+    } else if (createdIso) {
+      return '0s';
+    } else {
+      return '-';
+    }
+
     if (diffMs < 1000) {
       return `${diffMs} ms`;
     }
     const totalSecs = diffMs / 1000;
     if (totalSecs < 60) {
-      return `${totalSecs.toFixed(1)}s`;
+      return `${totalSecs.toFixed(2)}s`;
     }
     const mins = Math.floor(totalSecs / 60);
     const remSecs = Math.round(totalSecs % 60);
@@ -113,6 +122,9 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
       SELECT r.id, r.user_id AS buyer_user_id, r.seller_user_id, r.seller_api_id, r.mobile_number, r.mobile_ciphertext,
              r.operator_name, r.circle_name, r.amount_minor, r.margin_minor, r.cost_minor, r.seller_margin_minor,
              r.seller_margin_percent,
+             COALESCE(r.request_received_at, (r.response_payload->'inbound_request'->>'received_at')::timestamptz, r.created_at) AS actual_received_at,
+             COALESCE(r.response_at, r.updated_at, r.created_at) AS actual_response_at,
+             COALESCE(r.duration_ms, (r.response_payload->>'duration_ms')::int) AS actual_duration_ms,
              r.status, r.idempotency_key, r.provider_reference, r.with_gst, r.created_at, r.updated_at,
              o.operator_code, u.username AS buyer_username, u.name AS buyer_name,
              sapi.name AS seller_api_name, sapi.short_name AS seller_api_short_name
@@ -170,19 +182,21 @@ module.exports = function createUserSellerSalesTxnPage({ db, formatMinorUnits, d
           ? ((Number(rowSellerMargin) / Number(row.amount_minor)) * 100).toFixed(2)
           : '0.00');
       const apiDisplayName = row.seller_api_name || row.seller_api_short_name || 'Direct / Internal';
-      const durationHtml = formatDuration(row.created_at, row.updated_at, row.status);
+      const actualReceived = row.actual_received_at || row.created_at;
+      const actualResponse = row.actual_response_at || row.updated_at || row.created_at;
+      const durationHtml = formatDuration(actualReceived, actualResponse, row.status, row.actual_duration_ms);
 
       return `
         <tr>
           <td class="text-center font-weight-bold text-muted">${index + 1}</td>
           <td style="white-space:nowrap;font-size:11px;line-height:1.35;">
-            <div class="font-monospace text-dark font-weight-bold" title="1. Request Time">
-              <i class="fa fa-arrow-circle-up text-primary mr-1" style="font-size:11px;"></i>${escapeHtml(formatDateTime(row.created_at))}
+            <div class="font-monospace text-dark font-weight-bold" title="1. Actual Request Received Time">
+              <i class="fa fa-arrow-circle-up text-primary mr-1" style="font-size:11px;"></i>${escapeHtml(formatDateTime(actualReceived))}
             </div>
-            <div class="font-monospace text-muted mt-1" title="2. Response Time">
-              <i class="fa fa-arrow-circle-down text-success mr-1" style="font-size:11px;"></i>${row.status === 'pending' || row.status === 'processing' ? '<span class="text-warning font-weight-bold">Awaiting...</span>' : escapeHtml(formatDateTime(row.updated_at || row.created_at))}
+            <div class="font-monospace text-muted mt-1" title="2. Actual Response Time">
+              <i class="fa fa-arrow-circle-down text-success mr-1" style="font-size:11px;"></i>${row.status === 'pending' || row.status === 'processing' ? '<span class="text-warning font-weight-bold">Awaiting...</span>' : escapeHtml(formatDateTime(actualResponse))}
             </div>
-            <div class="mt-1 font-monospace" title="3. Total Used Time">
+            <div class="mt-1 font-monospace" title="3. Total Used Time (Duration)">
               <span class="badge badge-light border text-dark px-1 py-0 font-weight-bold" style="font-size:10px;">
                 <i class="fa fa-clock-o text-info mr-1"></i>${durationHtml}
               </span>
