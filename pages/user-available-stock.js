@@ -45,8 +45,20 @@ module.exports = function createUserAvailableStockPage({ db, formatMinorUnits, d
     const operators = await db.query("SELECT id, operator_name, service_type, operator_code FROM operator_definitions WHERE status='active' AND deleted_at IS NULL ORDER BY service_type, operator_name");
     const services = [...new Set(operators.rows.map((row) => row.service_type))];
 
-    // Query all active and admin-approved seller margins
-    const conditions = ['m.deleted_at IS NULL', 'm.is_active = true', 'm.is_admin_approved = true'];
+    // Query all active and admin-approved seller margins that have an active and admin-approved seller API ready to route transactions
+    const conditions = [
+      'm.deleted_at IS NULL',
+      'm.is_active = true',
+      'm.is_admin_approved = true',
+      `EXISTS (
+        SELECT 1 FROM seller_api_settings s
+        WHERE s.user_id = m.user_id
+          AND s.deleted_at IS NULL
+          AND s.is_active = true
+          AND s.is_admin_approved = true
+          AND (m.api_name IS NULL OR m.api_name = '' OR m.api_name = 'Exchange API' OR s.name = m.api_name OR s.short_name = m.api_name)
+      )`,
+    ];
     const values = [];
     const add = (value) => { values.push(value); return `$${values.length}`; };
 

@@ -433,4 +433,134 @@ test('Buyer & Seller Margin - Circle Routing and Seller API Selection Tests', as
     // Verify parameter 2 is the detected circle 'UP East'
     assert.strictEqual(capturedQueryParams[1], 'UP East');
   });
+
+  await t.test('Scenario: Seller offers 2.21% (effective 2.11% available) for Airtel and Buyer sets 1.85%: routes to winning seller when API approved', async () => {
+    let sentStatusCode = null;
+    let sentPayload = null;
+    let forwardedSellerUserId = null;
+
+    const mockDb = {
+      connect: async () => ({
+        query: async (sql) => {
+          if (sql.includes('INSERT INTO recharge_orders')) {
+            return { rows: [{ id: 'order-success-1', created_at: new Date() }], rowCount: 1 };
+          }
+          return { rowCount: 1, rows: [{ id: 'wallet-1', balance_minor: '100000', buyer_balance_minor: '100000' }] };
+        },
+        release: () => {},
+      }),
+      query: async (sql, params) => {
+        if (sql.includes('SELECT u.id, u.username') || sql.includes('FROM users')) {
+          return {
+            rows: [{ id: 'buyer-user-id', username: 'buyer_test', role: 'user', status: 'active', callback_url: null }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM user_whitelisted_ips')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM admin_service_settings')) return { rows: [], rowCount: 0 };
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-airtel-id',
+              operator_name: 'Airtel',
+              service_type: 'Mobile Recharge',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000,
+              maximum_amount_minor: 1000000,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: '100000', buyer_balance_minor: '100000' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM recharge_orders WHERE user_id = $1 AND idempotency_key = $2')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes('FROM buyer_margin_settings')) {
+          // Buyer configured purchase margin 1.85%
+          return {
+            rows: [{
+              id: 'bm-1',
+              commission_percent: '1.8500',
+              with_gst: false,
+              limit_minor: '0',
+              limit_used_minor: '0',
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('FROM seller_margin_settings m') && sql.includes('INNER JOIN seller_api_settings s')) {
+          // Seller configured sales margin 2.21% (which is 2.11% after 0.10% admin margin)
+          // 2.21% >= 1.85% buyer minimum margin
+          return {
+            rows: [{
+              seller_margin_id: 'sm-airtel-1',
+              user_id: 'seller-user-9839680707',
+              commission_percent: '2.2100',
+              operator_id: 'op-airtel-id',
+              circle_name: 'All',
+              limit_minor: '117000',
+              limit_used_minor: '0',
+              with_gst: true,
+              is_roffer: 'all',
+              seller_api_id: 'api-rambhiya-id',
+              seller_api_name: 'Rambhiya',
+              config_ciphertext: 'enc_cfg',
+              api_active: true,
+            }],
+            rowCount: 1,
+          };
+        }
+        if (sql.includes('INSERT INTO recharge_orders')) {
+          return { rows: [{ id: 'order-success-1' }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    const service = createBuyerApiService({
+      db: mockDb,
+      formatMinorUnits: () => '0.00',
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => b.toString(),
+      decryptSellerApiConfig: () => ({
+        recharge: {
+          url: 'https://goyalpay.com/recharge',
+          requestType: 'GET',
+          responseType: 'json',
+          parameters: [{ key: 'number', value: '{NUMBER}' }],
+        },
+      }),
+      decryptServiceConfig: () => ({}),
+      fetchOperatorLookup: async () => ({
+        ok: true,
+        brand: 'ezytm plan API',
+        operator: 'Airtel',
+        circle: 'UP East',
+        operatorCode: 'AIRTEL',
+      }),
+      sendJson: (_res, code, payload) => {
+        sentStatusCode = code;
+        sentPayload = payload;
+      },
+      httpError: (msg, status = 400) => Object.assign(new Error(msg), { statusCode: status }),
+      forwardRechargeToSeller: async ({ sellerApiRow }) => {
+        forwardedSellerUserId = sellerApiRow?.user_id;
+        return { ok: true, status: 'SUCCESS', supplierTxnId: 'TXN_RAMBHIYA', operatorTxnId: 'OPR_AIRTEL_1' };
+      },
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockRes = {};
+    const mockUrl = new URL('http://localhost/webservices/api/recharge?username=buyer_test&token=tok&number=9839680707&amount=22&operator=AIRTEL&ref_id=REF_AIRTEL_211');
+
+    await service.handleBuyerRecharge(mockReq, mockRes, mockUrl);
+
+    assert.strictEqual(sentStatusCode, 200);
+    assert.strictEqual(sentPayload?.status, 'SUCCESS');
+    assert.strictEqual(forwardedSellerUserId, 'seller-user-9839680707');
+  });
 });
