@@ -15,6 +15,9 @@ module.exports = function createAdminServiceSettingsPage({
   sendJson,
   httpError,
 }) {
+  if (db && typeof baileysWhatsappService.setDb === 'function') {
+    baileysWhatsappService.setDb(db);
+  }
   /**
    * Render HTML page for /admin/settings/service-settings
    */

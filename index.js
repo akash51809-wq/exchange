@@ -177,6 +177,7 @@ const {
 const { fetchOperatorLookup, fetchEzytmRoffer } = require('./lib/plan-api-service');
 const { escapeHtml } = require('./lib/page-utils');
 const { getClientIp } = require('./lib/client-ip');
+const baileysWhatsappService = require('./lib/baileys-whatsapp-service');
 
 // 1) Configuration: PORT and HOST can be configured via environment variables.
 const PORT = parsePort(process.env.PORT, 3000);
@@ -1575,6 +1576,7 @@ async function requestWhatsappOtp(request, response) {
 
   // Send WhatsApp OTP strictly to WhatsApp number (never to email)
   let waSent = false;
+  let waError = null;
   try {
     const waResult = await sendNotificationEvent({
       db,
@@ -1588,8 +1590,12 @@ async function requestWhatsappOtp(request, response) {
       recipientMobile: mobile,
     });
     waSent = Boolean(waResult?.whatsapp?.sent);
+    if (!waSent && waResult?.whatsapp?.error) {
+      waError = waResult.whatsapp.error;
+    }
   } catch (err) {
     console.warn('[Signup WhatsApp OTP Event Error]:', err.message);
+    waError = err.message;
   }
 
   if (!waSent) {
@@ -1599,16 +1605,25 @@ async function requestWhatsappOtp(request, response) {
       decryptServiceConfig,
       toNumber: mobile,
       message: waMsg,
-    }).catch(() => ({ sent: false }));
+    }).catch((fErr) => ({ sent: false, error: fErr.message }));
     waSent = Boolean(waFallback?.sent);
+    if (!waSent && waFallback?.error) {
+      waError = waFallback.error;
+    }
+  }
+
+  if (!waSent) {
+    const waStatus = baileysWhatsappService.getStatus();
+    const reason = !waStatus.isConnected
+      ? 'WhatsApp Service is currently not connected. Please connect WhatsApp in Admin Service Settings or use Email OTP.'
+      : (waError || 'Failed to deliver OTP to WhatsApp. Please verify your WhatsApp number or use Email OTP.');
+    throw httpError(reason, 503);
   }
 
   sendJson(response, 200, {
     ok: true,
-    message: waSent
-      ? 'OTP sent successfully on WhatsApp.'
-      : 'OTP dispatched to WhatsApp. Please check.',
-    whatsappSent: waSent,
+    message: 'OTP sent successfully on WhatsApp.',
+    whatsappSent: true,
   });
 }
 
@@ -9105,12 +9120,12 @@ async function startServer() {
       console.log(`Exchange API running at http://${HOST}:${PORT}`);
       console.log('✓ Supabase / PostgreSQL database connection active and ready.');
     });
-    // Auto-reconnect Baileys WhatsApp if session exists
+    // Auto-reconnect WhatsApp if session exists in DB or disk
     try {
       const baileysWhatsappService = require('./lib/baileys-whatsapp-service');
-      void baileysWhatsappService.init();
+      void baileysWhatsappService.init(db);
     } catch (bErr) {
-      console.warn('[Baileys] WhatsApp auto-init error:', bErr.message);
+      console.warn('[WhatsApp] WhatsApp auto-init error:', bErr.message);
     }
   } catch (error) {
     console.error('✗ Database connection failed; API not started:', error.message);

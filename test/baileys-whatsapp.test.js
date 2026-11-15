@@ -133,3 +133,98 @@ test('Admin Service Settings - Baileys Status endpoint returns live connection i
   assert.ok('status' in res.data);
   assert.ok('isConnected' in res.data);
 });
+
+test('Baileys WhatsApp Service - Session persistence to/from database store', async () => {
+  const store = new Map();
+  const mockDb = {
+    query: async (sql, params) => {
+      if (sql.includes('SELECT file_name, file_data FROM whatsapp_session_store')) {
+        const rows = [];
+        for (const [key, val] of store.entries()) {
+          rows.push({ file_name: key, file_data: val });
+        }
+        return { rowCount: rows.length, rows };
+      }
+      if (sql.includes('INSERT INTO whatsapp_session_store')) {
+        store.set(params[0], params[1]);
+        return { rowCount: 1, rows: [] };
+      }
+      if (sql.includes('DELETE FROM whatsapp_session_store')) {
+        store.clear();
+        return { rowCount: 1, rows: [] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  baileysWhatsappService.setDb(mockDb);
+
+  // Clear session
+  await baileysWhatsappService.clearDbSession();
+  assert.strictEqual(store.size, 0);
+
+  // Fake creds file
+  const fs = require('fs');
+  const path = require('path');
+  baileysWhatsappService.ensureAuthDir();
+  const testFile = path.join(baileysWhatsappService.authDir, 'test-key.json');
+  fs.writeFileSync(testFile, JSON.stringify({ test: 'auth_value' }));
+
+  // Sync to DB
+  await baileysWhatsappService.syncSessionToDb();
+  assert.ok(store.has('test-key.json'), 'Session file should be saved in DB store');
+
+  // Restore from DB
+  fs.unlinkSync(testFile);
+  assert.strictEqual(fs.existsSync(testFile), false);
+  const restored = await baileysWhatsappService.restoreSessionFromDb();
+  assert.strictEqual(restored, true);
+  assert.strictEqual(fs.existsSync(testFile), true);
+
+  // Cleanup
+  fs.unlinkSync(testFile);
+  await baileysWhatsappService.clearDbSession();
+});
+
+test('Baileys WhatsApp Service - Robust phone normalization handles all variations', async () => {
+  // Test with mock socket
+  const originalSock = baileysWhatsappService.sock;
+  const originalStatus = baileysWhatsappService.status;
+
+  let capturedJid = null;
+  let capturedText = null;
+
+  baileysWhatsappService.status = 'connected';
+  baileysWhatsappService.sock = {
+    sendMessage: async (jid, content) => {
+      capturedJid = jid;
+      capturedText = content.text;
+      return { key: { id: 'TEST_MSG_ID' }, messageTimestamp: 123456789 };
+    },
+  };
+
+  try {
+    // 10 digits
+    let res = await baileysWhatsappService.sendMessage('9876543210', 'Test 1');
+    assert.strictEqual(res.sent, true);
+    assert.strictEqual(capturedJid, '919876543210@s.whatsapp.net');
+
+    // +91 with spaces and dashes
+    res = await baileysWhatsappService.sendMessage('+91 98765-43210', 'Test 2');
+    assert.strictEqual(res.sent, true);
+    assert.strictEqual(capturedJid, '919876543210@s.whatsapp.net');
+
+    // 0 leading 11 digits
+    res = await baileysWhatsappService.sendMessage('09876543210', 'Test 3');
+    assert.strictEqual(res.sent, true);
+    assert.strictEqual(capturedJid, '919876543210@s.whatsapp.net');
+
+    // +910 leading 13 digits
+    res = await baileysWhatsappService.sendMessage('+9109876543210', 'Test 4');
+    assert.strictEqual(res.sent, true);
+    assert.strictEqual(capturedJid, '919876543210@s.whatsapp.net');
+  } finally {
+    baileysWhatsappService.sock = originalSock;
+    baileysWhatsappService.status = originalStatus;
+  }
+});
