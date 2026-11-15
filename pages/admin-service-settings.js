@@ -52,7 +52,7 @@ module.exports = function createAdminServiceSettingsPage({
       initialName = escapeHtml(liveWa.connectedName || 'WhatsApp Account');
       initialNumber = escapeHtml(liveWa.connectedNumber ? ('+' + liveWa.connectedNumber) : 'Active');
       initialTime = liveWa.connectedAt ? new Date(liveWa.connectedAt).toLocaleString() : 'Active Now';
-    } else if (liveWa.status === 'qr_ready' && liveWa.qrCodeDataUrl) {
+    } else if (liveWa.qrCodeDataUrl) {
       initialBadgeHtml = '<span class="badge badge-warning text-dark px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code</span>';
       btnConnectDisplay = 'inline-block';
       btnLogoutDisplay = 'none';
@@ -60,10 +60,10 @@ module.exports = function createAdminServiceSettingsPage({
       connectedCardDisplay = 'none';
       initialQrSrc = liveWa.qrCodeDataUrl;
     } else if (liveWa.status === 'connecting') {
-      initialBadgeHtml = '<span class="badge badge-info px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-spinner fa-spin mr-1"></i> Initializing / Connecting...</span>';
+      initialBadgeHtml = '<span class="badge badge-info px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-spinner fa-spin mr-1"></i> Generating QR Code...</span>';
       btnConnectDisplay = 'inline-block';
       btnLogoutDisplay = 'none';
-      qrAreaDisplay = 'none';
+      qrAreaDisplay = 'block';
       connectedCardDisplay = 'none';
     } else {
       initialBadgeHtml = '<span class="badge badge-secondary px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-times-circle mr-1"></i> Disconnected / Not Linked</span>';
@@ -1411,8 +1411,13 @@ module.exports = function createAdminServiceSettingsPage({
                         <h6 class="font-weight-bold text-dark mb-1"><i class="fa fa-qrcode text-success mr-1"></i> Scan WhatsApp QR Code</h6>
                         <p class="text-muted small mb-3">अपने मोबाइल फ़ोन से इस QR कोड को स्कैन करके WhatsApp अकाउंट लिंक करें।</p>
                         
-                        <div class="d-inline-block p-3 border rounded shadow-sm bg-white mb-3" style="border: 2px solid #22c55e !important; border-radius: 16px !important;">
-                          <img id="baileysQrImage" src="${initialQrSrc}" alt="WhatsApp QR Code" style="width: 260px; height: 260px; object-fit: contain; display: block;">
+                        <div class="d-inline-block p-3 border rounded shadow-sm bg-white mb-3" style="border: 2px solid #22c55e !important; border-radius: 16px !important; min-width: 270px; min-height: 270px; display: inline-flex; align-items: center; justify-content: center;">
+                          <div id="baileysQrSpinner" style="display: ${initialQrSrc ? 'none' : 'block'}; padding: 30px 15px;">
+                            <div class="spinner-border text-success mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                            <div class="font-weight-bold text-dark" style="font-size: 14px;">Generating WhatsApp QR...</div>
+                            <small class="text-muted d-block mt-1">Connecting to WhatsApp server, please wait...</small>
+                          </div>
+                          <img id="baileysQrImage" src="${initialQrSrc}" alt="WhatsApp QR Code" style="width: 260px; height: 260px; object-fit: contain; display: ${initialQrSrc ? 'block' : 'none'};">
                         </div>
 
                         <div class="text-left mx-auto" style="max-width: 440px; font-size: 13px;">
@@ -3157,6 +3162,7 @@ module.exports = function createAdminServiceSettingsPage({
       const connInfo = document.getElementById('baileysConnectedInfo');
       const qrArea = document.getElementById('baileysQrArea');
       const qrImage = document.getElementById('baileysQrImage');
+      const qrSpinner = document.getElementById('baileysQrSpinner');
       const connectedCard = document.getElementById('baileysConnectedCard');
       const connectedDp = document.getElementById('baileysConnectedDp');
       const connectedNameDisplay = document.getElementById('baileysConnectedNameDisplay');
@@ -3221,8 +3227,8 @@ module.exports = function createAdminServiceSettingsPage({
           baileysPollTimer = null;
         }
 
-      } else if (data.status === 'qr_ready' && data.qrCodeDataUrl) {
-        // QR Ready to Scan State
+      } else if (data.qrCodeDataUrl) {
+        // QR Ready to Scan State (or QR available during connection)
         badge.className = 'badge badge-warning text-dark px-3 py-2 font-weight-bold';
         badge.style.fontSize = '13.5px';
         badge.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code';
@@ -3230,33 +3236,41 @@ module.exports = function createAdminServiceSettingsPage({
         if (connInfo) connInfo.style.display = 'none';
         if (connectedCard) connectedCard.style.display = 'none';
         if (qrArea) qrArea.style.display = 'block';
-        if (qrImage) qrImage.src = data.qrCodeDataUrl;
+        if (qrSpinner) qrSpinner.style.display = 'none';
+        if (qrImage) {
+          qrImage.src = data.qrCodeDataUrl;
+          qrImage.style.display = 'block';
+        }
 
         btnConnect.style.display = 'inline-block';
         btnConnect.innerHTML = '<i class="fa fa-refresh mr-1"></i> Reload QR Code';
         btnConnect.disabled = false;
         btnLogout.style.display = 'none';
 
-        // Start fast polling so scan updates instantly
+        // Fast polling so scan pairing is detected instantly
         if (!baileysPollTimer) {
           baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
         }
 
       } else if (data.status === 'connecting') {
-        // Connecting State
+        // Connecting State (No QR dataUrl yet)
         badge.className = 'badge badge-info px-3 py-2 font-weight-bold';
         badge.style.fontSize = '13.5px';
-        badge.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Initializing / Connecting...';
+        badge.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Generating QR Code...';
 
         if (connInfo) connInfo.style.display = 'none';
         if (connectedCard) connectedCard.style.display = 'none';
-        if (qrArea) qrArea.style.display = 'none';
+        if (qrArea) qrArea.style.display = 'block';
+        if (qrSpinner) qrSpinner.style.display = 'block';
+        if (qrImage) qrImage.style.display = 'none';
+
         btnConnect.style.display = 'inline-block';
+        btnConnect.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Generating QR...';
         btnConnect.disabled = true;
         btnLogout.style.display = 'none';
 
         if (!baileysPollTimer) {
-          baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
+          baileysPollTimer = setInterval(fetchBaileysStatus, 1200);
         }
 
       } else {
@@ -3306,6 +3320,7 @@ module.exports = function createAdminServiceSettingsPage({
       btnBaileysConnect.addEventListener('click', async () => {
         btnBaileysConnect.disabled = true;
         btnBaileysConnect.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Generating QR...';
+        updateBaileysUI({ status: 'connecting', isConnected: false });
         try {
           const res = await fetch('/api/admin/baileys/connect', {
             method: 'POST',
@@ -3314,10 +3329,11 @@ module.exports = function createAdminServiceSettingsPage({
           const data = await res.json();
           updateBaileysUI(data);
           if (!baileysPollTimer) {
-            baileysPollTimer = setInterval(fetchBaileysStatus, 2500);
+            baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
           }
         } catch (err) {
           alert('Failed to connect to WhatsApp: ' + err.message);
+          updateBaileysUI({ status: 'disconnected', isConnected: false });
         } finally {
           btnBaileysConnect.disabled = false;
         }
@@ -3371,12 +3387,23 @@ module.exports = function createAdminServiceSettingsPage({
 
     // Auto-refresh WhatsApp status when switching to WhatsApp tab
     const tabWaLink = document.querySelector('a[href="#tabWhatsapp"]');
-    if (tabWaLink) {
-      tabWaLink.addEventListener('shown.bs.tab', () => {
-        fetchBaileysStatus();
+    function ensureWaQrIfDisconnected() {
+      fetchBaileysStatus().then(() => {
+        fetch('/api/admin/baileys/status', { credentials: 'same-origin' })
+          .then(r => r.json())
+          .then(d => {
+            if (!d.isConnected && !d.qrCodeDataUrl && d.status !== 'connecting') {
+              if (btnBaileysConnect) btnBaileysConnect.click();
+            }
+          })
+          .catch(() => {});
       });
+    }
+
+    if (tabWaLink) {
+      tabWaLink.addEventListener('shown.bs.tab', ensureWaQrIfDisconnected);
       tabWaLink.addEventListener('click', () => {
-        setTimeout(fetchBaileysStatus, 150);
+        setTimeout(ensureWaQrIfDisconnected, 150);
       });
     }
 
