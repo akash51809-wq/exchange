@@ -275,6 +275,9 @@ const {
   handleTestSms,
   handleSaveWhatsappSettings,
   handleTestWhatsapp,
+  handleBaileysStatus,
+  handleBaileysConnect,
+  handleBaileysLogout,
   handleSavePlanApiSettings,
   handleTestPlanApi,
   handleTestPlanApiRoffer,
@@ -6784,6 +6787,32 @@ async function handleRequest(request, response) {
         statusCode = response.statusCode || 200;
         return;
       }
+      if (url.pathname === '/api/admin/baileys/status') {
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleBaileysStatus(request, response);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/baileys/connect' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleBaileysConnect(request, response);
+        statusCode = response.statusCode || 200;
+        return;
+      }
+      if (url.pathname === '/api/admin/baileys/logout' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        await handleBaileysLogout(request, response);
+        statusCode = response.statusCode || 200;
+        return;
+      }
       if (url.pathname === '/api/admin/settings/services/plan-api') {
         checkSameOrigin(request);
         const admin = await getSession(request);
@@ -9076,6 +9105,13 @@ async function startServer() {
       console.log(`Exchange API running at http://${HOST}:${PORT}`);
       console.log('✓ Supabase / PostgreSQL database connection active and ready.');
     });
+    // Auto-reconnect Baileys WhatsApp if session exists
+    try {
+      const baileysWhatsappService = require('./lib/baileys-whatsapp-service');
+      void baileysWhatsappService.init();
+    } catch (bErr) {
+      console.warn('[Baileys] WhatsApp auto-init error:', bErr.message);
+    }
   } catch (error) {
     console.error('✗ Database connection failed; API not started:', error.message);
     process.exitCode = 1;

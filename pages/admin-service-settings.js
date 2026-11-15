@@ -6,6 +6,7 @@ const { addPanelChrome } = require('../lib/panel-chrome');
 const { fetchOperatorLookup, fetchEzytmRoffer } = require('../lib/plan-api-service');
 const { clearPolicyCache } = require('../lib/wallet-helper');
 const { checkAndDeactivateInactiveUsers } = require('../lib/user-inactivity-service');
+const baileysWhatsappService = require('../lib/baileys-whatsapp-service');
 
 module.exports = function createAdminServiceSettingsPage({
   db,
@@ -1289,12 +1290,12 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 2. WHATSAPP GATEWAY SETTINGS TAB -->
+            <!-- 2. WHATSAPP DIRECT WEB GATEWAY (BAILEYS) -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabWhatsapp">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
-                  <h5><i class="fa fa-whatsapp text-success"></i> WhatsApp Gateway Integration</h5>
+                  <h5><i class="fa fa-whatsapp text-success"></i> Direct WhatsApp Web Gateway (Baileys)</h5>
                   <div class="custom-control custom-switch custom-switch-lg">
                     <input type="checkbox" class="custom-control-input" id="whatsappEnabled">
                     <label class="custom-control-label" for="whatsappEnabled" id="whatsappEnabledLabel">WhatsApp Disabled</label>
@@ -1302,81 +1303,92 @@ module.exports = function createAdminServiceSettingsPage({
                 </div>
                 <div class="settings-panel-body">
                   
-                  <div class="help-callout">
-                    <strong><i class="fa fa-info-circle"></i> WhatsApp Gateway Instructions:</strong>
-                    <p class="mb-1">You can configure any HTTP GET or POST WhatsApp API provider.</p>
-                    <p class="mb-0">Supported dynamic replacement keywords: <code>[MOBILE_NO]</code> (10-digit mobile) and <code>[CONTENT]</code> (message content).</p>
+                  <div class="help-callout mb-4">
+                    <strong><i class="fa fa-info-circle"></i> Direct WhatsApp Web Gateway (WhiskeySockets/Baileys):</strong>
+                    <p class="mb-1">अब किसी थर्ड-पार्टी API गेटवे या URL की आवश्यकता नहीं है। आप सीधे अपने मोबाइल के WhatsApp से नीचे दिए गए QR कोड को स्कैन करके पोर्टल को कनेक्ट कर सकते हैं।</p>
+                    <p class="mb-0">कनेक्ट होने के बाद सभी OTP, अलर्ट्स, रिचार्ज नोटिफिकेशन्स और बल्क मेसेजेस सीधे आपके इस WhatsApp नंबर से भेजे जाएंगे।</p>
                   </div>
 
-                  <form id="whatsappForm">
-                    
-                    <!-- Keyword Buttons Bar -->
-                    <div class="form-group mb-3">
-                      <label class="font-weight-bold mb-1">Dynamic Keywords:</label>
-                      <div class="d-flex flex-wrap align-items-center" style="gap: 8px;">
-                        <button type="button" class="btn btn-sm btn-outline-success font-weight-bold btn-insert-keyword" data-keyword="[MOBILE_NO]">
-                          <i class="fa fa-phone mr-1"></i> [MOBILE_NO]
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-primary font-weight-bold btn-insert-keyword" data-keyword="[CONTENT]">
-                          <i class="fa fa-comment-o mr-1"></i> [CONTENT]
-                        </button>
-                        <small class="text-muted ml-md-auto font-weight-normal">(Click keyword button to insert into focused field)</small>
+                  <!-- Connection Status Box -->
+                  <div class="card border mb-4" style="border-radius: 10px; background: #fafbfc;">
+                    <div class="card-body p-4">
+                      <div class="d-flex flex-wrap align-items-center justify-content-between mb-3" style="gap: 12px;">
+                        <div>
+                          <span class="text-muted small text-uppercase font-weight-bold d-block">WhatsApp Connection Status</span>
+                          <div class="mt-1" id="baileysStatusBadgeContainer">
+                            <span class="badge badge-secondary px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;">
+                              <i class="fa fa-circle-o-notch fa-spin mr-1"></i> Checking Status...
+                            </span>
+                          </div>
+                        </div>
+                        <div class="d-flex flex-wrap" style="gap: 8px;">
+                          <button type="button" class="btn btn-success font-weight-bold shadow-sm" id="btnBaileysConnect">
+                            <i class="fa fa-qrcode mr-1"></i> Scan / Link WhatsApp
+                          </button>
+                          <button type="button" class="btn btn-outline-danger font-weight-bold" id="btnBaileysLogout" style="display: none;">
+                            <i class="fa fa-sign-out mr-1"></i> Disconnect / Logout
+                          </button>
+                          <button type="button" class="btn btn-outline-secondary font-weight-bold" id="btnBaileysRefresh">
+                            <i class="fa fa-refresh mr-1"></i> Refresh Status
+                          </button>
+                        </div>
                       </div>
+
+                      <!-- Connected Account Info (Shown when Connected) -->
+                      <div id="baileysConnectedInfo" class="alert alert-success mt-3 mb-0" style="display: none; border-radius: 8px;">
+                        <div class="d-flex align-items-center">
+                          <i class="fa fa-check-circle fa-2x text-success mr-3"></i>
+                          <div>
+                            <h6 class="font-weight-bold text-success mb-1">WhatsApp is Connected and Active!</h6>
+                            <div class="text-dark small">
+                              <strong>Linked Mobile:</strong> <span class="font-monospace text-primary font-weight-bold" id="baileysConnectedNumber">-</span> &nbsp;|&nbsp;
+                              <strong>Account:</strong> <span id="baileysConnectedName">-</span> &nbsp;|&nbsp;
+                              <strong>Connected Since:</strong> <span id="baileysConnectedTime">-</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <!-- QR Code Display Area (Shown when QR Ready) -->
+                      <div id="baileysQrArea" class="text-center p-4 mt-3 border rounded bg-white" style="display: none;">
+                        <h6 class="font-weight-bold text-dark mb-1"><i class="fa fa-qrcode text-success mr-1"></i> Scan WhatsApp QR Code</h6>
+                        <p class="text-muted small mb-3">अपने मोबाइल फ़ोन से इस QR कोड को स्कैन करके WhatsApp अकाउंट लिंक करें।</p>
+                        
+                        <div class="d-inline-block p-3 border rounded shadow-sm bg-white mb-3" style="border: 2px solid #22c55e !important; border-radius: 16px !important;">
+                          <img id="baileysQrImage" src="" alt="WhatsApp QR Code" style="width: 260px; height: 260px; object-fit: contain; display: block;">
+                        </div>
+
+                        <div class="text-left mx-auto" style="max-width: 440px; font-size: 13px;">
+                          <strong class="d-block mb-1 text-dark">लिंक करने के चरण (Steps to Link):</strong>
+                          <ol class="pl-3 mb-2 text-muted">
+                            <li>अपने मोबाइल फ़ोन में <strong>WhatsApp</strong> खोलें।</li>
+                            <li><strong>Settings</strong> (iPhone) या <strong>Menu ⋮</strong> (Android) पर जाकर <strong>Linked Devices</strong> चुनें।</li>
+                            <li><strong>Link a Device</strong> पर टैप करें और कैमरे को इस QR कोड पर रखें।</li>
+                          </ol>
+                          <small class="text-muted font-italic"><i class="fa fa-clock-o mr-1"></i> QR कोड समय समाप्त होने पर अपने आप अपडेट होता है या "Scan / Link WhatsApp" बटन दबाएं।</small>
+                        </div>
+                      </div>
+
                     </div>
+                  </div>
 
-                    <div class="row">
-                      <div class="col-md-3 form-group">
-                        <label for="waRequestType" class="font-weight-bold">Request Type *</label>
-                        <select id="waRequestType" class="form-control font-weight-bold">
-                          <option value="GET">GET</option>
-                          <option value="POST">POST</option>
-                        </select>
-                      </div>
-
-                      <div class="col-md-9 form-group">
-                        <label for="waApiUrl" class="font-weight-bold">API URL *</label>
-                        <input type="text" id="waApiUrl" class="form-control font-monospace" placeholder="https://api.whatsapp-gateway.com/send?apikey=YOUR_KEY&mobile=[MOBILE_NO]&msg=[CONTENT]" required>
-                        <small class="form-text text-muted">Enter full gateway URL including query parameters with <code>[MOBILE_NO]</code> and <code>[CONTENT]</code></small>
-                      </div>
-                    </div>
-
-                    <!-- POST Options (Payload and Headers) -->
-                    <div class="row" id="waPostOptionsRow" style="display: none;">
-                      <div class="col-md-8 form-group">
-                        <label for="waPostBody" class="font-weight-bold">POST Body / Payload (Optional)</label>
-                        <textarea id="waPostBody" class="form-control font-monospace" rows="3" placeholder='{"number": "[MOBILE_NO]", "message": "[CONTENT]"}'></textarea>
-                        <small class="form-text text-muted">Use <code>[MOBILE_NO]</code> and <code>[CONTENT]</code> inside JSON payload if sending via POST body.</small>
-                      </div>
-                      <div class="col-md-4 form-group">
-                        <label for="waHeaders" class="font-weight-bold">Custom Headers (Optional)</label>
-                        <textarea id="waHeaders" class="form-control font-monospace" rows="3" placeholder="Authorization: Bearer YOUR_TOKEN&#10;Content-Type: application/json"></textarea>
-                        <small class="form-text text-muted">One header per line (e.g. <code>Header: Value</code>)</small>
-                      </div>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-                      <button type="submit" class="btn btn-primary" id="btnSaveWhatsapp">
-                        <i class="fa fa-save mr-1"></i> Save WhatsApp Settings
-                      </button>
-                      <span class="text-muted small" id="whatsappSaveStatus"></span>
-                    </div>
-                  </form>
-
-                  <!-- Test WhatsApp Box -->
+                  <!-- Test & Direct Send Box -->
                   <div class="test-box-card">
-                    <h6 class="font-weight-bold text-dark mb-2"><i class="fa fa-whatsapp text-success mr-1"></i> Test WhatsApp Gateway Message</h6>
-                    <p class="text-muted small mb-3">Send a test message to verify your API URL, method, and keyword replacements live.</p>
+                    <h6 class="font-weight-bold text-dark mb-2">
+                      <i class="fa fa-paper-plane text-success mr-1"></i> Direct WhatsApp Send &amp; Test Message
+                    </h6>
+                    <p class="text-muted small mb-3">सीधे कनेक्टेड WhatsApp से टेस्ट मैसेज भेजकर डिलीवरी सत्यापित करें।</p>
                     <div class="row align-items-end">
                       <div class="col-md-4 form-group mb-md-0">
-                        <label for="testWaRecipient" class="small font-weight-bold">Mobile Number</label>
-                        <input type="text" id="testWaRecipient" class="form-control" placeholder="10-digit mobile (e.g. 9876543210)">
+                        <label for="testWaRecipient" class="small font-weight-bold">Recipient Mobile Number *</label>
+                        <input type="text" id="testWaRecipient" class="form-control font-monospace" placeholder="10-digit mobile (e.g. 9876543210)">
                       </div>
                       <div class="col-md-5 form-group mb-md-0">
-                        <label for="testWaMessage" class="small font-weight-bold">Test Message Content</label>
-                        <input type="text" id="testWaMessage" class="form-control" value="Hello! This is a test WhatsApp message from Exchange Portal.">
+                        <label for="testWaMessage" class="small font-weight-bold">Message Content *</label>
+                        <input type="text" id="testWaMessage" class="form-control" value="Hello! This is a test WhatsApp message from Exchange Portal via Baileys.">
                       </div>
                       <div class="col-md-3">
-                        <button type="button" class="btn btn-success btn-block" id="btnSendTestWhatsapp">
+                        <button type="button" class="btn btn-success btn-block font-weight-bold shadow-sm" id="btnSendTestWhatsapp">
                           <i class="fa fa-paper-plane mr-1"></i> Send Test Message
                         </button>
                       </div>
@@ -2506,18 +2518,14 @@ module.exports = function createAdminServiceSettingsPage({
           updateEmailProviderVisibility();
         }
 
-        // Populate WhatsApp
+        // Populate WhatsApp Master Switch & Baileys Status
         if (data.whatsapp) {
           waSwitch.checked = Boolean(data.whatsapp.isEnabled);
           waLabel.textContent = waSwitch.checked ? 'WhatsApp Enabled' : 'WhatsApp Disabled';
           waLabel.style.color = waSwitch.checked ? '#16a34a' : '#64748b';
-          const reqType = (data.whatsapp.requestType || 'GET').toUpperCase();
-          document.getElementById('waRequestType').value = reqType;
-          document.getElementById('waApiUrl').value = data.whatsapp.apiUrl || data.whatsapp.gatewayUrl || '';
-          document.getElementById('waPostBody').value = data.whatsapp.postBody || '';
-          document.getElementById('waHeaders').value = data.whatsapp.headers || '';
-          const postRow = document.getElementById('waPostOptionsRow');
-          if (postRow) postRow.style.display = reqType === 'POST' ? 'flex' : 'none';
+        }
+        if (typeof fetchBaileysStatus === 'function') {
+          fetchBaileysStatus();
         }
 
 
@@ -3035,94 +3043,225 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
-    // Save WhatsApp Form
-    const whatsappForm = document.getElementById('whatsappForm');
-    const waSaveBtn = document.getElementById('btnSaveWhatsapp');
-    const waSaveStatus = document.getElementById('whatsappSaveStatus');
+    // ==========================================
+    // Baileys Direct WhatsApp Web Client Logic
+    // ==========================================
+    let baileysPollTimer = null;
 
-    whatsappForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      waSaveBtn.disabled = true;
-      waSaveBtn.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Saving...';
-      waSaveStatus.textContent = '';
-
-      const payload = {
-        isEnabled: waSwitch.checked,
-        requestType: document.getElementById('waRequestType').value,
-        apiUrl: document.getElementById('waApiUrl').value.trim(),
-        postBody: document.getElementById('waPostBody').value.trim(),
-        headers: document.getElementById('waHeaders').value.trim(),
-      };
-
+    async function fetchBaileysStatus() {
       try {
-        const res = await fetch('/api/admin/settings/services/whatsapp', {
+        const res = await fetch('/api/admin/baileys/status', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const data = await res.json();
+        updateBaileysUI(data);
+      } catch (err) {
+        console.warn('Failed to fetch Baileys status:', err);
+      }
+    }
+
+    function updateBaileysUI(data) {
+      const badge = document.getElementById('baileysStatusBadge');
+      const connInfo = document.getElementById('baileysConnectedInfo');
+      const qrArea = document.getElementById('baileysQrArea');
+      const qrImage = document.getElementById('baileysQrImage');
+      const btnConnect = document.getElementById('btnBaileysConnect');
+      const btnLogout = document.getElementById('btnBaileysLogout');
+
+      if (!badge) return;
+
+      if (data.isConnected) {
+        // Connected State
+        badge.className = 'badge badge-success px-3 py-2 font-weight-bold';
+        badge.style.fontSize = '13.5px';
+        badge.innerHTML = '<i class="fa fa-check-circle mr-1"></i> Connected &amp; Active';
+
+        if (connInfo) connInfo.style.display = 'block';
+        if (qrArea) qrArea.style.display = 'none';
+
+        document.getElementById('baileysConnectedNumber').textContent = data.connectedNumber ? ('+' + data.connectedNumber) : 'Active';
+        document.getElementById('baileysConnectedName').textContent = data.connectedName || 'WhatsApp Account';
+        document.getElementById('baileysConnectedTime').textContent = data.connectedAt ? new Date(data.connectedAt).toLocaleString() : 'Now';
+
+        btnConnect.style.display = 'none';
+        btnLogout.style.display = 'inline-block';
+
+        // Clear polling timer once successfully connected
+        if (baileysPollTimer) {
+          clearInterval(baileysPollTimer);
+          baileysPollTimer = null;
+        }
+
+      } else if (data.status === 'qr_ready' && data.qrCodeDataUrl) {
+        // QR Ready to Scan State
+        badge.className = 'badge badge-warning text-dark px-3 py-2 font-weight-bold';
+        badge.style.fontSize = '13.5px';
+        badge.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code';
+
+        if (connInfo) connInfo.style.display = 'none';
+        if (qrArea) qrArea.style.display = 'block';
+        if (qrImage) qrImage.src = data.qrCodeDataUrl;
+
+        btnConnect.style.display = 'inline-block';
+        btnConnect.innerHTML = '<i class="fa fa-refresh mr-1"></i> Reload QR Code';
+        btnConnect.disabled = false;
+        btnLogout.style.display = 'none';
+
+        // Start polling if not already started
+        if (!baileysPollTimer) {
+          baileysPollTimer = setInterval(fetchBaileysStatus, 3000);
+        }
+
+      } else if (data.status === 'connecting') {
+        // Connecting State
+        badge.className = 'badge badge-info px-3 py-2 font-weight-bold';
+        badge.style.fontSize = '13.5px';
+        badge.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Initializing / Connecting...';
+
+        if (connInfo) connInfo.style.display = 'none';
+        if (qrArea) qrArea.style.display = 'none';
+        btnConnect.style.display = 'inline-block';
+        btnConnect.disabled = true;
+        btnLogout.style.display = 'none';
+
+        if (!baileysPollTimer) {
+          baileysPollTimer = setInterval(fetchBaileysStatus, 2500);
+        }
+
+      } else {
+        // Disconnected State
+        badge.className = 'badge badge-secondary px-3 py-2 font-weight-bold';
+        badge.style.fontSize = '13.5px';
+        badge.innerHTML = '<i class="fa fa-times-circle mr-1"></i> Disconnected / Not Linked';
+
+        if (connInfo) connInfo.style.display = 'none';
+        if (qrArea) qrArea.style.display = 'none';
+        btnConnect.style.display = 'inline-block';
+        btnConnect.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Scan / Link WhatsApp';
+        btnConnect.disabled = false;
+        btnLogout.style.display = 'none';
+
+        if (baileysPollTimer) {
+          clearInterval(baileysPollTimer);
+          baileysPollTimer = null;
+        }
+      }
+    }
+
+    // Toggle Master Switch
+    waSwitch.addEventListener('change', async () => {
+      waLabel.textContent = waSwitch.checked ? 'WhatsApp Enabled' : 'WhatsApp Disabled';
+      waLabel.style.color = waSwitch.checked ? '#16a34a' : '#64748b';
+      try {
+        await fetch('/api/admin/settings/services/whatsapp', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           credentials: 'same-origin',
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ isEnabled: waSwitch.checked }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Failed to save WhatsApp settings.');
-        waSaveStatus.textContent = '✓ Saved successfully!';
-        waSaveStatus.className = 'text-success font-weight-bold';
-        setTimeout(() => waSaveStatus.textContent = '', 3000);
       } catch (err) {
-        waSaveStatus.textContent = '✗ ' + err.message;
-        waSaveStatus.className = 'text-danger font-weight-bold';
-      } finally {
-        waSaveBtn.disabled = false;
-        waSaveBtn.innerHTML = '<i class="fa fa-save mr-1"></i> Save WhatsApp Settings';
+        console.warn('Failed to save WhatsApp toggle:', err);
       }
     });
 
-    // Send Test WhatsApp
+    // Button: Scan / Link WhatsApp (Connect)
+    const btnBaileysConnect = document.getElementById('btnBaileysConnect');
+    if (btnBaileysConnect) {
+      btnBaileysConnect.addEventListener('click', async () => {
+        btnBaileysConnect.disabled = true;
+        btnBaileysConnect.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Generating QR...';
+        try {
+          const res = await fetch('/api/admin/baileys/connect', {
+            method: 'POST',
+            credentials: 'same-origin',
+          });
+          const data = await res.json();
+          updateBaileysUI(data);
+          if (!baileysPollTimer) {
+            baileysPollTimer = setInterval(fetchBaileysStatus, 2500);
+          }
+        } catch (err) {
+          alert('Failed to connect to WhatsApp: ' + err.message);
+        } finally {
+          btnBaileysConnect.disabled = false;
+        }
+      });
+    }
+
+    // Button: Disconnect / Logout
+    const btnBaileysLogout = document.getElementById('btnBaileysLogout');
+    if (btnBaileysLogout) {
+      btnBaileysLogout.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to disconnect and logout this WhatsApp account?')) return;
+        btnBaileysLogout.disabled = true;
+        btnBaileysLogout.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Logging out...';
+        try {
+          const res = await fetch('/api/admin/baileys/logout', {
+            method: 'POST',
+            credentials: 'same-origin',
+          });
+          const data = await res.json();
+          updateBaileysUI(data);
+        } catch (err) {
+          alert('Failed to logout WhatsApp: ' + err.message);
+        } finally {
+          btnBaileysLogout.disabled = false;
+          btnBaileysLogout.innerHTML = '<i class="fa fa-sign-out mr-1"></i> Disconnect / Logout';
+        }
+      });
+    }
+
+    // Button: Refresh Status
+    const btnBaileysRefresh = document.getElementById('btnBaileysRefresh');
+    if (btnBaileysRefresh) {
+      btnBaileysRefresh.addEventListener('click', () => {
+        fetchBaileysStatus();
+      });
+    }
+
+    // Send Test Message via Baileys
     const btnSendTestWa = document.getElementById('btnSendTestWhatsapp');
     const testWaRecipient = document.getElementById('testWaRecipient');
     const testWaMessage = document.getElementById('testWaMessage');
     const testWaAlert = document.getElementById('testWaAlert');
 
-    btnSendTestWa.addEventListener('click', async () => {
-      const toNumber = testWaRecipient.value.trim();
-      if (!toNumber || toNumber.length < 10) {
-        alert('Please enter a valid 10-digit mobile number for WhatsApp test.');
-        testWaRecipient.focus();
-        return;
-      }
+    if (btnSendTestWa) {
+      btnSendTestWa.addEventListener('click', async () => {
+        const toNumber = (testWaRecipient.value || '').trim();
+        if (!toNumber || toNumber.replace(/\D/g, '').length < 10) {
+          alert('Please enter a valid 10-digit mobile number for WhatsApp test.');
+          testWaRecipient.focus();
+          return;
+        }
 
-      btnSendTestWa.disabled = true;
-      btnSendTestWa.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending WhatsApp Message...';
-      testWaAlert.style.display = 'none';
+        btnSendTestWa.disabled = true;
+        btnSendTestWa.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending via Baileys...';
+        testWaAlert.style.display = 'none';
 
-      const payload = {
-        toNumber,
-        message: testWaMessage.value.trim(),
-        requestType: document.getElementById('waRequestType').value,
-        apiUrl: document.getElementById('waApiUrl').value.trim(),
-        postBody: document.getElementById('waPostBody').value.trim(),
-        headers: document.getElementById('waHeaders').value.trim(),
-      };
-
-      try {
-        const res = await fetch('/api/admin/settings/services/whatsapp/test', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'WhatsApp message test failed.');
-        testWaAlert.className = 'alert alert-success mt-3';
-        testWaAlert.innerHTML = '<strong>✓ WhatsApp Dispatched Successfully!</strong> Status: ' + data.status + '<br><small class="text-muted font-monospace">' + escapeHtml(data.response || '') + '</small>';
-        testWaAlert.style.display = 'block';
-      } catch (err) {
-        testWaAlert.className = 'alert alert-danger mt-3';
-        testWaAlert.innerHTML = '<strong>✗ WhatsApp Test Failed:</strong> ' + escapeHtml(err.message);
-        testWaAlert.style.display = 'block';
-      } finally {
-        btnSendTestWa.disabled = false;
-        btnSendTestWa.innerHTML = '<i class="fa fa-paper-plane mr-1"></i> Send Test Message';
-      }
-    });
+        try {
+          const res = await fetch('/api/admin/settings/services/whatsapp/test', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              toNumber,
+              message: (testWaMessage.value || '').trim(),
+            }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'WhatsApp message test failed.');
+          testWaAlert.className = 'alert alert-success mt-3';
+          testWaAlert.innerHTML = '<strong><i class="fa fa-check-circle mr-1"></i> WhatsApp Message Dispatched Successfully!</strong><br><small class="font-monospace text-dark">' + escapeHtml(data.response || data.message || '') + '</small>';
+          testWaAlert.style.display = 'block';
+        } catch (err) {
+          testWaAlert.className = 'alert alert-danger mt-3';
+          testWaAlert.innerHTML = '<strong><i class="fa fa-exclamation-triangle mr-1"></i> WhatsApp Test Failed:</strong> ' + escapeHtml(err.message);
+          testWaAlert.style.display = 'block';
+        } finally {
+          btnSendTestWa.disabled = false;
+          btnSendTestWa.innerHTML = '<i class="fa fa-paper-plane mr-1"></i> Send Test Message';
+        }
+      });
+    }
 
     // Save Plan API Form
     const planApiForm = document.getElementById('planApiForm');
@@ -4558,134 +4697,154 @@ module.exports = function createAdminServiceSettingsPage({
   }
 
   /**
-   * POST /api/admin/settings/services/whatsapp - Save WhatsApp configuration
+   * POST /api/admin/settings/services/whatsapp - Save WhatsApp master switch configuration
    */
   async function handleSaveWhatsappSettings(request, response, input) {
     const isEnabled = Boolean(input.isEnabled);
-    const requestType = String(input.requestType || 'GET').trim().toUpperCase();
-    const apiUrl = String(input.apiUrl || '').trim();
-    const postBody = String(input.postBody || '').trim();
-    const headers = String(input.headers || '').trim();
-
-    if (isEnabled && !apiUrl) {
-      throw httpError('API URL is required when WhatsApp service is enabled.', 400);
-    }
-
-    const config = {
-      requestType,
-      apiUrl,
-      postBody,
-      headers,
-    };
-
-    const ciphertext = encryptServiceConfig(config);
 
     await db.query(
       `INSERT INTO admin_service_settings (service_key, is_enabled, config_ciphertext, updated_at)
        VALUES ('whatsapp', $1, $2, now())
        ON CONFLICT (service_key) DO UPDATE
-       SET is_enabled = EXCLUDED.is_enabled, config_ciphertext = EXCLUDED.config_ciphertext, updated_at = now()`,
-      [isEnabled, ciphertext],
+       SET is_enabled = EXCLUDED.is_enabled, updated_at = now()`,
+      [isEnabled, encryptServiceConfig({ isEnabled, provider: 'baileys' })],
     );
 
-    sendJson(response, 200, { ok: true, message: 'WhatsApp settings saved successfully.' });
+    sendJson(response, 200, { ok: true, isEnabled, message: `WhatsApp service ${isEnabled ? 'enabled' : 'disabled'} successfully.` });
   }
 
   /**
-   * POST /api/admin/settings/services/whatsapp/test - Send a test WhatsApp message
+   * POST /api/admin/settings/services/whatsapp/test - Send a test WhatsApp message via Baileys
    */
   async function handleTestWhatsapp(request, response, input) {
-    const toNumber = String(input.toNumber || '').trim().replace(/\D/g, '');
+    const toNumber = String(input.toNumber || input.mobile || '').trim().replace(/\D/g, '');
     if (!toNumber || toNumber.length < 10) {
       throw httpError('Valid 10-digit recipient mobile number is required.', 400);
     }
 
-    const message = String(input.message || 'Hello! This is a test WhatsApp message from Exchange Portal.').trim();
+    const message = String(input.message || 'Hello! This is a test WhatsApp message from Exchange Portal via Baileys.').trim();
 
-    let requestType = String(input.requestType || '').trim().toUpperCase();
-    let apiUrl = String(input.apiUrl || '').trim();
-    let postBody = String(input.postBody || '').trim();
-    let rawHeaders = String(input.headers || '').trim();
-
-    if (!apiUrl) {
-      const row = await db.query("SELECT config_ciphertext FROM admin_service_settings WHERE service_key = 'whatsapp'");
-      if (row.rowCount > 0) {
-        const saved = decryptServiceConfig(row.rows[0].config_ciphertext);
-        requestType = requestType || saved.requestType || 'GET';
-        apiUrl = apiUrl || saved.apiUrl || saved.gatewayUrl || '';
-        postBody = postBody || saved.postBody || '';
-        rawHeaders = rawHeaders || saved.headers || '';
+    // 1. Primary: Send via Baileys
+    const bStatus = baileysWhatsappService.getStatus();
+    if (bStatus.isConnected) {
+      const sendRes = await baileysWhatsappService.sendMessage(toNumber, message);
+      if (!sendRes.sent) {
+        throw httpError(sendRes.error || 'Failed to send WhatsApp message via Baileys.', 400);
       }
+      sendJson(response, 200, {
+        ok: true,
+        status: 200,
+        provider: 'baileys',
+        messageId: sendRes.messageId,
+        toNumber: sendRes.toNumber,
+        response: `Message sent via Baileys Direct WhatsApp (msgId: ${sendRes.messageId}) to ${sendRes.toNumber}`,
+        message: 'WhatsApp message dispatched successfully via Baileys!',
+      });
+      return;
     }
 
-    if (!apiUrl) {
-      throw httpError('Incomplete WhatsApp gateway settings. Please enter API URL.', 400);
-    }
+    // 2. Legacy fallback if explicit apiUrl was supplied
+    let apiUrl = String(input.apiUrl || '').trim();
+    if (apiUrl) {
+      let requestType = String(input.requestType || 'GET').trim().toUpperCase();
+      let postBody = String(input.postBody || '').trim();
+      let rawHeaders = String(input.headers || '').trim();
 
-    if (!requestType) requestType = 'GET';
+      let finalUrl = apiUrl
+        .replace(/\[MOBILE_NO\]/gi, encodeURIComponent(toNumber))
+        .replace(/\[CONTENT\]/gi, encodeURIComponent(message));
 
-    // Keyword replacements for URL (with URL encoding)
-    let finalUrl = apiUrl
-      .replace(/\[MOBILE_NO\]/gi, encodeURIComponent(toNumber))
-      .replace(/\[CONTENT\]/gi, encodeURIComponent(message));
+      let finalBody = postBody
+        .replace(/\[MOBILE_NO\]/gi, toNumber)
+        .replace(/\[CONTENT\]/gi, message);
 
-    // Keyword replacements for POST Body
-    let finalBody = postBody
-      .replace(/\[MOBILE_NO\]/gi, toNumber)
-      .replace(/\[CONTENT\]/gi, message);
-
-    // Parse custom headers
-    const reqHeaders = {};
-    if (rawHeaders) {
-      const lines = rawHeaders.split('\n');
-      for (const line of lines) {
-        const colonIdx = line.indexOf(':');
-        if (colonIdx > 0) {
-          const key = line.slice(0, colonIdx).trim().toLowerCase();
-          const val = line.slice(colonIdx + 1).trim();
-          if (key && val) {
-            reqHeaders[key] = val;
+      const reqHeaders = {};
+      if (rawHeaders) {
+        const lines = rawHeaders.split('\n');
+        for (const line of lines) {
+          const colonIdx = line.indexOf(':');
+          if (colonIdx > 0) {
+            const key = line.slice(0, colonIdx).trim().toLowerCase();
+            const val = line.slice(colonIdx + 1).trim();
+            if (key && val) reqHeaders[key] = val;
           }
         }
       }
-    }
 
-    const fetchOptions = {
-      method: requestType,
-      signal: AbortSignal.timeout(15000),
-    };
-
-    if (requestType === 'POST') {
-      if (!reqHeaders['content-type']) {
-        if (finalBody.trim().startsWith('{') || finalBody.trim().startsWith('[')) {
-          reqHeaders['content-type'] = 'application/json';
-        } else {
-          reqHeaders['content-type'] = 'application/x-www-form-urlencoded';
-        }
-      }
-      fetchOptions.body = finalBody;
-    }
-
-    if (Object.keys(reqHeaders).length > 0) {
-      fetchOptions.headers = reqHeaders;
-    }
-
-    try {
-      const fetchRes = await fetch(finalUrl, fetchOptions);
-      const resText = await fetchRes.text();
-
-      sendJson(response, 200, {
-        ok: true,
+      const fetchOptions = {
         method: requestType,
-        hitUrl: finalUrl,
-        status: fetchRes.status,
-        statusText: fetchRes.statusText,
-        response: resText.slice(0, 500),
-        message: `Request dispatched successfully. Response status: ${fetchRes.status}`,
-      });
-    } catch (err) {
-      throw httpError(`WhatsApp Request Failed: ${err.message}`, 400);
+        signal: AbortSignal.timeout(15000),
+      };
+
+      if (requestType === 'POST') {
+        if (!reqHeaders['content-type']) {
+          if (finalBody.trim().startsWith('{') || finalBody.trim().startsWith('[')) {
+            reqHeaders['content-type'] = 'application/json';
+          } else {
+            reqHeaders['content-type'] = 'application/x-www-form-urlencoded';
+          }
+        }
+        fetchOptions.body = finalBody;
+      }
+
+      if (Object.keys(reqHeaders).length > 0) {
+        fetchOptions.headers = reqHeaders;
+      }
+
+      try {
+        const fetchRes = await fetch(finalUrl, fetchOptions);
+        const resText = await fetchRes.text();
+
+        sendJson(response, 200, {
+          ok: true,
+          method: requestType,
+          hitUrl: finalUrl,
+          status: fetchRes.status,
+          statusText: fetchRes.statusText,
+          response: resText.slice(0, 500),
+          message: `Request dispatched successfully. Response status: ${fetchRes.status}`,
+        });
+        return;
+      } catch (err) {
+        throw httpError(`WhatsApp Request Failed: ${err.message}`, 400);
+      }
     }
+
+    // If not connected and no API URL
+    throw httpError('WhatsApp is not connected. Please click "Scan / Link WhatsApp" and scan the QR code to connect your account.', 400);
+  }
+
+  /**
+   * GET /api/admin/baileys/status - Get WhatsApp connection status and QR code
+   */
+  async function handleBaileysStatus(request, response) {
+    sendJson(response, 200, {
+      ok: true,
+      ...baileysWhatsappService.getStatus(),
+    });
+  }
+
+  /**
+   * POST /api/admin/baileys/connect - Start / Connect Baileys WhatsApp session & generate QR
+   */
+  async function handleBaileysConnect(request, response) {
+    const status = await baileysWhatsappService.connect();
+    sendJson(response, 200, {
+      ok: true,
+      ...status,
+    });
+  }
+
+  /**
+   * POST /api/admin/baileys/logout - Disconnect & logout Baileys WhatsApp session
+   */
+  async function handleBaileysLogout(request, response) {
+    const status = await baileysWhatsappService.logout();
+    sendJson(response, 200, {
+      ok: true,
+      ...status,
+      message: 'WhatsApp session disconnected and logged out successfully.',
+    });
   }
 
   /**
@@ -5008,6 +5167,9 @@ module.exports = function createAdminServiceSettingsPage({
     handleTestSms,
     handleSaveWhatsappSettings,
     handleTestWhatsapp,
+    handleBaileysStatus,
+    handleBaileysConnect,
+    handleBaileysLogout,
     handleSavePlanApiSettings,
     handleTestPlanApi,
     handleTestPlanApiRoffer,

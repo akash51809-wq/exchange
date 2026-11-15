@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "argon2": "^0.45.1",
     "nodemailer": "^10.0.13",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "qrcode": "^1.5.4"
   },
   "allowScripts": {
     "argon2@0.45.1": true
