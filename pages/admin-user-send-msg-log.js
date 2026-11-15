@@ -2,9 +2,16 @@
 
 const { escapeHtml } = require('../lib/page-utils');
 const { addPanelChrome } = require('../lib/panel-chrome');
+const {
+  sendWhatsappNotification,
+  sendEmailNotification,
+  sendSmsNotification,
+  logSentMessage,
+} = require('../lib/notification-service');
 
 module.exports = function createAdminUserSendMsgLogPage({
   db,
+  decryptServiceConfig,
   sendJson,
   httpError,
 }) {
@@ -353,7 +360,7 @@ module.exports = function createAdminUserSendMsgLogPage({
     const endRowIdx = Math.min(offset + PAGE_SIZE, totalRecords);
 
     const rowsHtml = logs.length === 0
-      ? `<tr><td colspan="7" class="text-center py-5 text-muted"><i class="fa fa-inbox fa-3x mb-3 text-secondary d-block"></i>No sent message logs found for the selected filter criteria.</td></tr>`
+      ? `<tr><td colspan="8" class="text-center py-5 text-muted"><i class="fa fa-inbox fa-3x mb-3 text-secondary d-block"></i>No sent message logs found for the selected filter criteria.</td></tr>`
       : logs.map((row, idx) => {
         const slNo = offset + idx + 1;
         const plat = String(row.platform || '').toLowerCase();
@@ -411,6 +418,7 @@ module.exports = function createAdminUserSendMsgLogPage({
               <div class="msg-content-preview font-monospace" style="font-size:12.5px;color:#333;word-break:break-word;white-space:pre-wrap;">${shortContent}</div>
               ${isLong ? `
                 <button type="button" class="btn btn-link btn-sm p-0 mt-1 text-primary view-msg-btn"
+                  data-id="${escapeHtml(row.id)}"
                   data-user="${userNameDisplay}"
                   data-recip="${escapeHtml(row.recipient)}"
                   data-type="${escapeHtml(row.msg_type || 'Message')}"
@@ -424,6 +432,18 @@ module.exports = function createAdminUserSendMsgLogPage({
             <td class="align-middle text-nowrap">
               <div class="text-dark font-weight-500" style="font-size:12.5px;">${dateFormatted}</div>
               ${relTime ? `<small class="text-muted d-block">${relTime}</small>` : ''}
+            </td>
+            <td class="text-center align-middle">
+              <button type="button" class="btn btn-sm btn-outline-primary resend-msg-btn py-1 px-2 font-weight-bold text-nowrap"
+                style="font-size:12px;border-radius:4px;"
+                data-id="${escapeHtml(row.id)}"
+                data-recip="${escapeHtml(row.recipient)}"
+                data-plat="${escapeHtml(plat)}"
+                data-user="${userNameDisplay}"
+                data-type="${escapeHtml(row.msg_type || 'Message')}"
+                title="Resend this message">
+                <i class="fa fa-repeat mr-1"></i> Resend
+              </button>
             </td>
           </tr>
         `;
@@ -689,6 +709,7 @@ module.exports = function createAdminUserSendMsgLogPage({
                     <th style="min-width:160px;">Msg Type</th>
                     <th style="min-width:280px;">Msg Content</th>
                     <th style="width:170px;">Date Time</th>
+                    <th style="width:110px;" class="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -743,8 +764,11 @@ module.exports = function createAdminUserSendMsgLogPage({
           <div id="modalContent" class="p-3 bg-light rounded border font-monospace text-dark" style="white-space:pre-wrap;word-break:break-word;max-height:280px;overflow-y:auto;font-size:13px;">-</div>
         </div>
       </div>
-      <div class="modal-footer bg-light">
+      <div class="modal-footer bg-light d-flex justify-content-between align-items-center">
         <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary btn-sm" id="modalResendBtn">
+          <i class="fa fa-repeat mr-1"></i> Resend Message
+        </button>
       </div>
     </div>
   </div>
@@ -753,9 +777,66 @@ module.exports = function createAdminUserSendMsgLogPage({
 <script src="/assets/plugins/jquery/jquery.min.js"></script>
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script>
+  var currentModalLogId = null;
+  var currentModalPlat = null;
+  var currentModalRecip = null;
+
+  function executeResend(logId, plat, recip, btnElement) {
+    if (!logId) return;
+    var confirmMsg = 'Are you sure you want to resend this ' + (plat || '').toUpperCase() + ' message to ' + recip + '?';
+    if (!confirm(confirmMsg)) return;
+
+    var originalHtml = btnElement.html();
+    btnElement.prop('disabled', true).html('<i class="fa fa-spinner fa-spin mr-1"></i> Resending...');
+
+    $.ajax({
+      url: '/api/admin/reports/user-send-msg-log/resend',
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ logId: logId }),
+      success: function(resp) {
+        btnElement.removeClass('btn-outline-primary btn-primary').addClass('btn-success').html('<i class="fa fa-check mr-1"></i> Resent!');
+        $('#resendAlertBox').remove();
+        var alertHtml = '<div id="resendAlertBox" class="alert alert-success alert-dismissible fade show shadow-sm mb-3" role="alert">' +
+          '<i class="fa fa-check-circle mr-2"></i>' + (resp.message || 'Message resent successfully!') +
+          '<button type="button" class="close" data-dismiss="alert">&times;</button></div>';
+        $('.settings-titlebar').after(alertHtml);
+        setTimeout(function() {
+          btnElement.removeClass('btn-success').addClass('btn-outline-primary').html(originalHtml).prop('disabled', false);
+        }, 3500);
+      },
+      error: function(xhr) {
+        var errText = 'Failed to resend message.';
+        try {
+          var parsed = JSON.parse(xhr.responseText);
+          if (parsed && parsed.error) errText = parsed.error;
+        } catch (_) {}
+        alert('Error: ' + errText);
+        btnElement.html(originalHtml).prop('disabled', false);
+      }
+    });
+  }
+
   $(document).ready(function() {
+    $(document).on('click', '.resend-msg-btn', function() {
+      var btn = $(this);
+      var logId = btn.data('id');
+      var plat = btn.data('plat');
+      var recip = btn.data('recip');
+      executeResend(logId, plat, recip, btn);
+    });
+
+    $('#modalResendBtn').on('click', function() {
+      var btn = $(this);
+      if (!currentModalLogId) return;
+      executeResend(currentModalLogId, currentModalPlat, currentModalRecip, btn);
+    });
+
     $('.view-msg-btn').on('click', function() {
       var btn = $(this);
+      currentModalLogId = btn.data('id');
+      currentModalPlat = btn.data('plat');
+      currentModalRecip = btn.data('recip');
       $('#modalTitle').text(btn.data('type') || 'Message Details');
       $('#modalUser').text(btn.data('user') || '-');
       $('#modalRecip').text(btn.data('recip') || '-');
@@ -783,7 +864,99 @@ module.exports = function createAdminUserSendMsgLogPage({
     response.end(fullPage);
   }
 
+  /**
+   * POST /api/admin/reports/user-send-msg-log/resend - Resend a logged message
+   */
+  async function handleResendMsg(request, response, input) {
+    const logId = String(input.logId || input.id || '').trim();
+    if (!logId) {
+      throw httpError('Message log ID is required.', 400);
+    }
+
+    const res = await db.query('SELECT * FROM user_sent_msg_logs WHERE id = $1', [logId]);
+    if (res.rowCount === 0) {
+      throw httpError('Message log record not found.', 404);
+    }
+
+    const row = res.rows[0];
+    const platform = String(row.platform || '').toLowerCase().trim();
+    const recipient = String(row.recipient || '').trim();
+    const content = String(row.content || '').trim();
+    const subject = row.subject || undefined;
+
+    if (!recipient) {
+      throw httpError('Recipient is missing in message log record.', 400);
+    }
+    if (!content) {
+      throw httpError('Message content is empty in message log record.', 400);
+    }
+
+    let sendResult = null;
+    if (platform === 'whatsapp') {
+      sendResult = await sendWhatsappNotification({
+        db,
+        decryptServiceConfig,
+        toNumber: recipient,
+        message: content,
+      });
+      if (!sendResult || !sendResult.sent) {
+        throw httpError(sendResult?.error || 'Failed to send WhatsApp message. Please check WhatsApp connection in Service Settings.', 400);
+      }
+    } else if (platform === 'email') {
+      const hasHtml = content.includes('<') && content.includes('>');
+      sendResult = await sendEmailNotification({
+        db,
+        decryptServiceConfig,
+        toEmail: recipient,
+        subject: subject || 'Exchange Portal Notification',
+        text: hasHtml ? content.replace(/<[^>]+>/g, '').trim() : content,
+        html: hasHtml ? content : undefined,
+      });
+      if (!sendResult || !sendResult.sent) {
+        throw httpError(sendResult?.error || 'Failed to send Email. Please check Email service settings.', 400);
+      }
+    } else if (platform === 'sms') {
+      sendResult = await sendSmsNotification({
+        db,
+        decryptServiceConfig,
+        toNumber: recipient,
+        message: content,
+      });
+      if (!sendResult || !sendResult.sent) {
+        throw httpError(sendResult?.error || 'Failed to send SMS. Please check SMS service settings.', 400);
+      }
+    } else {
+      throw httpError(`Unsupported messaging platform: ${platform}`, 400);
+    }
+
+    // Log the newly resent message into user_sent_msg_logs
+    try {
+      await logSentMessage(db, {
+        userId: row.user_id,
+        userName: row.user_name,
+        recipient: recipient,
+        msgType: String(row.msg_type || 'Message').includes('(Resent)') ? row.msg_type : `${row.msg_type || 'Message'} (Resent)`,
+        platform: platform,
+        content: content,
+        subject: subject,
+        status: 'sent',
+        responsePayload: sendResult,
+      });
+    } catch (logErr) {
+      console.warn('[Resend Message Log Error]:', logErr.message);
+    }
+
+    sendJson(response, 200, {
+      ok: true,
+      message: `Message resent successfully to ${recipient} via ${platform.toUpperCase()}!`,
+      platform: platform,
+      recipient: recipient,
+      result: sendResult,
+    });
+  }
+
   return {
     sendAdminUserSendMsgLogPage,
+    handleResendMsg,
   };
 };

@@ -360,8 +360,9 @@ const { sendAdminComplaintReportPage } = createAdminComplaintReportPage({
   sendJson,
   httpError,
 });
-const { sendAdminUserSendMsgLogPage } = createAdminUserSendMsgLogPage({
+const { sendAdminUserSendMsgLogPage, handleResendMsg } = createAdminUserSendMsgLogPage({
   db,
+  decryptServiceConfig,
   sendJson,
   httpError,
 });
@@ -7275,6 +7276,16 @@ async function handleRequest(request, response) {
           }
         });
 
+        return;
+      }
+      if (url.pathname === '/api/admin/reports/user-send-msg-log/resend' && request.method === 'POST') {
+        checkSameOrigin(request);
+        const admin = await getSession(request);
+        if (!admin) throw httpError('login required', 401);
+        if (admin.role !== 'admin') throw httpError('admin access required', 403);
+        const input = await readJson(request);
+        await handleResendMsg(request, response, input);
+        statusCode = response.statusCode || 200;
         return;
       }
       if (url.pathname === '/api/buyer/disputes') {

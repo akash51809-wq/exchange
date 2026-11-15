@@ -330,6 +330,8 @@ test('Admin User Send Msg Log Page - Structure, Filters & 25-Row Pager', async (
     assert.ok(responseBody.includes('Msg Type'), 'Should have Msg Type column');
     assert.ok(responseBody.includes('Msg Content'), 'Should have Msg Content column');
     assert.ok(responseBody.includes('Date Time'), 'Should have Date Time column');
+    assert.ok(responseBody.includes('Action'), 'Should have Action column');
+    assert.ok(responseBody.includes('resend-msg-btn'), 'Should have Resend button in table');
 
     // Pagination verification (25 rows per page, 2 pages for 50 records)
     assert.ok(responseBody.includes('Showing <strong>1</strong> to <strong>25</strong> of <strong>50</strong> entries (25 per page)'), 'Should show 25 entries per page text');
@@ -357,4 +359,71 @@ test('Admin User Send Msg Log Page - Structure, Filters & 25-Row Pager', async (
     assert.ok(responseBody.includes('Sl No,Log ID,Date Time (IST),User Name,Username,Recipient (Mobile / Email),Platform,Message Type,Subject,Message Content,Status'));
     assert.ok(responseBody.includes('Test User 1'));
   });
+});
+
+test('Admin User Send Msg Log - handleResendMsg Endpoint', async (t) => {
+  let loggedResend = null;
+  const mockDb = {
+    query: async (sql, params) => {
+      if (sql.includes('SELECT * FROM user_sent_msg_logs WHERE id = $1')) {
+        if (params[0] === 'log-wa-1') {
+          return {
+            rowCount: 1,
+            rows: [{
+              id: 'log-wa-1',
+              user_id: 'u-1',
+              user_name: 'Rahul Kumar',
+              recipient: '9876543210',
+              platform: 'whatsapp',
+              msg_type: 'Login OTP',
+              content: 'Your OTP is 998877.',
+              subject: null,
+            }],
+          };
+        }
+        return { rowCount: 0, rows: [] };
+      }
+      if (sql.includes("service_key = 'whatsapp'")) {
+        return { rowCount: 1, rows: [{ config_ciphertext: Buffer.from('mock'), is_enabled: true }] };
+      }
+      if (sql.includes('INSERT INTO user_sent_msg_logs')) {
+        loggedResend = {
+          recipient: params[2],
+          msg_type: params[3],
+          platform: params[4],
+          content: params[5],
+        };
+        return { rowCount: 1, rows: [{ id: 'new-log-id' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({ status: 200, text: async () => '{"status":"ok"}' });
+
+  try {
+    const { handleResendMsg } = createAdminUserSendMsgLogPage({
+      db: mockDb,
+      decryptServiceConfig: () => ({ apiUrl: 'https://example.com/api?to=[RECIPIENT]&msg=[MESSAGE]' }),
+      sendJson: (res, code, data) => {
+        res.statusCode = code;
+        res.data = data;
+      },
+      httpError: (msg, code) => Object.assign(new Error(msg), { statusCode: code }),
+    });
+
+    const res = {};
+    await handleResendMsg({}, res, { logId: 'log-wa-1' });
+
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.data.ok, true);
+    assert.match(res.data.message, /resent successfully/i);
+    assert.ok(loggedResend, 'Resent message should be logged into DB');
+    assert.equal(loggedResend.recipient, '9876543210');
+    assert.equal(loggedResend.platform, 'whatsapp');
+    assert.match(loggedResend.msg_type, /Resent/);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
