@@ -19,6 +19,57 @@ module.exports = function createAdminServiceSettingsPage({
    * Render HTML page for /admin/settings/service-settings
    */
   async function sendAdminServiceSettingsPage(admin, response) {
+    const liveWa = baileysWhatsappService.getStatus();
+    const defaultAvatarSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
+      '<circle cx="60" cy="60" r="60" fill="#25D366"/>' +
+      '<path fill="#ffffff" d="M60 26c-18.78 0-34 15.22-34 34 0 6 1.57 11.64 4.31 16.53L26 94l17.88-4.69A33.82 33.82 0 0 0 60 94c18.78 0 34-15.22 34-34s-15.22-34-34-34zm0 62.25c-5.1 0-9.87-1.37-13.99-3.76l-1-.58-10.4 2.73 2.78-10.13-.65-1.04A28.18 28.18 0 0 1 31.75 60c0-15.6 12.65-28.25 28.25-28.25S88.25 44.4 88.25 60 75.6 88.25 60 88.25z"/>' +
+      '<path fill="#ffffff" d="M73.5 67.8c-.8-.4-4.7-2.3-5.4-2.6-.7-.3-1.3-.4-1.8.4-.5.8-2.1 2.6-2.5 3.1-.5.5-.9.6-1.7.2-.8-.4-3.4-1.3-6.4-4-2.4-2.1-4-4.8-4.5-5.6-.5-.8-.1-1.3.4-1.7.4-.4.8-1 1.2-1.4.4-.5.5-.8.8-1.3.3-.5.1-1-.1-1.4-.2-.4-1.8-4.4-2.5-6-.7-1.6-1.4-1.4-1.9-1.4h-1.6c-.6 0-1.5.2-2.3 1-.8.9-3 3-3 7.2s3.1 8.4 3.5 9c.5.5 6.1 9.3 14.8 13.1 2.1.9 3.7 1.4 5 1.8 2.1.7 4 .6 5.5.4 1.7-.3 5.2-2.1 5.9-4.2.7-2 .7-3.8.5-4.2-.2-.4-.8-.6-1.6-1z"/>' +
+      '</svg>'
+    );
+
+    let initialBadgeHtml = '';
+    let btnConnectDisplay = 'inline-block';
+    let btnLogoutDisplay = 'none';
+    let qrAreaDisplay = 'none';
+    let connectedCardDisplay = 'none';
+    let initialQrSrc = '';
+    let initialDpSrc = defaultAvatarSvg;
+    let initialName = 'WhatsApp Account';
+    let initialNumber = '-';
+    let initialTime = '-';
+
+    if (liveWa.isConnected) {
+      initialBadgeHtml = '<span class="badge badge-success px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-check-circle mr-1"></i> Connected &amp; Active</span>';
+      btnConnectDisplay = 'none';
+      btnLogoutDisplay = 'inline-block';
+      qrAreaDisplay = 'none';
+      connectedCardDisplay = 'block';
+      initialDpSrc = liveWa.profilePicUrl || defaultAvatarSvg;
+      initialName = escapeHtml(liveWa.connectedName || 'WhatsApp Account');
+      initialNumber = escapeHtml(liveWa.connectedNumber ? ('+' + liveWa.connectedNumber) : 'Active');
+      initialTime = liveWa.connectedAt ? new Date(liveWa.connectedAt).toLocaleString() : 'Active Now';
+    } else if (liveWa.status === 'qr_ready' && liveWa.qrCodeDataUrl) {
+      initialBadgeHtml = '<span class="badge badge-warning text-dark px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code</span>';
+      btnConnectDisplay = 'inline-block';
+      btnLogoutDisplay = 'none';
+      qrAreaDisplay = 'block';
+      connectedCardDisplay = 'none';
+      initialQrSrc = liveWa.qrCodeDataUrl;
+    } else if (liveWa.status === 'connecting') {
+      initialBadgeHtml = '<span class="badge badge-info px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-spinner fa-spin mr-1"></i> Initializing / Connecting...</span>';
+      btnConnectDisplay = 'inline-block';
+      btnLogoutDisplay = 'none';
+      qrAreaDisplay = 'none';
+      connectedCardDisplay = 'none';
+    } else {
+      initialBadgeHtml = '<span class="badge badge-secondary px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;"><i class="fa fa-times-circle mr-1"></i> Disconnected / Not Linked</span>';
+      btnConnectDisplay = 'inline-block';
+      btnLogoutDisplay = 'none';
+      qrAreaDisplay = 'none';
+      connectedCardDisplay = 'none';
+    }
+
     const html = `<!DOCTYPE html>
 <html lang="en" dir="ltr">
 <head>
@@ -1295,12 +1346,12 @@ module.exports = function createAdminServiceSettingsPage({
             </div>
 
             <!-- ========================================== -->
-            <!-- 2. WHATSAPP DIRECT WEB GATEWAY (BAILEYS) -->
+            <!-- 2. WHATSAPP DIRECT WEB GATEWAY            -->
             <!-- ========================================== -->
             <div class="tab-pane" id="tabWhatsapp">
               <div class="settings-panel-card">
                 <div class="settings-panel-header">
-                  <h5><i class="fa fa-whatsapp text-success"></i> Direct WhatsApp Web Gateway (Baileys)</h5>
+                  <h5><i class="fa fa-whatsapp text-success"></i> Direct WhatsApp Gateway</h5>
                   <div class="custom-control custom-switch custom-switch-lg">
                     <input type="checkbox" class="custom-control-input" id="whatsappEnabled">
                     <label class="custom-control-label" for="whatsappEnabled" id="whatsappEnabledLabel">WhatsApp Disabled</label>
@@ -1309,7 +1360,7 @@ module.exports = function createAdminServiceSettingsPage({
                 <div class="settings-panel-body">
                   
                   <div class="help-callout mb-4">
-                    <strong><i class="fa fa-info-circle"></i> Direct WhatsApp Web Gateway (WhiskeySockets/Baileys):</strong>
+                    <strong><i class="fa fa-info-circle"></i> Direct WhatsApp Web Gateway:</strong>
                     <p class="mb-1">अब किसी थर्ड-पार्टी API गेटवे या URL की आवश्यकता नहीं है। आप सीधे अपने मोबाइल के WhatsApp से नीचे दिए गए QR कोड को स्कैन करके पोर्टल को कनेक्ट कर सकते हैं।</p>
                     <p class="mb-0">कनेक्ट होने के बाद सभी OTP, अलर्ट्स, रिचार्ज नोटिफिकेशन्स और बल्क मेसेजेस सीधे आपके इस WhatsApp नंबर से भेजे जाएंगे।</p>
                   </div>
@@ -1321,16 +1372,14 @@ module.exports = function createAdminServiceSettingsPage({
                         <div>
                           <span class="text-muted small text-uppercase font-weight-bold d-block">WhatsApp Connection Status</span>
                           <div class="mt-1" id="baileysStatusBadgeContainer">
-                            <span class="badge badge-secondary px-3 py-2 font-weight-bold" id="baileysStatusBadge" style="font-size: 13.5px;">
-                              <i class="fa fa-circle-o-notch fa-spin mr-1"></i> Checking Status...
-                            </span>
+                            ${initialBadgeHtml}
                           </div>
                         </div>
                         <div class="d-flex flex-wrap" style="gap: 8px;">
-                          <button type="button" class="btn btn-success font-weight-bold shadow-sm" id="btnBaileysConnect">
-                            <i class="fa fa-qrcode mr-1"></i> Scan / Link WhatsApp
+                          <button type="button" class="btn btn-success font-weight-bold shadow-sm" id="btnBaileysConnect" style="display: ${btnConnectDisplay};">
+                            <i class="fa fa-qrcode mr-1"></i> ${liveWa.status === 'qr_ready' ? 'Reload QR Code' : 'Scan / Link WhatsApp'}
                           </button>
-                          <button type="button" class="btn btn-outline-danger font-weight-bold" id="btnBaileysLogout" style="display: none;">
+                          <button type="button" class="btn btn-outline-danger font-weight-bold" id="btnBaileysLogout" style="display: ${btnLogoutDisplay};">
                             <i class="fa fa-sign-out mr-1"></i> Disconnect / Logout
                           </button>
                           <button type="button" class="btn btn-outline-secondary font-weight-bold" id="btnBaileysRefresh">
@@ -1346,21 +1395,21 @@ module.exports = function createAdminServiceSettingsPage({
                           <div>
                             <h6 class="font-weight-bold text-success mb-1">WhatsApp is Connected and Active!</h6>
                             <div class="text-dark small">
-                              <strong>Linked Mobile:</strong> <span class="font-monospace text-primary font-weight-bold" id="baileysConnectedNumber">-</span> &nbsp;|&nbsp;
-                              <strong>Account:</strong> <span id="baileysConnectedName">-</span> &nbsp;|&nbsp;
-                              <strong>Connected Since:</strong> <span id="baileysConnectedTime">-</span>
+                              <strong>Linked Mobile:</strong> <span class="font-monospace text-primary font-weight-bold" id="baileysConnectedNumber">${initialNumber}</span> &nbsp;|&nbsp;
+                              <strong>Account:</strong> <span id="baileysConnectedName">${initialName}</span> &nbsp;|&nbsp;
+                              <strong>Connected Since:</strong> <span id="baileysConnectedTime">${initialTime}</span>
                             </div>
                           </div>
                         </div>
                       </div>
 
                       <!-- QR Code Display Area (Shown when QR Ready) -->
-                      <div id="baileysQrArea" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: none; border-color: #86efac !important;">
+                      <div id="baileysQrArea" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: ${qrAreaDisplay}; border-color: #86efac !important;">
                         <h6 class="font-weight-bold text-dark mb-1"><i class="fa fa-qrcode text-success mr-1"></i> Scan WhatsApp QR Code</h6>
                         <p class="text-muted small mb-3">अपने मोबाइल फ़ोन से इस QR कोड को स्कैन करके WhatsApp अकाउंट लिंक करें।</p>
                         
                         <div class="d-inline-block p-3 border rounded shadow-sm bg-white mb-3" style="border: 2px solid #22c55e !important; border-radius: 16px !important;">
-                          <img id="baileysQrImage" src="" alt="WhatsApp QR Code" style="width: 260px; height: 260px; object-fit: contain; display: block;">
+                          <img id="baileysQrImage" src="${initialQrSrc}" alt="WhatsApp QR Code" style="width: 260px; height: 260px; object-fit: contain; display: block;">
                         </div>
 
                         <div class="text-left mx-auto" style="max-width: 440px; font-size: 13px;">
@@ -1375,17 +1424,17 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
 
                       <!-- WhatsApp Connected Card (Shown when Connected in place of QR) -->
-                      <div id="baileysConnectedCard" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: none; border-color: #86efac !important; background: linear-gradient(to bottom, #f0fdf4, #ffffff) !important;">
+                      <div id="baileysConnectedCard" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: ${connectedCardDisplay}; border-color: #86efac !important; background: linear-gradient(to bottom, #f0fdf4, #ffffff) !important;">
                         <div class="position-relative d-inline-block mb-3">
-                          <img id="baileysConnectedDp" src="" alt="WhatsApp Profile Picture" class="shadow-sm" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 4px solid #22c55e; background-color: #f1f5f9; display: inline-block;">
+                          <img id="baileysConnectedDp" src="${initialDpSrc}" alt="WhatsApp Profile Picture" class="shadow-sm" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 4px solid #22c55e; background-color: #f1f5f9; display: inline-block;">
                           <span class="position-absolute" style="bottom: 4px; right: 8px; width: 28px; height: 28px; background: #22c55e; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
                             <i class="fa fa-check text-white" style="font-size: 13px;"></i>
                           </span>
                         </div>
                         
-                        <h5 class="font-weight-bold text-dark mb-1" id="baileysConnectedNameDisplay">-</h5>
+                        <h5 class="font-weight-bold text-dark mb-1" id="baileysConnectedNameDisplay">${initialName}</h5>
                         <div class="h6 font-monospace text-success font-weight-bold mb-2" id="baileysConnectedNumberDisplay">
-                          <i class="fa fa-whatsapp mr-1"></i> <span>-</span>
+                          <i class="fa fa-whatsapp mr-1"></i> <span>${initialNumber}</span>
                         </div>
                         
                         <div class="mb-3">
@@ -1395,8 +1444,8 @@ module.exports = function createAdminServiceSettingsPage({
                         </div>
 
                         <div class="text-muted small mx-auto p-2 bg-light rounded border" style="max-width: 440px;">
-                          <span class="mr-2"><strong>Connected Since:</strong> <span id="baileysConnectedTimeDisplay">-</span></span>
-                          <span class="badge badge-outline-success border border-success text-success px-2 py-1">Baileys Multi-Device Web</span>
+                          <span class="mr-2"><strong>Connected Since:</strong> <span id="baileysConnectedTimeDisplay">${initialTime}</span></span>
+                          <span class="badge badge-outline-success border border-success text-success px-2 py-1">Direct Web Gateway</span>
                         </div>
 
                         <div class="mt-3">
@@ -2289,6 +2338,7 @@ module.exports = function createAdminServiceSettingsPage({
   <script src="/auth-client.js"></script>
   <script>
   (()=>{
+    const INITIAL_WA_DATA = ${JSON.stringify(liveWa)};
     function activateTab(targetSelector) {
       const btn = document.querySelector(\`.settings-tab-btn[data-target="\${targetSelector}"]\`);
       if (btn) {
@@ -3084,7 +3134,7 @@ module.exports = function createAdminServiceSettingsPage({
     }
 
     // ==========================================
-    // Baileys Direct WhatsApp Web Client Logic
+    // Direct WhatsApp Web Client Logic
     // ==========================================
     let baileysPollTimer = null;
 
@@ -3095,7 +3145,7 @@ module.exports = function createAdminServiceSettingsPage({
         const data = await res.json();
         updateBaileysUI(data);
       } catch (err) {
-        console.warn('Failed to fetch Baileys status:', err);
+        console.warn('Failed to fetch WhatsApp status:', err);
       }
     }
 
@@ -3227,6 +3277,10 @@ module.exports = function createAdminServiceSettingsPage({
       }
     }
 
+    if (typeof INITIAL_WA_DATA !== 'undefined' && INITIAL_WA_DATA) {
+      updateBaileysUI(INITIAL_WA_DATA);
+    }
+
     // Toggle Master Switch
     waSwitch.addEventListener('change', async () => {
       waLabel.textContent = waSwitch.checked ? 'WhatsApp Enabled' : 'WhatsApp Disabled';
@@ -3323,7 +3377,10 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
-    // Send Test Message via Baileys
+    // Immediate status check on page initialization
+    fetchBaileysStatus();
+
+    // Send Test Message
     const btnSendTestWa = document.getElementById('btnSendTestWhatsapp');
     const testWaRecipient = document.getElementById('testWaRecipient');
     const testWaMessage = document.getElementById('testWaMessage');
@@ -3346,7 +3403,7 @@ module.exports = function createAdminServiceSettingsPage({
         }
 
         btnSendTestWa.disabled = true;
-        btnSendTestWa.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending via Baileys...';
+        btnSendTestWa.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending WhatsApp message...';
         testWaAlert.style.display = 'none';
 
         try {
@@ -4834,14 +4891,14 @@ module.exports = function createAdminServiceSettingsPage({
       throw httpError('Valid 10-digit recipient mobile number is required.', 400);
     }
 
-    const message = String(input.message || 'Hello! This is a test WhatsApp message from Exchange Portal via Baileys.').trim();
+    const message = String(input.message || 'Hello! This is a test WhatsApp message from Exchange Portal.').trim();
 
-    // 1. Primary: Send via Baileys
+    // 1. Primary: Send via WhatsApp Web session
     const bStatus = baileysWhatsappService.getStatus();
     if (bStatus.isConnected) {
       const sendRes = await baileysWhatsappService.sendMessage(toNumber, message);
       if (!sendRes.sent) {
-        throw httpError(sendRes.error || 'Failed to send WhatsApp message via Baileys.', 400);
+        throw httpError(sendRes.error || 'Failed to send WhatsApp message.', 400);
       }
       sendJson(response, 200, {
         ok: true,
@@ -4849,8 +4906,8 @@ module.exports = function createAdminServiceSettingsPage({
         provider: 'baileys',
         messageId: sendRes.messageId,
         toNumber: sendRes.toNumber,
-        response: `Message sent via Baileys Direct WhatsApp (msgId: ${sendRes.messageId}) to ${sendRes.toNumber}`,
-        message: 'WhatsApp message dispatched successfully via Baileys!',
+        response: `Message sent via Direct WhatsApp (msgId: ${sendRes.messageId}) to ${sendRes.toNumber}`,
+        message: 'WhatsApp message dispatched successfully!',
       });
       return;
     }
@@ -4931,9 +4988,7 @@ module.exports = function createAdminServiceSettingsPage({
    */
   async function handleBaileysStatus(request, response) {
     if (baileysWhatsappService.status === 'connected' && !baileysWhatsappService.profilePicUrl) {
-      try {
-        await baileysWhatsappService.fetchProfilePicture();
-      } catch (_) {}
+      void baileysWhatsappService.fetchProfilePicture();
     }
     sendJson(response, 200, {
       ok: true,

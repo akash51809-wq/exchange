@@ -59,7 +59,9 @@ test('Admin Service Settings - WhatsApp page HTML contains Baileys QR & Scan UI 
   await handler.sendAdminServiceSettingsPage({ id: 'admin-id', role: 'admin' }, mockRes);
 
   // Verifications:
-  assert.ok(capturedHtml.includes('Direct WhatsApp Web Gateway (Baileys)'), 'Should contain Baileys heading');
+  assert.ok(capturedHtml.includes('Direct WhatsApp Gateway'), 'Should contain WhatsApp Gateway heading');
+  assert.ok(!capturedHtml.includes('(Baileys)'), 'Frontend HTML should not expose internal library Baileys');
+  assert.ok(!capturedHtml.includes('WhiskeySockets'), 'Frontend HTML should not expose WhiskeySockets');
   assert.ok(capturedHtml.includes('id="btnBaileysConnect"'), 'Should contain Scan / Link WhatsApp button');
   assert.ok(capturedHtml.includes('id="btnBaileysLogout"'), 'Should contain Logout button');
   assert.ok(capturedHtml.includes('id="baileysQrImage"'), 'Should contain QR image element');
