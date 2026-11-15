@@ -329,9 +329,12 @@ test('Admin User Send Msg Log Page - Structure, Filters & 25-Row Pager', async (
     assert.ok(responseBody.includes('Platform'), 'Should have Platform column');
     assert.ok(responseBody.includes('Msg Type'), 'Should have Msg Type column');
     assert.ok(responseBody.includes('Msg Content'), 'Should have Msg Content column');
+    assert.ok(responseBody.includes('Delivery Status'), 'Should have Delivery Status column');
     assert.ok(responseBody.includes('Date Time'), 'Should have Date Time column');
     assert.ok(responseBody.includes('Action'), 'Should have Action column');
     assert.ok(responseBody.includes('resend-msg-btn'), 'Should have Resend button in table');
+    assert.ok(responseBody.includes('Delivered'), 'Should display Delivered status badge');
+    assert.ok(responseBody.includes('name="status"'), 'Should have Delivery Status filter dropdown');
 
     // Pagination verification (25 rows per page, 2 pages for 50 records)
     assert.ok(responseBody.includes('Showing <strong>1</strong> to <strong>25</strong> of <strong>50</strong> entries (25 per page)'), 'Should show 25 entries per page text');
@@ -425,5 +428,75 @@ test('Admin User Send Msg Log - handleResendMsg Endpoint', async (t) => {
     assert.match(loggedResend.msg_type, /Resent/);
   } finally {
     global.fetch = originalFetch;
+  }
+
+  // Failure Case: Resend fails when WhatsApp gateway returns 503 or error
+  let failedInsert = null;
+  const failingDb = {
+    query: async (sql, params) => {
+      if (sql.includes('SELECT * FROM user_sent_msg_logs WHERE id = $1')) {
+        return {
+          rowCount: 1,
+          rows: [{
+            id: 'log-fail-1',
+            user_id: 'u-1',
+            user_name: 'Rahul Kumar',
+            recipient: '9876543210',
+            platform: 'whatsapp',
+            msg_type: 'Login OTP',
+            content: 'Your OTP is 998877.',
+            subject: null,
+          }],
+        };
+      }
+      if (sql.includes("service_key = 'whatsapp'")) {
+        return { rowCount: 1, rows: [{ config_ciphertext: Buffer.from('mock'), is_enabled: true }] };
+      }
+      if (sql.includes('INSERT INTO user_sent_msg_logs')) {
+        failedInsert = {
+          sql: sql,
+          recipient: params[2],
+          msg_type: params[3],
+          platform: params[4],
+          payload: params[7],
+        };
+        return { rowCount: 1, rows: [{ id: 'failed-log-id' }] };
+      }
+      return { rowCount: 0, rows: [] };
+    },
+  };
+
+  const failingFetch = async () => ({
+    status: 503,
+    ok: false,
+    text: async () => JSON.stringify({ status: false, message: 'WhatsApp is not connected for this user session (ADMIN).' }),
+  });
+
+  const originalGlobalFetch = global.fetch;
+  global.fetch = failingFetch;
+  try {
+    const { handleResendMsg: handleFailingResend } = createAdminUserSendMsgLogPage({
+      db: failingDb,
+      decryptServiceConfig: () => ({ apiUrl: 'https://example.com/api?to=[RECIPIENT]&msg=[MESSAGE]' }),
+      sendJson: () => {},
+      httpError: (msg, code) => Object.assign(new Error(msg), { statusCode: code }),
+    });
+
+    await assert.rejects(
+      async () => {
+        await handleFailingResend({}, {}, { logId: 'log-fail-1' });
+      },
+      (err) => {
+        assert.equal(err.statusCode, 400);
+        assert.match(err.message, /not connected/i);
+        return true;
+      }
+    );
+
+    assert.ok(failedInsert, 'Failed resend attempt should be logged with failed status');
+    assert.ok(failedInsert.sql.includes("'failed'"), 'SQL should explicitly store failed status');
+    assert.match(failedInsert.payload, /not connected/i);
+  } finally {
+    global.fetch = originalGlobalFetch;
   }
 });

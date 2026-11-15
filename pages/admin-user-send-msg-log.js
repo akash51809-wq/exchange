@@ -70,7 +70,87 @@ module.exports = function createAdminUserSendMsgLogPage({
   }
 
   /**
-   * Ensure user_sent_msg_logs table exists
+   * Helper to format Delivery Status badge and provider details
+   */
+  function renderDeliveryStatus(row) {
+    const status = String(row.status || '').toLowerCase();
+    const plat = String(row.platform || '').toLowerCase();
+    const payload = row.response_payload && typeof row.response_payload === 'object' ? row.response_payload : {};
+
+    const isFailed = status === 'failed' || payload.sent === false;
+    if (isFailed) {
+      let reason = 'Failed / Undelivered';
+      let detail = '';
+      const respStr = typeof payload.response === 'string' ? payload.response : JSON.stringify(payload.response || '');
+      if (respStr.includes('WhatsApp is not connected') || respStr.includes('not connected') || payload.status === 503) {
+        reason = 'Not Connected';
+        detail = 'WhatsApp not connected';
+      } else if (payload.error) {
+        reason = String(payload.error).slice(0, 26);
+        detail = String(payload.error);
+      } else if (payload.status) {
+        reason = `HTTP ${payload.status}`;
+        detail = `Gateway error ${payload.status}`;
+      }
+      return `
+        <div class="text-center">
+          <span class="badge badge-danger px-2 py-1 font-weight-bold" style="background-color:#dc3545;color:#fff;">
+            <i class="fa fa-times-circle mr-1"></i>Failed
+          </span>
+          <small class="d-block text-danger font-weight-semibold mt-1 text-truncate" style="font-size:11px;max-width:125px;margin:0 auto;" title="${escapeHtml(detail || reason)}">${escapeHtml(reason)}</small>
+        </div>
+      `;
+    }
+
+    // Delivered status
+    if (plat === 'whatsapp') {
+      const isDirect = payload.provider === 'baileys' || (payload.response && String(payload.response).includes('Direct'));
+      const provLabel = isDirect ? 'Direct WhatsApp' : 'WhatsApp Gateway';
+      return `
+        <div class="text-center">
+          <span class="badge badge-success px-2 py-1 font-weight-bold" style="background-color:#28a745;color:#fff;">
+            <i class="fa fa-check-circle mr-1"></i>Delivered
+          </span>
+          <small class="d-block text-muted mt-1" style="font-size:11px;">${escapeHtml(provLabel)}</small>
+        </div>
+      `;
+    }
+
+    if (plat === 'email') {
+      const isScript = payload.provider === 'google_script' || (payload.response && String(payload.response).includes('script'));
+      const provLabel = isScript ? 'Google Apps Script' : 'SMTP Server';
+      return `
+        <div class="text-center">
+          <span class="badge badge-primary px-2 py-1 font-weight-bold" style="background-color:#007bff;color:#fff;">
+            <i class="fa fa-check-circle mr-1"></i>Delivered
+          </span>
+          <small class="d-block text-muted mt-1" style="font-size:11px;">${escapeHtml(provLabel)}</small>
+        </div>
+      `;
+    }
+
+    if (plat === 'sms') {
+      return `
+        <div class="text-center">
+          <span class="badge badge-info px-2 py-1 font-weight-bold" style="background-color:#17a2b8;color:#fff;">
+            <i class="fa fa-check-circle mr-1"></i>Delivered
+          </span>
+          <small class="d-block text-muted mt-1" style="font-size:11px;">SMS Gateway</small>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="text-center">
+        <span class="badge badge-success px-2 py-1 font-weight-bold">
+          <i class="fa fa-check mr-1"></i>Delivered
+        </span>
+      </div>
+    `;
+  }
+
+  /**
+   * Ensure user_sent_msg_logs table exists and cleanup any legacy failed status
    */
   async function ensureTable() {
     try {
@@ -92,6 +172,21 @@ module.exports = function createAdminUserSendMsgLogPage({
         CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_user_id ON user_sent_msg_logs(user_id);
         CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_platform ON user_sent_msg_logs(platform);
         CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_msg_type ON user_sent_msg_logs(msg_type);
+        CREATE INDEX IF NOT EXISTS idx_user_sent_msg_logs_status ON user_sent_msg_logs(status);
+      `);
+
+      // Clean up legacy records: mark any records where gateway returned 503 or not connected as failed
+      await db.query(`
+        UPDATE user_sent_msg_logs
+        SET status = 'failed'
+        WHERE status != 'failed'
+          AND (
+            (response_payload->>'sent')::text = 'false'
+            OR (response_payload->>'status')::text IN ('503', '500', '400', '401', '403')
+            OR (response_payload->>'response')::text ILIKE '%not connected%'
+            OR (response_payload->>'response')::text ILIKE '%WhatsApp is not connected%'
+            OR (response_payload->>'error') IS NOT NULL
+          )
       `);
     } catch (err) {
       console.warn('[User Sent Msg Log Table Init Warning]:', err.message);
@@ -110,6 +205,7 @@ module.exports = function createAdminUserSendMsgLogPage({
     const user = String(searchParams.get('user') || searchParams.get('userId') || '').trim();
     const msgType = String(searchParams.get('msgType') || searchParams.get('type') || '').trim();
     const platform = String(searchParams.get('platform') || '').trim().toLowerCase();
+    const status = String(searchParams.get('status') || '').trim().toLowerCase();
     const rawPage = parseInt(searchParams.get('page') || '1', 10);
     const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
     const download = String(searchParams.get('download') || searchParams.get('export') || '').trim().toLowerCase();
@@ -123,14 +219,19 @@ module.exports = function createAdminUserSendMsgLogPage({
     const values = [];
     const addParam = (val) => { values.push(val); return `$${values.length}`; };
 
-    // Always restrict to real, successfully sent messages
-    conditions.push("l.status = 'sent'");
-
     if (validFrom) {
       conditions.push(`l.created_at >= (${addParam(validFrom)}::date::timestamp AT TIME ZONE 'Asia/Kolkata')`);
     }
     if (validTo) {
       conditions.push(`l.created_at < (((${addParam(validTo)}::date + 1)::timestamp) AT TIME ZONE 'Asia/Kolkata')`);
+    }
+
+    if (status && status !== 'all') {
+      if (status === 'delivered' || status === 'sent') {
+        conditions.push("l.status = 'sent'");
+      } else if (status === 'failed') {
+        conditions.push("l.status = 'failed'");
+      }
     }
 
     if (user) {
@@ -159,6 +260,7 @@ module.exports = function createAdminUserSendMsgLogPage({
       user,
       msgType,
       platform: platform || 'all',
+      status: status || 'all',
       page,
       download,
       whereClause,
@@ -172,7 +274,7 @@ module.exports = function createAdminUserSendMsgLogPage({
   async function streamCsv(filters, response) {
     const query = `
       SELECT l.id, l.user_id, l.user_name, l.recipient, l.msg_type,
-             l.platform, l.content, l.subject, l.status, l.created_at,
+             l.platform, l.content, l.subject, l.status, l.response_payload, l.created_at,
              u.username, u.email AS user_email
       FROM user_sent_msg_logs l
       LEFT JOIN users u ON u.id = l.user_id
@@ -203,10 +305,13 @@ module.exports = function createAdminUserSendMsgLogPage({
       'Subject',
       'Message Content',
       'Status',
+      'Delivery Status',
     ].join(',') + '\r\n';
 
     const rows = [BOM, headers];
     res.rows.forEach((row, idx) => {
+      const isFailed = row.status === 'failed' || (row.response_payload && row.response_payload.sent === false);
+      const deliveryStatus = isFailed ? 'Failed' : 'Delivered';
       const line = [
         idx + 1,
         sanitizeCsv(row.id),
@@ -219,6 +324,7 @@ module.exports = function createAdminUserSendMsgLogPage({
         sanitizeCsv(row.subject || '-'),
         sanitizeCsv(row.content),
         sanitizeCsv(row.status || 'sent'),
+        sanitizeCsv(deliveryStatus),
       ].join(',') + '\r\n';
       rows.push(line);
     });
@@ -236,7 +342,7 @@ module.exports = function createAdminUserSendMsgLogPage({
       return streamCsv(filters, response);
     }
 
-    // 1. Fetch distinct users and message types for filter dropdowns
+    // 1. Fetch distinct users, message types and counts for filter dropdowns & KPI cards
     const [usersRes, msgTypesRes, countsRes] = await Promise.all([
       db.query(`
         SELECT id, username, name, email
@@ -248,26 +354,27 @@ module.exports = function createAdminUserSendMsgLogPage({
       db.query(`
         SELECT DISTINCT msg_type
         FROM user_sent_msg_logs
-        WHERE msg_type IS NOT NULL AND msg_type != '' AND status = 'sent'
+        WHERE msg_type IS NOT NULL AND msg_type != ''
         ORDER BY msg_type ASC
       `).catch(() => ({ rows: [] })),
-      // Platform counters for the current date range (only real, sent messages)
+      // Real platform and status counters for the current date range
       db.query(`
         SELECT
           COUNT(*) AS total_count,
-          COUNT(*) FILTER (WHERE platform = 'sms') AS sms_count,
-          COUNT(*) FILTER (WHERE platform = 'whatsapp') AS whatsapp_count,
-          COUNT(*) FILTER (WHERE platform = 'email') AS email_count
+          COUNT(*) FILTER (WHERE l.status = 'sent') AS delivered_count,
+          COUNT(*) FILTER (WHERE l.status = 'failed') AS failed_count,
+          COUNT(*) FILTER (WHERE l.platform = 'sms') AS sms_count,
+          COUNT(*) FILTER (WHERE l.platform = 'whatsapp') AS whatsapp_count,
+          COUNT(*) FILTER (WHERE l.platform = 'email') AS email_count
         FROM user_sent_msg_logs l
-        WHERE l.status = 'sent'
-          AND l.created_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
+        WHERE l.created_at >= ($1::date::timestamp AT TIME ZONE 'Asia/Kolkata')
           AND l.created_at < ((($2::date + 1)::timestamp) AT TIME ZONE 'Asia/Kolkata')
-      `, [filters.from, filters.to]).catch(() => ({ rows: [{ total_count: 0, sms_count: 0, whatsapp_count: 0, email_count: 0 }] })),
+      `, [filters.from, filters.to]).catch(() => ({ rows: [{ total_count: 0, delivered_count: 0, failed_count: 0, sms_count: 0, whatsapp_count: 0, email_count: 0 }] })),
     ]);
 
     const usersList = usersRes.rows || [];
     const existingMsgTypes = (msgTypesRes.rows || []).map((r) => r.msg_type);
-    const summary = countsRes.rows[0] || { total_count: 0, sms_count: 0, whatsapp_count: 0, email_count: 0 };
+    const summary = countsRes.rows[0] || { total_count: 0, delivered_count: 0, failed_count: 0, sms_count: 0, whatsapp_count: 0, email_count: 0 };
 
     // Standard fallback notification types if table has few or none yet
     const standardMsgTypes = [
@@ -307,7 +414,7 @@ module.exports = function createAdminUserSendMsgLogPage({
 
     const listSql = `
       SELECT l.id, l.user_id, l.user_name, l.recipient, l.msg_type,
-             l.platform, l.content, l.subject, l.status, l.created_at,
+             l.platform, l.content, l.subject, l.status, l.response_payload, l.created_at,
              u.username, u.email AS user_email
       FROM user_sent_msg_logs l
       LEFT JOIN users u ON u.id = l.user_id
@@ -329,6 +436,7 @@ module.exports = function createAdminUserSendMsgLogPage({
       if (filters.user) p.set('user', filters.user);
       if (filters.msgType && filters.msgType !== 'all') p.set('msgType', filters.msgType);
       if (filters.platform && filters.platform !== 'all') p.set('platform', filters.platform);
+      if (filters.status && filters.status !== 'all') p.set('status', filters.status);
       p.set('page', String(pageNum));
       return `?${p.toString()}`;
     }
@@ -341,6 +449,20 @@ module.exports = function createAdminUserSendMsgLogPage({
       if (filters.user) p.set('user', filters.user);
       if (filters.msgType && filters.msgType !== 'all') p.set('msgType', filters.msgType);
       if (plat && plat !== 'all') p.set('platform', plat);
+      if (filters.status && filters.status !== 'all') p.set('status', filters.status);
+      p.set('page', '1');
+      return `?${p.toString()}`;
+    }
+
+    // Helper for status filter pill links
+    function makeStatusUrl(stat) {
+      const p = new URLSearchParams();
+      if (filters.from) p.set('from', filters.from);
+      if (filters.to) p.set('to', filters.to);
+      if (filters.user) p.set('user', filters.user);
+      if (filters.msgType && filters.msgType !== 'all') p.set('msgType', filters.msgType);
+      if (filters.platform && filters.platform !== 'all') p.set('platform', filters.platform);
+      if (stat && stat !== 'all') p.set('status', stat);
       p.set('page', '1');
       return `?${p.toString()}`;
     }
@@ -352,6 +474,7 @@ module.exports = function createAdminUserSendMsgLogPage({
     if (filters.user) exportParams.set('user', filters.user);
     if (filters.msgType && filters.msgType !== 'all') exportParams.set('msgType', filters.msgType);
     if (filters.platform && filters.platform !== 'all') exportParams.set('platform', filters.platform);
+    if (filters.status && filters.status !== 'all') exportParams.set('status', filters.status);
     exportParams.set('download', 'csv');
     const exportUrl = `?${exportParams.toString()}`;
 
@@ -360,7 +483,7 @@ module.exports = function createAdminUserSendMsgLogPage({
     const endRowIdx = Math.min(offset + PAGE_SIZE, totalRecords);
 
     const rowsHtml = logs.length === 0
-      ? `<tr><td colspan="8" class="text-center py-5 text-muted"><i class="fa fa-inbox fa-3x mb-3 text-secondary d-block"></i>No sent message logs found for the selected filter criteria.</td></tr>`
+      ? `<tr><td colspan="9" class="text-center py-5 text-muted"><i class="fa fa-inbox fa-3x mb-3 text-secondary d-block"></i>No sent message logs found for the selected filter criteria.</td></tr>`
       : logs.map((row, idx) => {
         const slNo = offset + idx + 1;
         const plat = String(row.platform || '').toLowerCase();
@@ -388,6 +511,12 @@ module.exports = function createAdminUserSendMsgLogPage({
         const dateFormatted = formatDateTime(row.created_at);
         const relTime = formatRelativeTime(row.created_at);
 
+        const deliveryStatusHtml = renderDeliveryStatus(row);
+        const isFailed = String(row.status || '').toLowerCase() === 'failed' || (row.response_payload && row.response_payload.sent === false);
+        const statusReason = isFailed
+          ? (row.response_payload?.error || (typeof row.response_payload?.response === 'string' && row.response_payload?.response.includes('not connected') ? 'WhatsApp is not connected' : 'Failed to deliver'))
+          : (row.response_payload?.provider || 'Delivered successfully');
+
         return `
           <tr>
             <td class="text-center font-weight-bold align-middle">${slNo}</td>
@@ -414,7 +543,7 @@ module.exports = function createAdminUserSendMsgLogPage({
               </span>
               ${row.subject ? `<small class="d-block text-muted mt-1" title="Email Subject">Sub: ${escapeHtml(row.subject)}</small>` : ''}
             </td>
-            <td class="align-middle" style="max-width:320px;">
+            <td class="align-middle" style="max-width:300px;">
               <div class="msg-content-preview font-monospace" style="font-size:12.5px;color:#333;word-break:break-word;white-space:pre-wrap;">${shortContent}</div>
               ${isLong ? `
                 <button type="button" class="btn btn-link btn-sm p-0 mt-1 text-primary view-msg-btn"
@@ -424,10 +553,15 @@ module.exports = function createAdminUserSendMsgLogPage({
                   data-type="${escapeHtml(row.msg_type || 'Message')}"
                   data-plat="${escapeHtml(plat.toUpperCase())}"
                   data-date="${escapeHtml(dateFormatted)}"
+                  data-status="${escapeHtml(isFailed ? 'Failed' : 'Delivered')}"
+                  data-reason="${escapeHtml(statusReason)}"
                   data-msg="${escapeHtml(row.content || '')}">
                   <i class="fa fa-eye"></i> View Full Message
                 </button>
               ` : ''}
+            </td>
+            <td class="align-middle text-center" style="width:130px;">
+              ${deliveryStatusHtml}
             </td>
             <td class="align-middle text-nowrap">
               <div class="text-dark font-weight-500" style="font-size:12.5px;">${dateFormatted}</div>
@@ -521,11 +655,11 @@ module.exports = function createAdminUserSendMsgLogPage({
     body { background-color: #f4f6f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #333; }
     .card { border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.03); margin-bottom: 22px; }
     .card-header { background-color: #fff; border-bottom: 1px solid #edf2f7; padding: 14px 20px; font-weight: 700; border-top-left-radius: 10px; border-top-right-radius: 10px; }
-    .stat-card { border-radius: 10px; border: 1px solid #e2e8f0; padding: 16px 20px; background: #fff; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
+    .stat-card { border-radius: 10px; border: 1px solid #e2e8f0; padding: 14px 16px; background: #fff; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; transition: transform 0.15s ease, box-shadow 0.15s ease; }
     .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 15px rgba(0,0,0,0.05); }
-    .stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-    .stat-val { font-size: 22px; font-weight: 800; line-height: 1.2; margin-top: 4px; }
-    .stat-lbl { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; }
+    .stat-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+    .stat-val { font-size: 20px; font-weight: 800; line-height: 1.2; margin-top: 4px; }
+    .stat-lbl { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #718096; }
     .table thead th { background-color: #2d3748; color: #fff; font-size: 12.5px; font-weight: 600; border-color: #374151; vertical-align: middle; padding: 11px 12px; }
     .table-striped tbody tr:nth-of-type(odd) { background-color: #fcfdfe; }
     .table-hover tbody tr:hover { background-color: #f1f5f9; }
@@ -550,7 +684,7 @@ module.exports = function createAdminUserSendMsgLogPage({
         <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-3">
           <div>
             <h3 class="font-weight-bold text-dark m-0"><i class="fa fa-history text-primary mr-2"></i>User Send Msg Log</h3>
-            <p class="text-muted mt-1 mb-0" style="font-size:13.5px;">Logs of all notifications dispatched to users via SMS, WhatsApp, and Email.</p>
+            <p class="text-muted mt-1 mb-0" style="font-size:13.5px;">Logs of all notifications dispatched to users via SMS, WhatsApp, and Email with real-time delivery status.</p>
           </div>
           <div class="mt-2 mt-md-0">
             <a href="${exportUrl}" class="btn btn-success btn-sm font-weight-bold shadow-sm">
@@ -562,12 +696,12 @@ module.exports = function createAdminUserSendMsgLogPage({
           </div>
         </div>
 
-        <!-- Summary KPI Counters for selected date range -->
+        <!-- Summary KPI Counters for selected date range (Total, Delivered, Failed, WhatsApp, SMS, Email) -->
         <div class="row">
-          <div class="col-sm-6 col-lg-3">
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
             <div class="stat-card">
               <div>
-                <div class="stat-lbl">Total Messages</div>
+                <div class="stat-lbl">Total Dispatched</div>
                 <div class="stat-val text-dark">${Number(summary.total_count || 0).toLocaleString('en-IN')}</div>
               </div>
               <div class="stat-icon" style="background:#eef2ff;color:#4f46e5;">
@@ -575,10 +709,32 @@ module.exports = function createAdminUserSendMsgLogPage({
               </div>
             </div>
           </div>
-          <div class="col-sm-6 col-lg-3">
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
             <div class="stat-card">
               <div>
-                <div class="stat-lbl">WhatsApp Messages</div>
+                <div class="stat-lbl">Delivered</div>
+                <div class="stat-val text-success">${Number(summary.delivered_count || (Number(summary.total_count || 0) - Number(summary.failed_count || 0))).toLocaleString('en-IN')}</div>
+              </div>
+              <div class="stat-icon" style="background:#dcfce7;color:#16a34a;">
+                <i class="fa fa-check-circle"></i>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
+            <div class="stat-card">
+              <div>
+                <div class="stat-lbl">Failed</div>
+                <div class="stat-val text-danger">${Number(summary.failed_count || 0).toLocaleString('en-IN')}</div>
+              </div>
+              <div class="stat-icon" style="background:#fee2e2;color:#dc2626;">
+                <i class="fa fa-times-circle"></i>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
+            <div class="stat-card">
+              <div>
+                <div class="stat-lbl">WhatsApp</div>
                 <div class="stat-val text-success">${Number(summary.whatsapp_count || 0).toLocaleString('en-IN')}</div>
               </div>
               <div class="stat-icon" style="background:#dcfce7;color:#16a34a;">
@@ -586,10 +742,10 @@ module.exports = function createAdminUserSendMsgLogPage({
               </div>
             </div>
           </div>
-          <div class="col-sm-6 col-lg-3">
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
             <div class="stat-card">
               <div>
-                <div class="stat-lbl">SMS Messages</div>
+                <div class="stat-lbl">SMS</div>
                 <div class="stat-val text-info">${Number(summary.sms_count || 0).toLocaleString('en-IN')}</div>
               </div>
               <div class="stat-icon" style="background:#e0f2fe;color:#0284c7;">
@@ -597,10 +753,10 @@ module.exports = function createAdminUserSendMsgLogPage({
               </div>
             </div>
           </div>
-          <div class="col-sm-6 col-lg-3">
+          <div class="col-6 col-md-4 col-lg-2 mb-3">
             <div class="stat-card">
               <div>
-                <div class="stat-lbl">Email Messages</div>
+                <div class="stat-lbl">Email</div>
                 <div class="stat-val text-primary">${Number(summary.email_count || 0).toLocaleString('en-IN')}</div>
               </div>
               <div class="stat-icon" style="background:#ede9fe;color:#7c3aed;">
@@ -618,16 +774,16 @@ module.exports = function createAdminUserSendMsgLogPage({
           </div>
           <div class="card-body">
             <form method="GET" action="/admin/reports/user-send-msg-log" id="filterForm">
-              <div class="row align-items-end">
-                <div class="col-md-2 col-sm-6 mb-3 mb-md-0">
+              <div class="row">
+                <div class="col-md-2 col-sm-6 mb-3">
                   <label class="filter-label" for="fromDate">From Date</label>
                   <input type="date" id="fromDate" name="from" class="form-control" value="${escapeHtml(filters.from)}">
                 </div>
-                <div class="col-md-2 col-sm-6 mb-3 mb-md-0">
+                <div class="col-md-2 col-sm-6 mb-3">
                   <label class="filter-label" for="toDate">To Date</label>
                   <input type="date" id="toDate" name="to" class="form-control" value="${escapeHtml(filters.to)}">
                 </div>
-                <div class="col-md-3 col-sm-6 mb-3 mb-md-0">
+                <div class="col-md-2 col-sm-6 mb-3">
                   <label class="filter-label" for="userSelect">User</label>
                   <select id="userSelect" name="user" class="form-control custom-select">
                     <option value="">All Users</option>
@@ -637,7 +793,7 @@ module.exports = function createAdminUserSendMsgLogPage({
                     }).join('')}
                   </select>
                 </div>
-                <div class="col-md-2 col-sm-6 mb-3 mb-md-0">
+                <div class="col-md-2 col-sm-6 mb-3">
                   <label class="filter-label" for="msgTypeSelect">Msg Type</label>
                   <select id="msgTypeSelect" name="msgType" class="form-control custom-select">
                     <option value="all">All Message Types</option>
@@ -647,7 +803,7 @@ module.exports = function createAdminUserSendMsgLogPage({
                     }).join('')}
                   </select>
                 </div>
-                <div class="col-md-2 col-sm-6 mb-3 mb-md-0">
+                <div class="col-md-2 col-sm-6 mb-3">
                   <label class="filter-label" for="platformSelect">Platform</label>
                   <select id="platformSelect" name="platform" class="form-control custom-select">
                     <option value="all"${filters.platform === 'all' ? ' selected' : ''}>All Platforms</option>
@@ -656,41 +812,73 @@ module.exports = function createAdminUserSendMsgLogPage({
                     <option value="email"${filters.platform === 'email' ? ' selected' : ''}>Email</option>
                   </select>
                 </div>
-                <div class="col-md-1 col-sm-12 text-md-right">
-                  <button type="submit" class="btn btn-primary btn-block font-weight-bold" style="height:38px;">
-                    <i class="fa fa-search"></i> Filter
-                  </button>
+                <div class="col-md-2 col-sm-6 mb-3">
+                  <label class="filter-label" for="statusSelect">Delivery Status</label>
+                  <select id="statusSelect" name="status" class="form-control custom-select">
+                    <option value="all"${filters.status === 'all' ? ' selected' : ''}>All Status</option>
+                    <option value="delivered"${filters.status === 'delivered' || filters.status === 'sent' ? ' selected' : ''}>Delivered / Sent</option>
+                    <option value="failed"${filters.status === 'failed' ? ' selected' : ''}>Failed / Undelivered</option>
+                  </select>
                 </div>
+              </div>
+              <div class="d-flex justify-content-end align-items-center mt-1">
+                <a href="/admin/reports/user-send-msg-log" class="btn btn-outline-secondary btn-sm mr-2 font-weight-bold" style="height:36px;line-height:22px;">
+                  <i class="fa fa-times mr-1"></i> Reset
+                </a>
+                <button type="submit" class="btn btn-primary btn-sm px-4 font-weight-bold" style="height:36px;">
+                  <i class="fa fa-search mr-1"></i> Filter Logs
+                </button>
               </div>
             </form>
           </div>
         </div>
 
-        <!-- Platform Tabs -->
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <ul class="nav nav-pills bg-white p-1 rounded border shadow-sm">
-            <li class="nav-item">
-              <a class="nav-link ${filters.platform === 'all' ? 'active' : ''}" href="${makePlatformUrl('all')}">
-                <i class="fa fa-list mr-1"></i> All (${Number(summary.total_count || 0).toLocaleString('en-IN')})
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link ${filters.platform === 'sms' ? 'active' : ''}" href="${makePlatformUrl('sms')}">
-                <i class="fa fa-commenting mr-1 text-info"></i> SMS (${Number(summary.sms_count || 0).toLocaleString('en-IN')})
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link ${filters.platform === 'whatsapp' ? 'active' : ''}" href="${makePlatformUrl('whatsapp')}">
-                <i class="fa fa-whatsapp mr-1 text-success"></i> WhatsApp (${Number(summary.whatsapp_count || 0).toLocaleString('en-IN')})
-              </a>
-            </li>
-            <li class="nav-item">
-              <a class="nav-link ${filters.platform === 'email' ? 'active' : ''}" href="${makePlatformUrl('email')}">
-                <i class="fa fa-envelope mr-1 text-primary"></i> Email (${Number(summary.email_count || 0).toLocaleString('en-IN')})
-              </a>
-            </li>
-          </ul>
-          <div class="d-none d-md-block text-muted font-weight-500" style="font-size:13px;">
+        <!-- Platform & Delivery Status Filter Tabs -->
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+          <div class="d-flex flex-wrap align-items-center mb-2 mb-md-0">
+            <ul class="nav nav-pills bg-white p-1 rounded border shadow-sm mr-3 mb-2 mb-md-0">
+              <li class="nav-item">
+                <a class="nav-link ${filters.platform === 'all' ? 'active' : ''}" href="${makePlatformUrl('all')}">
+                  <i class="fa fa-list mr-1"></i> All (${Number(summary.total_count || 0).toLocaleString('en-IN')})
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link ${filters.platform === 'whatsapp' ? 'active' : ''}" href="${makePlatformUrl('whatsapp')}">
+                  <i class="fa fa-whatsapp mr-1 text-success"></i> WhatsApp (${Number(summary.whatsapp_count || 0).toLocaleString('en-IN')})
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link ${filters.platform === 'sms' ? 'active' : ''}" href="${makePlatformUrl('sms')}">
+                  <i class="fa fa-commenting mr-1 text-info"></i> SMS (${Number(summary.sms_count || 0).toLocaleString('en-IN')})
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link ${filters.platform === 'email' ? 'active' : ''}" href="${makePlatformUrl('email')}">
+                  <i class="fa fa-envelope mr-1 text-primary"></i> Email (${Number(summary.email_count || 0).toLocaleString('en-IN')})
+                </a>
+              </li>
+            </ul>
+
+            <ul class="nav nav-pills bg-white p-1 rounded border shadow-sm">
+              <li class="nav-item">
+                <a class="nav-link ${filters.status === 'all' ? 'active' : ''}" href="${makeStatusUrl('all')}">
+                  All Status
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link ${filters.status === 'delivered' || filters.status === 'sent' ? 'active' : ''}" href="${makeStatusUrl('delivered')}">
+                  <i class="fa fa-check-circle mr-1 text-success"></i> Delivered
+                </a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link ${filters.status === 'failed' ? 'active' : ''}" href="${makeStatusUrl('failed')}">
+                  <i class="fa fa-times-circle mr-1 text-danger"></i> Failed
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div class="text-muted font-weight-500" style="font-size:13px;">
             Showing 25 rows per page
           </div>
         </div>
@@ -702,14 +890,15 @@ module.exports = function createAdminUserSendMsgLogPage({
               <table class="table table-bordered table-striped table-hover m-0">
                 <thead>
                   <tr>
-                    <th style="width:60px;" class="text-center">Sl No</th>
-                    <th style="min-width:180px;">User Name</th>
-                    <th style="min-width:160px;">User Number or Email</th>
-                    <th style="width:110px;" class="text-center">Platform</th>
-                    <th style="min-width:160px;">Msg Type</th>
-                    <th style="min-width:280px;">Msg Content</th>
-                    <th style="width:170px;">Date Time</th>
-                    <th style="width:110px;" class="text-center">Action</th>
+                    <th style="width:55px;" class="text-center">Sl No</th>
+                    <th style="min-width:170px;">User Name</th>
+                    <th style="min-width:150px;">User Number or Email</th>
+                    <th style="width:105px;" class="text-center">Platform</th>
+                    <th style="min-width:140px;">Msg Type</th>
+                    <th style="min-width:260px;">Msg Content</th>
+                    <th style="width:130px;" class="text-center">Delivery Status</th>
+                    <th style="width:160px;">Date Time</th>
+                    <th style="width:105px;" class="text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -755,6 +944,13 @@ module.exports = function createAdminUserSendMsgLogPage({
             <span id="modalPlat" class="badge badge-info">-</span>
           </div>
           <div class="col-6">
+            <small class="text-muted d-block font-weight-bold">DELIVERY STATUS</small>
+            <span id="modalStatus" class="badge badge-success">-</span>
+            <small id="modalReason" class="d-block font-weight-bold mt-1" style="display:none;font-size:11.5px;"></small>
+          </div>
+        </div>
+        <div class="row mb-3">
+          <div class="col-12">
             <small class="text-muted d-block font-weight-bold">DATE TIME</small>
             <span id="modalDate" class="text-dark font-weight-500">-</span>
           </div>
@@ -800,10 +996,11 @@ module.exports = function createAdminUserSendMsgLogPage({
         var alertHtml = '<div id="resendAlertBox" class="alert alert-success alert-dismissible fade show shadow-sm mb-3" role="alert">' +
           '<i class="fa fa-check-circle mr-2"></i>' + (resp.message || 'Message resent successfully!') +
           '<button type="button" class="close" data-dismiss="alert">&times;</button></div>';
-        $('.settings-titlebar').after(alertHtml);
+        $('.main-content .container-fluid').prepend(alertHtml);
         setTimeout(function() {
           btnElement.removeClass('btn-success').addClass('btn-outline-primary').html(originalHtml).prop('disabled', false);
-        }, 3500);
+          location.reload();
+        }, 1500);
       },
       error: function(xhr) {
         var errText = 'Failed to resend message.';
@@ -837,12 +1034,32 @@ module.exports = function createAdminUserSendMsgLogPage({
       currentModalLogId = btn.data('id');
       currentModalPlat = btn.data('plat');
       currentModalRecip = btn.data('recip');
+      var st = btn.data('status') || 'Delivered';
+      var reason = btn.data('reason') || '';
+
       $('#modalTitle').text(btn.data('type') || 'Message Details');
       $('#modalUser').text(btn.data('user') || '-');
       $('#modalRecip').text(btn.data('recip') || '-');
       $('#modalPlat').text(btn.data('plat') || '-');
       $('#modalDate').text(btn.data('date') || '-');
       $('#modalContent').text(btn.data('msg') || '-');
+
+      if (st === 'Failed') {
+        $('#modalStatus').removeClass('badge-success').addClass('badge-danger').html('<i class="fa fa-times-circle mr-1"></i>Failed');
+        if (reason) {
+          $('#modalReason').text(reason).removeClass('text-muted').addClass('text-danger').show();
+        } else {
+          $('#modalReason').hide();
+        }
+      } else {
+        $('#modalStatus').removeClass('badge-danger').addClass('badge-success').html('<i class="fa fa-check-circle mr-1"></i>Delivered');
+        if (reason) {
+          $('#modalReason').text(reason).removeClass('text-danger').addClass('text-muted').show();
+        } else {
+          $('#modalReason').hide();
+        }
+      }
+
       $('#msgDetailModal').modal('show');
     });
   });
@@ -892,6 +1109,8 @@ module.exports = function createAdminUserSendMsgLogPage({
     }
 
     let sendResult = null;
+    let sendError = null;
+
     if (platform === 'whatsapp') {
       sendResult = await sendWhatsappNotification({
         db,
@@ -900,7 +1119,7 @@ module.exports = function createAdminUserSendMsgLogPage({
         message: content,
       });
       if (!sendResult || !sendResult.sent) {
-        throw httpError(sendResult?.error || 'Failed to send WhatsApp message. Please check WhatsApp connection in Service Settings.', 400);
+        sendError = sendResult?.error || 'Failed to send WhatsApp message. Please check WhatsApp connection in Service Settings.';
       }
     } else if (platform === 'email') {
       const hasHtml = content.includes('<') && content.includes('>');
@@ -913,7 +1132,7 @@ module.exports = function createAdminUserSendMsgLogPage({
         html: hasHtml ? content : undefined,
       });
       if (!sendResult || !sendResult.sent) {
-        throw httpError(sendResult?.error || 'Failed to send Email. Please check Email service settings.', 400);
+        sendError = sendResult?.error || 'Failed to send Email. Please check Email service settings.';
       }
     } else if (platform === 'sms') {
       sendResult = await sendSmsNotification({
@@ -923,10 +1142,34 @@ module.exports = function createAdminUserSendMsgLogPage({
         message: content,
       });
       if (!sendResult || !sendResult.sent) {
-        throw httpError(sendResult?.error || 'Failed to send SMS. Please check SMS service settings.', 400);
+        sendError = sendResult?.error || 'Failed to send SMS. Please check SMS service settings.';
       }
     } else {
       throw httpError(`Unsupported messaging platform: ${platform}`, 400);
+    }
+
+    if (sendError) {
+      // Record failed attempt in user_sent_msg_logs with genuine failed status
+      try {
+        await db.query(
+          `INSERT INTO user_sent_msg_logs (
+            user_id, user_name, recipient, msg_type, platform, content, subject, status, response_payload, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'failed', $8, now())`,
+          [
+            row.user_id,
+            row.user_name,
+            recipient,
+            String(row.msg_type || 'Message').includes('(Resent)') ? row.msg_type : `${row.msg_type || 'Message'} (Resent)`,
+            platform,
+            content,
+            subject || null,
+            JSON.stringify(sendResult || { error: sendError }),
+          ]
+        );
+      } catch (logErr) {
+        console.warn('[Resend Message Failed Log Error]:', logErr.message);
+      }
+      throw httpError(sendError, 400);
     }
 
     // Log the newly resent message into user_sent_msg_logs
