@@ -2355,6 +2355,10 @@ module.exports = function createAdminServiceSettingsPage({
         btn.classList.add('active');
         const target = document.querySelector(targetSelector);
         if (target) target.classList.add('active');
+
+        if (targetSelector === '#tabWhatsapp' && typeof window.onSwitchToWaTab === 'function') {
+          window.onSwitchToWaTab();
+        }
       }
     }
 
@@ -3145,6 +3149,24 @@ module.exports = function createAdminServiceSettingsPage({
     // Direct WhatsApp Web Client Logic
     // ==========================================
     let baileysPollTimer = null;
+    let waDpPollCount = 0;
+
+    function startWaPolling(intervalMs) {
+      if (baileysPollTimer) clearInterval(baileysPollTimer);
+      baileysPollTimer = setInterval(fetchBaileysStatus, intervalMs || 1200);
+    }
+
+    function stopWaPolling() {
+      if (baileysPollTimer) {
+        clearInterval(baileysPollTimer);
+        baileysPollTimer = null;
+      }
+    }
+
+    window.onSwitchToWaTab = function() {
+      fetchBaileysStatus();
+      startWaPolling(1200);
+    };
 
     async function fetchBaileysStatus() {
       try {
@@ -3182,18 +3204,18 @@ module.exports = function createAdminServiceSettingsPage({
       );
 
       if (data.isConnected) {
-        // Connected State
+        // AUTOMATIC INSTANT TRANSITION: Hide QR code completely, show Connected Card!
+        if (qrArea) qrArea.style.display = 'none';
+        if (connInfo) connInfo.style.display = 'none';
+        if (connectedCard) connectedCard.style.display = 'block';
+
         badge.className = 'badge badge-success px-3 py-2 font-weight-bold';
         badge.style.fontSize = '13.5px';
         badge.innerHTML = '<i class="fa fa-check-circle mr-1"></i> Connected &amp; Active';
 
-        if (connInfo) connInfo.style.display = 'none';
-        if (qrArea) qrArea.style.display = 'none';
-        if (connectedCard) connectedCard.style.display = 'block';
-
         const formattedNumber = data.connectedNumber ? ('+' + data.connectedNumber) : 'Active';
         const formattedName = data.connectedName || 'WhatsApp Account';
-        const formattedTime = data.connectedAt ? new Date(data.connectedAt).toLocaleString() : 'Now';
+        const formattedTime = data.connectedAt ? new Date(data.connectedAt).toLocaleString() : 'Active Now';
 
         const elNum = document.getElementById('baileysConnectedNumber');
         if (elNum) elNum.textContent = formattedNumber;
@@ -3221,14 +3243,16 @@ module.exports = function createAdminServiceSettingsPage({
         btnConnect.style.display = 'none';
         btnLogout.style.display = 'inline-block';
 
-        // Clear polling timer once successfully connected
-        if (baileysPollTimer) {
-          clearInterval(baileysPollTimer);
-          baileysPollTimer = null;
+        // If connected but profile picture is still loading from WhatsApp, poll for up to 10 iterations (12s)
+        if (!data.profilePicUrl && waDpPollCount < 10) {
+          waDpPollCount++;
+          startWaPolling(1200);
+        } else {
+          stopWaPolling();
         }
 
       } else if (data.qrCodeDataUrl) {
-        // QR Ready to Scan State (or QR available during connection)
+        // QR Ready to Scan State
         badge.className = 'badge badge-warning text-dark px-3 py-2 font-weight-bold';
         badge.style.fontSize = '13.5px';
         badge.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code';
@@ -3247,10 +3271,8 @@ module.exports = function createAdminServiceSettingsPage({
         btnConnect.disabled = false;
         btnLogout.style.display = 'none';
 
-        // Fast polling so scan pairing is detected instantly
-        if (!baileysPollTimer) {
-          baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
-        }
+        // Fast active polling (1200ms) while QR code is displayed to instantly detect mobile phone scan!
+        startWaPolling(1200);
 
       } else if (data.status === 'connecting') {
         // Connecting State (No QR dataUrl yet)
@@ -3269,9 +3291,7 @@ module.exports = function createAdminServiceSettingsPage({
         btnConnect.disabled = true;
         btnLogout.style.display = 'none';
 
-        if (!baileysPollTimer) {
-          baileysPollTimer = setInterval(fetchBaileysStatus, 1200);
-        }
+        startWaPolling(1000);
 
       } else {
         // Disconnected State
@@ -3287,10 +3307,7 @@ module.exports = function createAdminServiceSettingsPage({
         btnConnect.disabled = false;
         btnLogout.style.display = 'none';
 
-        if (baileysPollTimer) {
-          clearInterval(baileysPollTimer);
-          baileysPollTimer = null;
-        }
+        stopWaPolling();
       }
     }
 
@@ -3328,9 +3345,7 @@ module.exports = function createAdminServiceSettingsPage({
           });
           const data = await res.json();
           updateBaileysUI(data);
-          if (!baileysPollTimer) {
-            baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
-          }
+          startWaPolling(1200);
         } catch (err) {
           alert('Failed to connect to WhatsApp: ' + err.message);
           updateBaileysUI({ status: 'disconnected', isConnected: false });
@@ -3385,30 +3400,9 @@ module.exports = function createAdminServiceSettingsPage({
       });
     }
 
-    // Auto-refresh WhatsApp status when switching to WhatsApp tab
-    const tabWaLink = document.querySelector('a[href="#tabWhatsapp"]');
-    function ensureWaQrIfDisconnected() {
-      fetchBaileysStatus().then(() => {
-        fetch('/api/admin/baileys/status', { credentials: 'same-origin' })
-          .then(r => r.json())
-          .then(d => {
-            if (!d.isConnected && !d.qrCodeDataUrl && d.status !== 'connecting') {
-              if (btnBaileysConnect) btnBaileysConnect.click();
-            }
-          })
-          .catch(() => {});
-      });
-    }
-
-    if (tabWaLink) {
-      tabWaLink.addEventListener('shown.bs.tab', ensureWaQrIfDisconnected);
-      tabWaLink.addEventListener('click', () => {
-        setTimeout(ensureWaQrIfDisconnected, 150);
-      });
-    }
-
-    // Immediate status check on page initialization
+    // Active polling starts immediately on page load
     fetchBaileysStatus();
+    startWaPolling(1500);
 
     // Send Test Message
     const btnSendTestWa = document.getElementById('btnSendTestWhatsapp');

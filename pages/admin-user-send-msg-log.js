@@ -970,98 +970,146 @@ module.exports = function createAdminUserSendMsgLogPage({
   </div>
 </div>
 
-<script src="/assets/plugins/jquery/jquery.min.js"></script>
+<script src="/assets/js/jquery-3.5.1.min.js"></script>
 <script src="/assets/plugins/bootstrap/js/bootstrap.bundle.min.js"></script>
 <script>
   var currentModalLogId = null;
   var currentModalPlat = null;
   var currentModalRecip = null;
 
-  function executeResend(logId, plat, recip, btnElement) {
+  async function executeResend(logId, plat, recip, btnElement) {
     if (!logId) return;
     var confirmMsg = 'Are you sure you want to resend this ' + (plat || '').toUpperCase() + ' message to ' + recip + '?';
     if (!confirm(confirmMsg)) return;
 
-    var originalHtml = btnElement.html();
-    btnElement.prop('disabled', true).html('<i class="fa fa-spinner fa-spin mr-1"></i> Resending...');
+    var originalHtml = btnElement.innerHTML;
+    btnElement.disabled = true;
+    btnElement.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Resending...';
 
-    $.ajax({
-      url: '/api/admin/reports/user-send-msg-log/resend',
-      type: 'POST',
-      contentType: 'application/json',
-      data: JSON.stringify({ logId: logId }),
-      success: function(resp) {
-        btnElement.removeClass('btn-outline-primary btn-primary').addClass('btn-success').html('<i class="fa fa-check mr-1"></i> Resent!');
-        $('#resendAlertBox').remove();
-        var alertHtml = '<div id="resendAlertBox" class="alert alert-success alert-dismissible fade show shadow-sm mb-3" role="alert">' +
-          '<i class="fa fa-check-circle mr-2"></i>' + (resp.message || 'Message resent successfully!') +
-          '<button type="button" class="close" data-dismiss="alert">&times;</button></div>';
-        $('.main-content .container-fluid').prepend(alertHtml);
-        setTimeout(function() {
-          btnElement.removeClass('btn-success').addClass('btn-outline-primary').html(originalHtml).prop('disabled', false);
-          location.reload();
-        }, 1500);
-      },
-      error: function(xhr) {
-        var errText = 'Failed to resend message.';
-        try {
-          var parsed = JSON.parse(xhr.responseText);
-          if (parsed && parsed.error) errText = parsed.error;
-        } catch (_) {}
-        alert('Error: ' + errText);
-        btnElement.html(originalHtml).prop('disabled', false);
+    try {
+      var res = await fetch('/api/admin/reports/user-send-msg-log/resend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ logId: logId })
+      });
+      var data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error(data.error || data.message || 'Failed to resend message');
       }
-    });
+
+      btnElement.className = btnElement.className.replace('btn-outline-primary', '').replace('btn-primary', '') + ' btn-success';
+      btnElement.innerHTML = '<i class="fa fa-check mr-1"></i> Resent!';
+
+      var existingAlert = document.getElementById('resendAlertBox');
+      if (existingAlert) existingAlert.remove();
+
+      var alertDiv = document.createElement('div');
+      alertDiv.id = 'resendAlertBox';
+      alertDiv.className = 'alert alert-success alert-dismissible fade show shadow-sm mb-3';
+      alertDiv.setAttribute('role', 'alert');
+      alertDiv.innerHTML = '<i class="fa fa-check-circle mr-2"></i><strong>Success!</strong> ' + (data.message || 'Message resent successfully!') +
+        '<button type="button" class="close" data-dismiss="alert">&times;</button>';
+
+      var container = document.querySelector('.main-content .container-fluid');
+      if (container) container.insertBefore(alertDiv, container.firstChild);
+
+      setTimeout(function() {
+        location.reload();
+      }, 1200);
+
+    } catch (err) {
+      alert('Resend Error: ' + err.message);
+      btnElement.innerHTML = originalHtml;
+      btnElement.disabled = false;
+    }
   }
 
-  $(document).ready(function() {
-    $(document).on('click', '.resend-msg-btn', function() {
-      var btn = $(this);
-      var logId = btn.data('id');
-      var plat = btn.data('plat');
-      var recip = btn.data('recip');
-      executeResend(logId, plat, recip, btn);
-    });
+  // Pure vanilla event listener for rock-solid reliability across all browsers
+  document.addEventListener('click', function(e) {
+    var resendBtn = e.target.closest('.resend-msg-btn');
+    if (resendBtn) {
+      e.preventDefault();
+      var logId = resendBtn.getAttribute('data-id');
+      var plat = resendBtn.getAttribute('data-plat');
+      var recip = resendBtn.getAttribute('data-recip');
+      executeResend(logId, plat, recip, resendBtn);
+      return;
+    }
 
-    $('#modalResendBtn').on('click', function() {
-      var btn = $(this);
+    var modalResendBtn = e.target.closest('#modalResendBtn');
+    if (modalResendBtn) {
+      e.preventDefault();
       if (!currentModalLogId) return;
-      executeResend(currentModalLogId, currentModalPlat, currentModalRecip, btn);
-    });
+      executeResend(currentModalLogId, currentModalPlat, currentModalRecip, modalResendBtn);
+      return;
+    }
 
-    $('.view-msg-btn').on('click', function() {
-      var btn = $(this);
-      currentModalLogId = btn.data('id');
-      currentModalPlat = btn.data('plat');
-      currentModalRecip = btn.data('recip');
-      var st = btn.data('status') || 'Delivered';
-      var reason = btn.data('reason') || '';
+    var viewBtn = e.target.closest('.view-msg-btn');
+    if (viewBtn) {
+      e.preventDefault();
+      currentModalLogId = viewBtn.getAttribute('data-id');
+      currentModalPlat = viewBtn.getAttribute('data-plat');
+      currentModalRecip = viewBtn.getAttribute('data-recip');
+      var st = viewBtn.getAttribute('data-status') || 'Delivered';
+      var reason = viewBtn.getAttribute('data-reason') || '';
 
-      $('#modalTitle').text(btn.data('type') || 'Message Details');
-      $('#modalUser').text(btn.data('user') || '-');
-      $('#modalRecip').text(btn.data('recip') || '-');
-      $('#modalPlat').text(btn.data('plat') || '-');
-      $('#modalDate').text(btn.data('date') || '-');
-      $('#modalContent').text(btn.data('msg') || '-');
+      var elTitle = document.getElementById('modalTitle');
+      var elUser = document.getElementById('modalUser');
+      var elRecip = document.getElementById('modalRecip');
+      var elPlat = document.getElementById('modalPlat');
+      var elDate = document.getElementById('modalDate');
+      var elContent = document.getElementById('modalContent');
+      var elStatus = document.getElementById('modalStatus');
+      var elReason = document.getElementById('modalReason');
 
-      if (st === 'Failed') {
-        $('#modalStatus').removeClass('badge-success').addClass('badge-danger').html('<i class="fa fa-times-circle mr-1"></i>Failed');
-        if (reason) {
-          $('#modalReason').text(reason).removeClass('text-muted').addClass('text-danger').show();
+      if (elTitle) elTitle.textContent = viewBtn.getAttribute('data-type') || 'Message Details';
+      if (elUser) elUser.textContent = viewBtn.getAttribute('data-user') || '-';
+      if (elRecip) elRecip.textContent = viewBtn.getAttribute('data-recip') || '-';
+      if (elPlat) elPlat.textContent = viewBtn.getAttribute('data-plat') || '-';
+      if (elDate) elDate.textContent = viewBtn.getAttribute('data-date') || '-';
+      if (elContent) elContent.textContent = viewBtn.getAttribute('data-msg') || '-';
+
+      if (elStatus) {
+        if (st === 'Failed') {
+          elStatus.className = 'badge badge-danger';
+          elStatus.innerHTML = '<i class="fa fa-times-circle mr-1"></i>Failed';
+          if (elReason) {
+            if (reason) {
+              elReason.textContent = reason;
+              elReason.className = 'text-danger';
+              elReason.style.display = 'block';
+            } else {
+              elReason.style.display = 'none';
+            }
+          }
         } else {
-          $('#modalReason').hide();
-        }
-      } else {
-        $('#modalStatus').removeClass('badge-danger').addClass('badge-success').html('<i class="fa fa-check-circle mr-1"></i>Delivered');
-        if (reason) {
-          $('#modalReason').text(reason).removeClass('text-danger').addClass('text-muted').show();
-        } else {
-          $('#modalReason').hide();
+          elStatus.className = 'badge badge-success';
+          elStatus.innerHTML = '<i class="fa fa-check-circle mr-1"></i>Delivered';
+          if (elReason) {
+            if (reason) {
+              elReason.textContent = reason;
+              elReason.className = 'text-muted';
+              elReason.style.display = 'block';
+            } else {
+              elReason.style.display = 'none';
+            }
+          }
         }
       }
 
-      $('#msgDetailModal').modal('show');
-    });
+      if (window.$ && $.fn && $.fn.modal) {
+        $('#msgDetailModal').modal('show');
+      } else {
+        var m = document.getElementById('msgDetailModal');
+        if (m) {
+          m.classList.add('show');
+          m.style.display = 'block';
+        }
+      }
+    }
   });
 </script>
 </body>
