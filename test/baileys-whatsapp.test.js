@@ -11,6 +11,7 @@ test('Baileys WhatsApp Service - getStatus returns structured connection state',
   assert.ok('status' in status);
   assert.ok('isConnected' in status);
   assert.ok('connectedNumber' in status);
+  assert.ok('profilePicUrl' in status);
   assert.ok('qrCodeDataUrl' in status);
   assert.strictEqual(typeof status.isConnected, 'boolean');
 });
@@ -62,6 +63,10 @@ test('Admin Service Settings - WhatsApp page HTML contains Baileys QR & Scan UI 
   assert.ok(capturedHtml.includes('id="btnBaileysConnect"'), 'Should contain Scan / Link WhatsApp button');
   assert.ok(capturedHtml.includes('id="btnBaileysLogout"'), 'Should contain Logout button');
   assert.ok(capturedHtml.includes('id="baileysQrImage"'), 'Should contain QR image element');
+  assert.ok(capturedHtml.includes('id="baileysConnectedCard"'), 'Should contain Connected Card element');
+  assert.ok(capturedHtml.includes('id="baileysConnectedDp"'), 'Should contain Connected DP element');
+  assert.ok(capturedHtml.includes('placeholder="type your test here"'), 'Should have informative placeholder');
+  assert.ok(!capturedHtml.includes('value="Hello! This is a test WhatsApp message'), 'Should not have prefilled default test message');
   assert.ok(capturedHtml.includes('id="btnSendTestWhatsapp"'), 'Should contain Send Test Message button');
 
   // Should NOT contain the old API configuration inputs

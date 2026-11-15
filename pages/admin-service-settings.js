@@ -377,6 +377,11 @@ module.exports = function createAdminServiceSettingsPage({
       font-weight: bold;
       font-size: 14px;
     }
+    #testWaMessage::placeholder {
+      color: #94a3b8 !important;
+      font-style: italic;
+      opacity: 0.85;
+    }
   </style>
 </head>
 <body>
@@ -1350,7 +1355,7 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
 
                       <!-- QR Code Display Area (Shown when QR Ready) -->
-                      <div id="baileysQrArea" class="text-center p-4 mt-3 border rounded bg-white" style="display: none;">
+                      <div id="baileysQrArea" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: none; border-color: #86efac !important;">
                         <h6 class="font-weight-bold text-dark mb-1"><i class="fa fa-qrcode text-success mr-1"></i> Scan WhatsApp QR Code</h6>
                         <p class="text-muted small mb-3">अपने मोबाइल फ़ोन से इस QR कोड को स्कैन करके WhatsApp अकाउंट लिंक करें।</p>
                         
@@ -1366,6 +1371,38 @@ module.exports = function createAdminServiceSettingsPage({
                             <li><strong>Link a Device</strong> पर टैप करें और कैमरे को इस QR कोड पर रखें।</li>
                           </ol>
                           <small class="text-muted font-italic"><i class="fa fa-clock-o mr-1"></i> QR कोड समय समाप्त होने पर अपने आप अपडेट होता है या "Scan / Link WhatsApp" बटन दबाएं।</small>
+                        </div>
+                      </div>
+
+                      <!-- WhatsApp Connected Card (Shown when Connected in place of QR) -->
+                      <div id="baileysConnectedCard" class="text-center p-4 mt-3 border rounded bg-white shadow-sm" style="display: none; border-color: #86efac !important; background: linear-gradient(to bottom, #f0fdf4, #ffffff) !important;">
+                        <div class="position-relative d-inline-block mb-3">
+                          <img id="baileysConnectedDp" src="" alt="WhatsApp Profile Picture" class="shadow-sm" style="width: 130px; height: 130px; border-radius: 50%; object-fit: cover; border: 4px solid #22c55e; background-color: #f1f5f9; display: inline-block;">
+                          <span class="position-absolute" style="bottom: 4px; right: 8px; width: 28px; height: 28px; background: #22c55e; border-radius: 50%; border: 3px solid #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.15);">
+                            <i class="fa fa-check text-white" style="font-size: 13px;"></i>
+                          </span>
+                        </div>
+                        
+                        <h5 class="font-weight-bold text-dark mb-1" id="baileysConnectedNameDisplay">-</h5>
+                        <div class="h6 font-monospace text-success font-weight-bold mb-2" id="baileysConnectedNumberDisplay">
+                          <i class="fa fa-whatsapp mr-1"></i> <span>-</span>
+                        </div>
+                        
+                        <div class="mb-3">
+                          <span class="badge badge-success px-3 py-2 font-weight-bold" style="font-size: 13px; border-radius: 20px;">
+                            <i class="fa fa-circle text-white mr-1" style="font-size: 9px;"></i> WhatsApp Active &amp; Ready to Send
+                          </span>
+                        </div>
+
+                        <div class="text-muted small mx-auto p-2 bg-light rounded border" style="max-width: 440px;">
+                          <span class="mr-2"><strong>Connected Since:</strong> <span id="baileysConnectedTimeDisplay">-</span></span>
+                          <span class="badge badge-outline-success border border-success text-success px-2 py-1">Baileys Multi-Device Web</span>
+                        </div>
+
+                        <div class="mt-3">
+                          <button type="button" class="btn btn-outline-danger btn-sm font-weight-bold" id="btnBaileysLogoutFromCard">
+                            <i class="fa fa-sign-out mr-1"></i> Disconnect / Logout WhatsApp
+                          </button>
                         </div>
                       </div>
 
@@ -1385,7 +1422,10 @@ module.exports = function createAdminServiceSettingsPage({
                       </div>
                       <div class="col-md-5 form-group mb-md-0">
                         <label for="testWaMessage" class="small font-weight-bold">Message Content *</label>
-                        <input type="text" id="testWaMessage" class="form-control" value="Hello! This is a test WhatsApp message from Exchange Portal via Baileys.">
+                        <input type="text" id="testWaMessage" class="form-control" placeholder="type your test here" value="" style="color: #1e293b;">
+                        <small class="form-text text-muted" style="font-size: 11px; margin-top: 3px;">
+                          <i class="fa fa-info-circle mr-1"></i> type your test here
+                        </small>
                       </div>
                       <div class="col-md-3">
                         <button type="button" class="btn btn-success btn-block font-weight-bold shadow-sm" id="btnSendTestWhatsapp">
@@ -3064,10 +3104,23 @@ module.exports = function createAdminServiceSettingsPage({
       const connInfo = document.getElementById('baileysConnectedInfo');
       const qrArea = document.getElementById('baileysQrArea');
       const qrImage = document.getElementById('baileysQrImage');
+      const connectedCard = document.getElementById('baileysConnectedCard');
+      const connectedDp = document.getElementById('baileysConnectedDp');
+      const connectedNameDisplay = document.getElementById('baileysConnectedNameDisplay');
+      const connectedNumberDisplay = document.getElementById('baileysConnectedNumberDisplay');
+      const connectedTimeDisplay = document.getElementById('baileysConnectedTimeDisplay');
       const btnConnect = document.getElementById('btnBaileysConnect');
       const btnLogout = document.getElementById('btnBaileysLogout');
 
       if (!badge) return;
+
+      const defaultDpSvg = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">' +
+        '<circle cx="60" cy="60" r="60" fill="#25D366"/>' +
+        '<path fill="#ffffff" d="M60 26c-18.78 0-34 15.22-34 34 0 6 1.57 11.64 4.31 16.53L26 94l17.88-4.69A33.82 33.82 0 0 0 60 94c18.78 0 34-15.22 34-34s-15.22-34-34-34zm0 62.25c-5.1 0-9.87-1.37-13.99-3.76l-1-.58-10.4 2.73 2.78-10.13-.65-1.04A28.18 28.18 0 0 1 31.75 60c0-15.6 12.65-28.25 28.25-28.25S88.25 44.4 88.25 60 75.6 88.25 60 88.25z"/>' +
+        '<path fill="#ffffff" d="M73.5 67.8c-.8-.4-4.7-2.3-5.4-2.6-.7-.3-1.3-.4-1.8.4-.5.8-2.1 2.6-2.5 3.1-.5.5-.9.6-1.7.2-.8-.4-3.4-1.3-6.4-4-2.4-2.1-4-4.8-4.5-5.6-.5-.8-.1-1.3.4-1.7.4-.4.8-1 1.2-1.4.4-.5.5-.8.8-1.3.3-.5.1-1-.1-1.4-.2-.4-1.8-4.4-2.5-6-.7-1.6-1.4-1.4-1.9-1.4h-1.6c-.6 0-1.5.2-2.3 1-.8.9-3 3-3 7.2s3.1 8.4 3.5 9c.5.5 6.1 9.3 14.8 13.1 2.1.9 3.7 1.4 5 1.8 2.1.7 4 .6 5.5.4 1.7-.3 5.2-2.1 5.9-4.2.7-2 .7-3.8.5-4.2-.2-.4-.8-.6-1.6-1z"/>' +
+        '</svg>'
+      );
 
       if (data.isConnected) {
         // Connected State
@@ -3075,12 +3128,36 @@ module.exports = function createAdminServiceSettingsPage({
         badge.style.fontSize = '13.5px';
         badge.innerHTML = '<i class="fa fa-check-circle mr-1"></i> Connected &amp; Active';
 
-        if (connInfo) connInfo.style.display = 'block';
+        if (connInfo) connInfo.style.display = 'none';
         if (qrArea) qrArea.style.display = 'none';
+        if (connectedCard) connectedCard.style.display = 'block';
 
-        document.getElementById('baileysConnectedNumber').textContent = data.connectedNumber ? ('+' + data.connectedNumber) : 'Active';
-        document.getElementById('baileysConnectedName').textContent = data.connectedName || 'WhatsApp Account';
-        document.getElementById('baileysConnectedTime').textContent = data.connectedAt ? new Date(data.connectedAt).toLocaleString() : 'Now';
+        const formattedNumber = data.connectedNumber ? ('+' + data.connectedNumber) : 'Active';
+        const formattedName = data.connectedName || 'WhatsApp Account';
+        const formattedTime = data.connectedAt ? new Date(data.connectedAt).toLocaleString() : 'Now';
+
+        const elNum = document.getElementById('baileysConnectedNumber');
+        if (elNum) elNum.textContent = formattedNumber;
+        const elName = document.getElementById('baileysConnectedName');
+        if (elName) elName.textContent = formattedName;
+        const elTime = document.getElementById('baileysConnectedTime');
+        if (elTime) elTime.textContent = formattedTime;
+
+        if (connectedNameDisplay) connectedNameDisplay.textContent = formattedName;
+        if (connectedNumberDisplay) {
+          const numSpan = connectedNumberDisplay.querySelector('span');
+          if (numSpan) numSpan.textContent = formattedNumber;
+          else connectedNumberDisplay.textContent = formattedNumber;
+        }
+        if (connectedTimeDisplay) connectedTimeDisplay.textContent = formattedTime;
+
+        if (connectedDp) {
+          connectedDp.onerror = function() {
+            this.onerror = null;
+            this.src = defaultDpSvg;
+          };
+          connectedDp.src = data.profilePicUrl || defaultDpSvg;
+        }
 
         btnConnect.style.display = 'none';
         btnLogout.style.display = 'inline-block';
@@ -3098,6 +3175,7 @@ module.exports = function createAdminServiceSettingsPage({
         badge.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Ready to Scan QR Code';
 
         if (connInfo) connInfo.style.display = 'none';
+        if (connectedCard) connectedCard.style.display = 'none';
         if (qrArea) qrArea.style.display = 'block';
         if (qrImage) qrImage.src = data.qrCodeDataUrl;
 
@@ -3118,6 +3196,7 @@ module.exports = function createAdminServiceSettingsPage({
         badge.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Initializing / Connecting...';
 
         if (connInfo) connInfo.style.display = 'none';
+        if (connectedCard) connectedCard.style.display = 'none';
         if (qrArea) qrArea.style.display = 'none';
         btnConnect.style.display = 'inline-block';
         btnConnect.disabled = true;
@@ -3134,6 +3213,7 @@ module.exports = function createAdminServiceSettingsPage({
         badge.innerHTML = '<i class="fa fa-times-circle mr-1"></i> Disconnected / Not Linked';
 
         if (connInfo) connInfo.style.display = 'none';
+        if (connectedCard) connectedCard.style.display = 'none';
         if (qrArea) qrArea.style.display = 'none';
         btnConnect.style.display = 'inline-block';
         btnConnect.innerHTML = '<i class="fa fa-qrcode mr-1"></i> Scan / Link WhatsApp';
@@ -3189,11 +3269,16 @@ module.exports = function createAdminServiceSettingsPage({
 
     // Button: Disconnect / Logout
     const btnBaileysLogout = document.getElementById('btnBaileysLogout');
+    const btnBaileysLogoutCard = document.getElementById('btnBaileysLogoutFromCard');
     if (btnBaileysLogout) {
       btnBaileysLogout.addEventListener('click', async () => {
         if (!confirm('Are you sure you want to disconnect and logout this WhatsApp account?')) return;
         btnBaileysLogout.disabled = true;
         btnBaileysLogout.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Logging out...';
+        if (btnBaileysLogoutCard) {
+          btnBaileysLogoutCard.disabled = true;
+          btnBaileysLogoutCard.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Logging out...';
+        }
         try {
           const res = await fetch('/api/admin/baileys/logout', {
             method: 'POST',
@@ -3206,7 +3291,16 @@ module.exports = function createAdminServiceSettingsPage({
         } finally {
           btnBaileysLogout.disabled = false;
           btnBaileysLogout.innerHTML = '<i class="fa fa-sign-out mr-1"></i> Disconnect / Logout';
+          if (btnBaileysLogoutCard) {
+            btnBaileysLogoutCard.disabled = false;
+            btnBaileysLogoutCard.innerHTML = '<i class="fa fa-sign-out mr-1"></i> Disconnect / Logout WhatsApp';
+          }
         }
+      });
+    }
+    if (btnBaileysLogoutCard && btnBaileysLogout) {
+      btnBaileysLogoutCard.addEventListener('click', () => {
+        btnBaileysLogout.click();
       });
     }
 
@@ -3215,6 +3309,17 @@ module.exports = function createAdminServiceSettingsPage({
     if (btnBaileysRefresh) {
       btnBaileysRefresh.addEventListener('click', () => {
         fetchBaileysStatus();
+      });
+    }
+
+    // Auto-refresh WhatsApp status when switching to WhatsApp tab
+    const tabWaLink = document.querySelector('a[href="#tabWhatsapp"]');
+    if (tabWaLink) {
+      tabWaLink.addEventListener('shown.bs.tab', () => {
+        fetchBaileysStatus();
+      });
+      tabWaLink.addEventListener('click', () => {
+        setTimeout(fetchBaileysStatus, 150);
       });
     }
 
@@ -3233,6 +3338,13 @@ module.exports = function createAdminServiceSettingsPage({
           return;
         }
 
+        const msgText = (testWaMessage.value || '').trim();
+        if (!msgText) {
+          alert('Please type a message to send.');
+          testWaMessage.focus();
+          return;
+        }
+
         btnSendTestWa.disabled = true;
         btnSendTestWa.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> Sending via Baileys...';
         testWaAlert.style.display = 'none';
@@ -3244,7 +3356,7 @@ module.exports = function createAdminServiceSettingsPage({
             credentials: 'same-origin',
             body: JSON.stringify({
               toNumber,
-              message: (testWaMessage.value || '').trim(),
+              message: msgText,
             }),
           });
           const data = await res.json();
@@ -4818,6 +4930,11 @@ module.exports = function createAdminServiceSettingsPage({
    * GET /api/admin/baileys/status - Get WhatsApp connection status and QR code
    */
   async function handleBaileysStatus(request, response) {
+    if (baileysWhatsappService.status === 'connected' && !baileysWhatsappService.profilePicUrl) {
+      try {
+        await baileysWhatsappService.fetchProfilePicture();
+      } catch (_) {}
+    }
     sendJson(response, 200, {
       ok: true,
       ...baileysWhatsappService.getStatus(),
