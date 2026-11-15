@@ -3106,9 +3106,9 @@ module.exports = function createAdminServiceSettingsPage({
         btnConnect.disabled = false;
         btnLogout.style.display = 'none';
 
-        // Start polling if not already started
+        // Start fast polling so scan updates instantly
         if (!baileysPollTimer) {
-          baileysPollTimer = setInterval(fetchBaileysStatus, 3000);
+          baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
         }
 
       } else if (data.status === 'connecting') {
@@ -3124,7 +3124,7 @@ module.exports = function createAdminServiceSettingsPage({
         btnLogout.style.display = 'none';
 
         if (!baileysPollTimer) {
-          baileysPollTimer = setInterval(fetchBaileysStatus, 2500);
+          baileysPollTimer = setInterval(fetchBaileysStatus, 1500);
         }
 
       } else {
@@ -4828,7 +4828,7 @@ module.exports = function createAdminServiceSettingsPage({
    * POST /api/admin/baileys/connect - Start / Connect Baileys WhatsApp session & generate QR
    */
   async function handleBaileysConnect(request, response) {
-    const status = await baileysWhatsappService.connect();
+    const status = await baileysWhatsappService.connect({ force: true });
     sendJson(response, 200, {
       ok: true,
       ...status,
