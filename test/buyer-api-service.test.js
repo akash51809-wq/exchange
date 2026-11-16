@@ -537,7 +537,7 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
     assert.strictEqual(sentPayload.status, 'SUCCESS');
     assert.strictEqual(sentPayload.buyer_margin, '2.90');
     assert.strictEqual(sentPayload.opt_id, 'OP_777');
-    assert.strictEqual(sentPayload.operator_ref, 'OP_777');
+    assert.strictEqual(sentPayload.operator_ref, undefined, 'operator_ref must be completely removed');
     assert.strictEqual(sentPayload.margin, undefined);
     assert.strictEqual(sentPayload.seller_margin_percent, undefined);
     assert.strictEqual(sentPayload.net_amount, '97.10');

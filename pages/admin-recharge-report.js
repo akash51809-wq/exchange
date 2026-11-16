@@ -1818,7 +1818,6 @@ module.exports = function createAdminRechargeReportPage({
         ? ((Number(order.margin_minor) / Number(order.amount_minor)) * 100).toFixed(2)
         : '0.00',
       opt_id: order.provider_reference || '',
-      operator_ref: order.provider_reference || '',
       statuscode: order.status === 'successful' ? '0' : (order.status === 'pending' ? '1' : '2'),
     };
 

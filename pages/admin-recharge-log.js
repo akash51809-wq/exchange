@@ -352,7 +352,7 @@ module.exports = function createAdminRechargeLogPage({
             winner_seller: row.seller_name || row.seller_username || 'Direct Engine',
             winner_seller_username: row.seller_username,
             seller_api_name: row.seller_api_name || 'Internal Route',
-            operator_ref: opeId,
+            opt_id: opeId,
             supplier_txn_id: payload.supplierTxnId || payload.txnid || opeId,
             total_attempts: routingAttempts.length > 0 ? routingAttempts.length : 1,
             attempts: routingAttempts.length > 0 ? routingAttempts : [
@@ -378,9 +378,9 @@ module.exports = function createAdminRechargeLogPage({
               status: row.status === 'successful' ? 'SUCCESS' : (row.status === 'pending' ? 'PENDING' : 'FAILURE'),
               ref_id: row.idempotency_key,
               txnid: systemRechargeId,
-              operator_ref: opeId,
+              opt_id: opeId,
               amount: amtFormatted,
-              margin: (Number(row.margin_minor || 0) / 100).toFixed(2),
+              buyer_margin: (Number(row.margin_minor || 0) / 100).toFixed(2),
               net_amount: (Number(row.cost_minor || row.amount_minor || 0) / 100).toFixed(2),
             },
           },
@@ -942,7 +942,7 @@ module.exports = function createAdminRechargeLogPage({
         attHtml += '<div class="row small mt-2">';
         attHtml += '<div class="col-md-6"><strong>Target Outbound URL:</strong> <code style="word-break:break-all;">' + (att.target_url || '-') + '</code></div>';
         attHtml += '<div class="col-md-3"><strong>Status:</strong> <span class="badge ' + (att.status === 'SUCCESS' ? 'badge-success' : (att.status === 'PENDING' ? 'badge-warning' : 'badge-danger')) + '">' + (att.status || '-') + '</span></div>';
-        attHtml += '<div class="col-md-3"><strong>Operator Txn (Ope ID):</strong> <code class="text-primary">' + (att.operator_txnid || rout.operator_ref || '-') + '</code></div>';
+        attHtml += '<div class="col-md-3"><strong>Operator Txn (Ope ID):</strong> <code class="text-primary">' + (att.operator_txnid || rout.opt_id || '-') + '</code></div>';
         attHtml += '</div>';
 
         if (att.raw_response) {

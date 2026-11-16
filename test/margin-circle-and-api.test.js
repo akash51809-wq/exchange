@@ -564,7 +564,7 @@ test('Buyer & Seller Margin - Circle Routing and Seller API Selection Tests', as
     assert.strictEqual(forwardedSellerUserId, 'seller-user-9839680707');
     assert.strictEqual(sentPayload?.buyer_margin, '2.11');
     assert.strictEqual(sentPayload?.opt_id, 'OPR_AIRTEL_1');
-    assert.strictEqual(sentPayload?.operator_ref, 'OPR_AIRTEL_1');
+    assert.strictEqual(sentPayload?.operator_ref, undefined, 'operator_ref must be completely removed');
     assert.strictEqual(sentPayload?.margin, undefined);
     assert.strictEqual(sentPayload?.buyer_margin_percent, undefined);
     assert.strictEqual(sentPayload?.seller_margin_percent, undefined);

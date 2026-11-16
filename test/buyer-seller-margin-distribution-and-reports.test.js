@@ -163,7 +163,7 @@ test('Buyer & Seller Margin Distribution and Transaction Reports', async (t) => 
     // Available margin = 2.21% - 0.10% = 2.11%
     assert.strictEqual(sentPayload?.buyer_margin, '2.11');
     assert.strictEqual(sentPayload?.opt_id, 'OPR_TXN_123');
-    assert.strictEqual(sentPayload?.operator_ref, 'OPR_TXN_123');
+    assert.strictEqual(sentPayload?.operator_ref, undefined, 'operator_ref must be completely removed');
     assert.strictEqual(sentPayload?.margin, undefined);
     assert.strictEqual(sentPayload?.seller_margin_percent, undefined);
 
