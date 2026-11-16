@@ -161,9 +161,11 @@ test('Buyer & Seller Margin Distribution and Transaction Reports', async (t) => 
     assert.strictEqual(forwardedSellerUserId, 'seller-user-uuid');
 
     // Available margin = 2.21% - 0.10% = 2.11%
-    assert.strictEqual(sentPayload?.margin, '2.11');
-    assert.strictEqual(sentPayload?.buyer_margin_percent, 2.11);
-    assert.strictEqual(sentPayload?.seller_margin_percent, 2.21);
+    assert.strictEqual(sentPayload?.buyer_margin, '2.11');
+    assert.strictEqual(sentPayload?.opt_id, 'OPR_TXN_123');
+    assert.strictEqual(sentPayload?.operator_ref, 'OPR_TXN_123');
+    assert.strictEqual(sentPayload?.margin, undefined);
+    assert.strictEqual(sentPayload?.seller_margin_percent, undefined);
 
     // On ₹22.00 (2200 minor):
     // Buyer receives 2.11% commission = round(2200 * 0.0211) = 46 minor (₹0.46)

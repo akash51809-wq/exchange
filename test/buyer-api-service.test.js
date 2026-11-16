@@ -406,7 +406,9 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
 
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload.status, 'PENDING');
-    assert.strictEqual(sentPayload.margin, '0.00', 'Margin must be 0.00 on pending order');
+    assert.strictEqual(sentPayload.buyer_margin, '0.00', 'Buyer margin must be 0.00 on pending order');
+    assert.strictEqual(sentPayload.margin, undefined);
+    assert.strictEqual(sentPayload.seller_margin_percent, undefined);
     assert.strictEqual(sentPayload.net_amount, '100.00', 'Full amount must be held on pending order');
     assert.strictEqual(sentPayload.closing_balance, '400.00', 'Closing balance must reflect full debit without unearned margin');
 
@@ -533,7 +535,11 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
 
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload.status, 'SUCCESS');
-    assert.strictEqual(sentPayload.margin, '2.90');
+    assert.strictEqual(sentPayload.buyer_margin, '2.90');
+    assert.strictEqual(sentPayload.opt_id, 'OP_777');
+    assert.strictEqual(sentPayload.operator_ref, 'OP_777');
+    assert.strictEqual(sentPayload.margin, undefined);
+    assert.strictEqual(sentPayload.seller_margin_percent, undefined);
     assert.strictEqual(sentPayload.net_amount, '97.10');
     assert.strictEqual(sentPayload.closing_balance, '402.90');
     assert.strictEqual(sellerWalletProvisioned, true, 'Seller wallet must be auto-provisioned');
@@ -649,7 +655,9 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
     assert.strictEqual(sentStatusCode, 200);
     assert.strictEqual(sentPayload.status, 'SUCCESS');
     assert.strictEqual(sentPayload.amount, '500.00');
-    assert.strictEqual(sentPayload.margin, '3.90', 'Margin must strictly be returned in percentage, NOT rupees');
+    assert.strictEqual(sentPayload.buyer_margin, '3.90', 'Buyer margin must strictly be returned in percentage, NOT rupees');
+    assert.strictEqual(sentPayload.margin, undefined);
+    assert.strictEqual(sentPayload.seller_margin_percent, undefined);
   });
 
   it('handleBuyerRecharge rolls back and throws error if seller wallet is missing on SUCCESS', async () => {

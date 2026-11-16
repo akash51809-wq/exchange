@@ -1742,8 +1742,8 @@ module.exports = function createFrontLandingPage({ db, sendJson }) {
   "status": "SUCCESS",
   "txnid": "TXN179422001928A4BC",
   "ref_id": "ORDER_20261109_001",
-  "operator_ref": "AIRTEL10928374",
-  "margin": "12.55",
+  "opt_id": "AIRTEL10928374",
+  "buyer_margin": "2.11",
   "closing_balance": "48750.25"
 }</pre>
           </div>
