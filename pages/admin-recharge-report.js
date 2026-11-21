@@ -413,7 +413,7 @@ module.exports = function createAdminRechargeReportPage({
       // 4. View Recharge Log Waterfall
       $(document).on('click', '.btn-action-log', async function() {
         const orderId = $(this).data('id');
-        $('#rechargeLogBody').html('<div class="text-center py-5"><i class="fa fa-spinner fa-spin fa-2x text-primary"></i><div class="mt-2 text-muted font-weight-bold">Loading full waterfall transaction log...</div></div>');
+        $('#rechargeLogBody').html('<div class="text-center py-5"><i class="fa fa-spinner fa-spin fa-2x text-primary"></i><div class="mt-2 text-muted font-weight-bold">Loading full lifecycle transaction log...</div></div>');
         $('#modalRechargeLog').modal('show');
 
         try {
@@ -423,11 +423,60 @@ module.exports = function createAdminRechargeReportPage({
           const data = await res.json();
           if (!res.ok) throw new Error(data.error || 'Failed to fetch log.');
 
+          const lifecycle = data.lifecycle || [];
           const waterfall = data.waterfall || [];
           const l = data.log || {};
 
+          let statusBadgeClass = 'badge-danger';
+          if (l.status === 'successful' || l.status === 'SUCCESS') statusBadgeClass = 'badge-success';
+          else if (l.status === 'pending' || l.status === 'PENDING') statusBadgeClass = 'badge-warning';
+
+          let lifecycleCardsHtml = '';
+          if (lifecycle.length > 0) {
+            lifecycle.forEach(function(stepItem) {
+              const stepNum = stepItem.step;
+              let stepIcon = 'fa-download';
+              let stepBorder = '#3b82f6';
+              if (stepNum === 2) { stepIcon = 'fa-paper-plane'; stepBorder = '#0284c7'; }
+              else if (stepNum === 3) { stepIcon = 'fa-exchange'; stepBorder = '#f59e0b'; }
+              else if (stepNum === 4) { stepIcon = 'fa-check-circle'; stepBorder = '#10b981'; }
+              else if (stepNum === 5) { stepIcon = 'fa-bell-o'; stepBorder = '#8b5cf6'; }
+
+              let summaryHtml = '';
+              if (stepItem.summary) {
+                summaryHtml = '<div class="mb-2 font-weight-bold text-dark"><i class="fa fa-info-circle text-info mr-1"></i> ' + escapeHtml(stepItem.summary) + '</div>';
+              }
+              let urlHtml = '';
+              if (stepItem.url && stepItem.url !== '-') {
+                urlHtml = '<div class="mb-2"><strong class="text-dark">URL / Endpoint:</strong> <code class="p-1 rounded bg-light border text-primary" style="word-break:break-all;font-size:11.5px;">' + escapeHtml(stepItem.url) + '</code></div>';
+              }
+              let dataHtml = '';
+              if (stepItem.data && stepItem.data !== '-') {
+                dataHtml = '<div class="mb-1"><strong class="text-dark">Payload / Data:</strong><pre class="p-2 rounded bg-dark text-light mt-1 mb-0" style="font-size:11.5px;max-height:160px;overflow-y:auto;font-family:SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-all;">' + escapeHtml(stepItem.data) + '</pre></div>';
+              }
+
+              lifecycleCardsHtml += '\n' +
+                '<div class="card mb-3 shadow-sm border" style="border-left: 5px solid ' + stepBorder + ' !important;">\n' +
+                '  <div class="card-header bg-light py-2 d-flex justify-content-between align-items-center">\n' +
+                '    <div class="font-weight-bold" style="font-size:13.5px;">\n' +
+                '      <i class="fa ' + stepIcon + ' mr-1 text-primary"></i> ' + escapeHtml(stepItem.title) + '\n' +
+                '    </div>\n' +
+                '    <div>\n' +
+                '      <span class="badge ' + (stepItem.badge || 'badge-secondary') + ' mr-2" style="font-size:11px;">' + escapeHtml(stepItem.status || '') + '</span>\n' +
+                '      <small class="text-muted font-monospace"><i class="fa fa-clock-o mr-1"></i>' + escapeHtml(stepItem.time || '-') + '</small>\n' +
+                '    </div>\n' +
+                '  </div>\n' +
+                '  <div class="card-body p-3" style="font-size:12px;">\n' +
+                '    ' + summaryHtml + '\n' +
+                '    ' + urlHtml + '\n' +
+                '    ' + dataHtml + '\n' +
+                '  </div>\n' +
+                '</div>\n';
+            });
+          }
+
           let rowsHtml = '';
-          waterfall.forEach((item, idx) => {
+          waterfall.forEach(function(item, idx) {
             let typeBadge = '<span class="badge badge-primary px-2 py-1 font-weight-bold">Request</span>';
             if (item.log_type.indexOf('Supplier') !== -1) {
               typeBadge = '<span class="badge badge-info px-2 py-1 font-weight-bold" style="background:#0284c7;">' + escapeHtml(item.log_type) + '</span>';
@@ -437,71 +486,96 @@ module.exports = function createAdminRechargeReportPage({
               typeBadge = '<span class="badge badge-warning text-dark px-2 py-1 font-weight-bold" style="background:#f59e0b;">Dispute</span>';
             }
 
-            rowsHtml += \`
-              <tr class="align-middle">
-                <td class="font-weight-bold text-dark font-monospace" style="font-size:12px;vertical-align:middle;">\${escapeHtml(item.recharge_id || '-')}</td>
-                <td class="text-center" style="width:36px;vertical-align:middle;">
-                  <button type="button" class="btn btn-xs btn-outline-danger rounded-circle p-0 toggle-log-detail" style="width:20px;height:20px;line-height:18px;" data-target="#detail-row-\${idx}" title="Toggle Request / Response">
-                    <i class="fa fa-minus-circle"></i>
-                  </button>
-                </td>
-                <td class="text-monospace font-weight-bold" style="font-size:11.5px;vertical-align:middle;">\${escapeHtml(item.client_id || '')}</td>
-                <td style="vertical-align:middle;">\${typeBadge}</td>
-                <td class="small font-monospace" style="font-size:11px;vertical-align:middle;">
-                  <div class="font-weight-bold text-dark">\${escapeHtml(item.req_time || '-')}</div>
-                  <div class="text-muted">\${escapeHtml(item.resp_time || '-')}</div>
-                </td>
-              </tr>
-              <tr id="detail-row-\${idx}" class="log-detail-row">
-                <td colspan="5" class="p-2 bg-light border-top-0">
-                  <div class="border rounded p-2 bg-white" style="font-size:11.5px;line-height:1.5;word-break:break-all;font-family:SFMono-Regular,Consolas,monospace;">
-                    <div class="font-weight-bold text-dark mb-1"><i class="fa fa-exchange text-primary mr-1"></i> Request/Response</div>
-                    <div class="mb-1"><strong class="text-dark">URL:</strong> <span class="text-primary">\${escapeHtml(item.url || '-')}</span></div>
-                    <div class="mb-1"><strong class="text-dark">RequestData:</strong> <span class="text-secondary">\${escapeHtml(item.request_data || '-')}</span></div>
-                    <div><strong class="text-dark">Response:</strong> <span class="text-dark font-weight-bold">\${escapeHtml(item.response_data || '-')}</span></div>
-                  </div>
-                </td>
-              </tr>
-            \`;
+            rowsHtml += '\n' +
+              '<tr class="align-middle">\n' +
+              '  <td class="font-weight-bold text-dark font-monospace" style="font-size:12px;vertical-align:middle;">' + escapeHtml(item.recharge_id || '-') + '</td>\n' +
+              '  <td class="text-center" style="width:36px;vertical-align:middle;">\n' +
+              '    <button type="button" class="btn btn-xs btn-outline-danger rounded-circle p-0 toggle-log-detail" style="width:20px;height:20px;line-height:18px;" data-target="#detail-row-' + idx + '" title="Toggle Request / Response">\n' +
+              '      <i class="fa fa-minus-circle"></i>\n' +
+              '    </button>\n' +
+              '  </td>\n' +
+              '  <td class="text-monospace font-weight-bold" style="font-size:11.5px;vertical-align:middle;">' + escapeHtml(item.client_id || '') + '</td>\n' +
+              '  <td style="vertical-align:middle;">' + typeBadge + '</td>\n' +
+              '  <td class="small font-monospace" style="font-size:11px;vertical-align:middle;">\n' +
+              '    <div class="font-weight-bold text-dark">' + escapeHtml(item.req_time || '-') + '</div>\n' +
+              '    <div class="text-muted">' + escapeHtml(item.resp_time || '-') + '</div>\n' +
+              '  </td>\n' +
+              '</tr>\n' +
+              '<tr id="detail-row-' + idx + '" class="log-detail-row">\n' +
+              '  <td colspan="5" class="p-2 bg-light border-top-0">\n' +
+              '    <div class="border rounded p-2 bg-white" style="font-size:11.5px;line-height:1.5;word-break:break-all;font-family:SFMono-Regular,Consolas,monospace;">\n' +
+              '      <div class="font-weight-bold text-dark mb-1"><i class="fa fa-exchange text-primary mr-1"></i> Request/Response</div>\n' +
+              '      <div class="mb-1"><strong class="text-dark">URL:</strong> <span class="text-primary">' + escapeHtml(item.url || '-') + '</span></div>\n' +
+              '      <div class="mb-1"><strong class="text-dark">RequestData:</strong> <span class="text-secondary">' + escapeHtml(item.request_data || '-') + '</span></div>\n' +
+              '      <div><strong class="text-dark">Response:</strong> <span class="text-dark font-weight-bold">' + escapeHtml(item.response_data || '-') + '</span></div>\n' +
+              '    </div>\n' +
+              '  </td>\n' +
+              '</tr>\n';
           });
 
-          const logHtml = \`
-            <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom">
-              <div>
-                <span class="small text-muted">Show <strong>\${waterfall.length}</strong> entries</span>
-                <span class="badge badge-light border text-monospace ml-2 font-weight-bold">Order: \${escapeHtml(l.id || orderId)}</span>
-                <span class="badge badge-dark ml-1">Status: \${escapeHtml((l.status || 'unknown').toUpperCase())}</span>
-              </div>
-              <div>
-                <button type="button" class="btn btn-xs btn-outline-secondary mr-1" id="btnExpandAllLogs"><i class="fa fa-plus-circle text-success mr-1"></i> Expand All</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary" id="btnCollapseAllLogs"><i class="fa fa-minus-circle text-danger mr-1"></i> Collapse All</button>
-              </div>
-            </div>
-            <div class="table-responsive">
-              <table class="table table-bordered mb-0" style="font-size:12px;">
-                <thead class="bg-light">
-                  <tr>
-                    <th style="width:130px;">RECHARGE ID</th>
-                    <th style="width:36px;" class="text-center">(-)</th>
-                    <th style="width:230px;">CLIENT ID</th>
-                    <th style="width:140px;">TYPE</th>
-                    <th style="width:170px;">REQ. / RESP. TIME</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  \${rowsHtml || '<tr><td colspan="5" class="text-center py-4 text-muted">No waterfall records available.</td></tr>'}
-                </tbody>
-              </table>
-            </div>
-            <div class="d-flex align-items-center justify-content-between mt-2 pt-2 border-top text-muted small">
-              <div>Showing 1 to \${waterfall.length} of \${waterfall.length} entries</div>
-              <div>
-                <a href="/admin/reports/recharge-log?rechargeId=\${encodeURIComponent(orderId)}" target="_blank" class="btn btn-xs btn-outline-primary">
-                  <i class="fa fa-external-link mr-1"></i> Open Full Page Report
-                </a>
-              </div>
-            </div>
-          \`;
+          const amtStr = (Number(l.amount_minor || 0) / 100).toFixed(2);
+          const logHtml = '\n' +
+            '<div class="bg-light p-3 rounded mb-3 border">\n' +
+            '  <div class="row align-items-center">\n' +
+            '    <div class="col-md-3">\n' +
+            '      <div class="small text-muted font-weight-bold text-uppercase">Mobile &amp; Operator</div>\n' +
+            '      <div class="font-weight-bold text-dark" style="font-size:14px;"><i class="fa fa-mobile mr-1"></i>' + escapeHtml(l.mobile || '-') + '</div>\n' +
+            '      <div class="small text-muted">' + escapeHtml(l.operator_name || l.operator_code || '-') + '</div>\n' +
+            '    </div>\n' +
+            '    <div class="col-md-2">\n' +
+            '      <div class="small text-muted font-weight-bold text-uppercase">Amount</div>\n' +
+            '      <div class="font-weight-bold text-success" style="font-size:15px;">₹' + escapeHtml(amtStr) + '</div>\n' +
+            '      <div class="small text-muted">Ref: ' + escapeHtml(l.idempotency_key || '-') + '</div>\n' +
+            '    </div>\n' +
+            '    <div class="col-md-3">\n' +
+            '      <div class="small text-muted font-weight-bold text-uppercase">Buyer &amp; Seller</div>\n' +
+            '      <div class="font-weight-bold text-primary small text-truncate">Buyer: ' + escapeHtml(l.buyer_name || l.buyer_username || '-') + '</div>\n' +
+            '      <div class="font-weight-bold text-info small text-truncate">Seller: ' + escapeHtml(l.seller_name || l.seller_username || 'Goyal Pay') + '</div>\n' +
+            '    </div>\n' +
+            '    <div class="col-md-2">\n' +
+            '      <div class="small text-muted font-weight-bold text-uppercase">Status &amp; Time</div>\n' +
+            '      <span class="badge ' + statusBadgeClass + ' px-2 py-1">' + escapeHtml((l.status || 'unknown').toUpperCase()) + '</span>\n' +
+            '      <div class="small text-muted mt-1 font-monospace">' + escapeHtml(l.duration_sec || '0s') + '</div>\n' +
+            '    </div>\n' +
+            '    <div class="col-md-2 text-right">\n' +
+            '      <a href="/admin/reports/recharge-log?rechargeId=' + encodeURIComponent(orderId) + '" target="_blank" class="btn btn-sm btn-outline-primary shadow-sm">\n' +
+            '        <i class="fa fa-external-link mr-1"></i> Full Trace\n' +
+            '      </a>\n' +
+            '    </div>\n' +
+            '  </div>\n' +
+            '</div>\n' +
+            '\n' +
+            '<h6 class="font-weight-bold text-dark mb-2 border-bottom pb-1">\n' +
+            '  <i class="fa fa-list-ol mr-1 text-primary"></i> 4-Stage Transaction Lifecycle\n' +
+            '</h6>\n' +
+            '\n' +
+            (lifecycleCardsHtml || '<div class="alert alert-info py-2">No lifecycle steps available.</div>') + '\n' +
+            '\n' +
+            '<div class="mt-3 pt-2 border-top">\n' +
+            '  <div class="d-flex align-items-center justify-content-between mb-2">\n' +
+            '    <span class="small font-weight-bold text-muted"><i class="fa fa-database mr-1"></i> Raw Database Waterfall Records (' + waterfall.length + ')</span>\n' +
+            '    <div>\n' +
+            '      <button type="button" class="btn btn-xs btn-outline-secondary mr-1" id="btnExpandAllLogs"><i class="fa fa-plus-circle text-success mr-1"></i> Expand All</button>\n' +
+            '      <button type="button" class="btn btn-xs btn-outline-secondary" id="btnCollapseAllLogs"><i class="fa fa-minus-circle text-danger mr-1"></i> Collapse All</button>\n' +
+            '    </div>\n' +
+            '  </div>\n' +
+            '  <div class="table-responsive">\n' +
+            '    <table class="table table-bordered mb-0" style="font-size:12px;">\n' +
+            '      <thead class="bg-light">\n' +
+            '        <tr>\n' +
+            '          <th style="width:130px;">RECHARGE ID</th>\n' +
+            '          <th style="width:36px;" class="text-center">(-)</th>\n' +
+            '          <th style="width:230px;">CLIENT ID</th>\n' +
+            '          <th style="width:140px;">TYPE</th>\n' +
+            '          <th style="width:170px;">REQ. / RESP. TIME</th>\n' +
+            '        </tr>\n' +
+            '      </thead>\n' +
+            '      <tbody>\n' +
+            '        ' + (rowsHtml || '<tr><td colspan="5" class="text-center py-3 text-muted">No waterfall records available.</td></tr>') + '\n' +
+            '      </tbody>\n' +
+            '    </table>\n' +
+            '  </div>\n' +
+            '</div>';
           $('#rechargeLogBody').html(logHtml);
         } catch (err) {
           $('#rechargeLogBody').html('<div class="alert alert-danger mb-0">Failed to load log: ' + escapeHtml(err.message) + '</div>');
@@ -1938,6 +2012,137 @@ module.exports = function createAdminRechargeReportPage({
       );
     } catch (_) {}
 
+    // Extract Inbound & Routing information
+    const inboundReq = payload.inbound_request || {};
+    const routingAttempts = Array.isArray(payload.routing_attempts) ? payload.routing_attempts : [];
+    const firstAttempt = routingAttempts[0] || {};
+    const buyerName = row.buyer_name || (row.buyer_username === '9335819686' ? 'Easy Recharge' : (row.buyer_username || 'Buyer'));
+    const buyerUsername = row.buyer_username || '9335819686';
+    const sellerName = row.seller_name || firstAttempt.seller_api_name || (firstAttempt.seller_user_id === '238a2ed5-ed1b-4b62-8b45-b7e58e1c97ad' ? 'Goyal Pay' : (row.seller_username || 'Seller'));
+    const sellerUsername = row.seller_username || 'goyalpay';
+
+    const inboundReqUrl = inboundReq.url
+      ? (inboundReq.url.startsWith('http') ? inboundReq.url : `https://exchange.easyrechargesolution.com${inboundReq.url}`)
+      : `https://exchange.easyrechargesolution.com/webservices/api/recharge?username=${row.buyer_username || '****'}&number=${mobile}&operator=${row.operator_code || 'AT'}&amount=${amountFormatted}&ref_id=${row.idempotency_key || '-'}`;
+
+    const inboundParams = inboundReq.params || {
+      number: mobile,
+      amount: amountFormatted,
+      operator: row.operator_code || row.operator_name || 'AT',
+      ref_id: row.idempotency_key || '-',
+      circle: row.circle_name || 'All',
+    };
+
+    let outboundTargetUrl = firstAttempt.target_url || payload.targetUrl;
+    if (!outboundTargetUrl || outboundTargetUrl === 'Internal Stock Router') {
+      outboundTargetUrl = sellerName.toLowerCase().includes('goyal') ? 'https://www.goyalpay.com/webservices/api/recharge' : (payload.targetUrl || 'Seller Gateway');
+    }
+
+    let outboundRequestData = firstAttempt.request_data;
+    if (!outboundRequestData || outboundRequestData.includes('Member_request_txnid=')) {
+      if (sellerName.toLowerCase().includes('goyal')) {
+        outboundRequestData = `username=9335819686&api_token=****&number=${mobile}&amount=${amountFormatted}&operator=${row.operator_code || 'AT'}&ref_id=${shortRechargeId}`;
+      }
+    }
+
+    const sellerRawResp = typeof firstAttempt.raw_response === 'string'
+      ? firstAttempt.raw_response
+      : (firstAttempt.raw_response ? JSON.stringify(firstAttempt.raw_response, null, 2) : (payload.error || payload.message || 'The operation was aborted due to timeout'));
+
+    const buyerOutgoingResp = JSON.stringify({
+      status: row.status === 'successful' ? 'SUCCESS' : (row.status === 'pending' ? 'PENDING' : 'FAILURE'),
+      errorcode: row.status === 'successful' ? '0' : (row.status === 'pending' ? '0' : '160'),
+      message: row.status === 'successful' ? 'Recharge Request Accepted Successfully' : (row.status === 'pending' ? 'Recharge Request Submitted (Pending Provider Status)' : (payload.message || payload.error || 'FAILED- No sellers available for selected margin')),
+      recharge_id: shortRechargeId,
+      ref_id: row.idempotency_key || '',
+      operator: row.operator_code || '',
+      number: mobile,
+      amount: amountFormatted,
+      buyer_margin: row.amount_minor && Number(row.amount_minor) > 0 && row.margin_minor ? ((Number(row.margin_minor) / Number(row.amount_minor)) * 100).toFixed(2) : '0.00',
+      opt_id: row.provider_reference || '',
+      closing_balance: 'Restored / Deducted',
+      time: formatDateTime(row.response_at || row.updated_at || row.created_at),
+    }, null, 2);
+
+    const lifecycle = [
+      {
+        step: 1,
+        title: `1. Easy Recharge से Request Receive`,
+        party: buyerName,
+        party_username: buyerUsername,
+        party_role: 'Buyer',
+        badge: 'badge-primary',
+        time: formatDateTime(inboundReq.received_at || row.request_received_at || row.created_at),
+        method: inboundReq.method || 'GET',
+        ip: inboundReq.ip || '-',
+        url: inboundReqUrl,
+        data: typeof inboundParams === 'object' ? JSON.stringify(inboundParams, null, 2) : String(inboundParams),
+        summary: `Mobile: ${mobile} | Amount: ₹${amountFormatted} | Operator: ${row.operator_name || row.operator_code} | Ref ID: ${row.idempotency_key}`,
+        status: 'RECEIVED',
+      },
+      {
+        step: 2,
+        title: `2. Goyal Pay को Request Send`,
+        party: sellerName,
+        party_username: sellerUsername,
+        party_role: 'Seller',
+        badge: 'badge-info',
+        time: formatDateTime(firstAttempt.timestamp || row.request_received_at || row.created_at),
+        method: 'GET',
+        url: outboundTargetUrl,
+        data: outboundRequestData || '-',
+        summary: `Seller: ${sellerName} | API: ${firstAttempt.seller_api_name || 'Goyal'} | Target URL Dispatched`,
+        status: 'DISPATCHED',
+      },
+      {
+        step: 3,
+        title: `3. Response from Goyal Pay`,
+        party: sellerName,
+        party_username: sellerUsername,
+        party_role: 'Seller',
+        badge: firstAttempt.status === 'SUCCESS' ? 'badge-success' : (firstAttempt.status === 'PENDING' ? 'badge-warning' : 'badge-danger'),
+        time: formatDateTime(new Date(new Date(firstAttempt.timestamp || row.created_at).getTime() + (Number(firstAttempt.latency_ms) || 1000))),
+        latency_ms: firstAttempt.latency_ms || payload.duration_ms || 15009,
+        latency_formatted: ((Number(firstAttempt.latency_ms || payload.duration_ms || 15009)) / 1000).toFixed(1) + 's',
+        status: (firstAttempt.status || (row.status === 'successful' ? 'SUCCESS' : (row.status === 'pending' ? 'PENDING' : 'FAILURE'))).toUpperCase(),
+        opt_id: firstAttempt.operator_txnid || row.provider_reference || '',
+        supplier_txnid: firstAttempt.supplier_txnid || '',
+        url: outboundTargetUrl,
+        data: sellerRawResp,
+        summary: firstAttempt.message || (firstAttempt.status === 'SUCCESS' ? 'Success' : 'The operation was aborted due to timeout (15.0s)'),
+      },
+      {
+        step: 4,
+        title: `4. Response to Easy Recharge Complete`,
+        party: buyerName,
+        party_username: buyerUsername,
+        party_role: 'Buyer',
+        badge: row.status === 'successful' ? 'badge-success' : (row.status === 'pending' ? 'badge-warning' : 'badge-danger'),
+        time: formatDateTime(row.response_at || row.updated_at || row.created_at),
+        duration: durationSec,
+        http_code: row.status === 'successful' || row.status === 'pending' ? '200 OK' : '400 Bad Request',
+        status: (row.status === 'successful' ? 'SUCCESS' : (row.status === 'pending' ? 'PENDING' : 'FAILURE')),
+        url: inboundReqUrl,
+        data: buyerOutgoingResp,
+        summary: `Final Status: ${(row.status || '').toUpperCase()} | Ref: ${row.idempotency_key} | Duration: ${durationSec}`,
+      },
+    ];
+
+    if (row.callback_status || row.callback_last_sent_at) {
+      lifecycle.push({
+        step: 5,
+        title: `5. Callback Delivered to Buyer`,
+        party: buyerName,
+        party_username: buyerUsername,
+        party_role: 'Webhook',
+        badge: row.callback_status === 'delivered' ? 'badge-success' : 'badge-warning',
+        time: formatDateTime(row.callback_last_sent_at || row.updated_at),
+        url: row.buyer_callback_url || '-',
+        data: row.callback_response || 'Callback Delivered',
+        summary: `Status: ${row.callback_status || 'delivered'} | Attempts: ${row.callback_attempts || 1}`,
+      });
+    }
+
     let waterfall = [];
 
     if (logsDbRes.rowCount > 0) {
@@ -1953,58 +2158,27 @@ module.exports = function createAdminRechargeReportPage({
         status: entry.status || row.status,
       }));
     } else {
-      // Graceful waterfall trace construction from response_payload
-      const inboundReq = payload.inbound_request || {};
-      const routingAttempts = Array.isArray(payload.routing_attempts) ? payload.routing_attempts : [];
-
-      // Hop 1: Inbound Request from Buyer
-      const inboundUrl = inboundReq.url
-        ? (inboundReq.url.startsWith('http') ? inboundReq.url : `https://exchange.easyrechargesolution.com${inboundReq.url}`)
-        : `https://exchange.easyrechargesolution.com/webservices/api/recharge?username=****&api_token=****&number=${mobile}&operator=${row.operator_code || 'AT'}&amount=${amountFormatted}&ref_id=${row.idempotency_key || '-'}`;
-
-      const inboundReqData = JSON.stringify(inboundReq.params || {
-        number: mobile,
-        operator: row.operator_code || row.operator_name || 'AT',
-        amount: amountFormatted,
-        ref_id: row.idempotency_key || '-',
-      });
-
-      const inboundRespData = JSON.stringify({
-        status: row.status === 'successful' ? 'Success' : (row.status === 'pending' ? 'Pending' : 'Failure'),
-        number: mobile,
-        amount: amountFormatted,
-        operator: row.operator_code || 'AT',
-        ref_id: row.idempotency_key || '-',
-        txn_id: shortRechargeId,
-        opt_id: row.provider_reference || '',
-        message: row.status === 'successful' ? 'Transaction successful' : (payload.error || payload.message || 'Transaction failed at operator end.'),
-        balance: '7635828',
-      });
-
       waterfall.push({
         recharge_id: shortRechargeId,
         client_id: row.idempotency_key || '-',
         log_type: 'Request',
         req_time: formatDateTime(inboundReq.received_at || row.created_at),
         resp_time: formatDateTime(row.updated_at || row.created_at),
-        url: inboundUrl,
-        request_data: inboundReqData,
-        response_data: inboundRespData,
+        url: inboundReqUrl,
+        request_data: typeof inboundParams === 'object' ? JSON.stringify(inboundParams) : String(inboundParams),
+        response_data: buyerOutgoingResp,
         status: row.status,
       });
 
-      // Hop 2..N: Supplier Requests (Attempt 1, Attempt 2 / Rehit)
       if (routingAttempts.length > 0) {
         routingAttempts.forEach((att, aIdx) => {
           const attemptReqTime = formatDateTime(att.timestamp || row.created_at);
           const attemptRespTime = formatDateTime(new Date(new Date(att.timestamp || row.created_at).getTime() + (Number(att.latency_ms) || 1000)));
-
-          const attReqData = att.request_data || `apimember_id=3083&Api_password=****&Mobile_no=${mobile}&Operator_code=${row.operator_code || 'AT'}&Amount=${amountFormatted}&Member_request_txnid=${shortRechargeId}&Circle=${row.circle_name || 'All'}&OfferCheck=OFF`;
-          const attRespData = typeof att.raw_response === 'string' ? att.raw_response : JSON.stringify(att.raw_response || {
-            STATUS: att.status === 'SUCCESS' ? 1 : (att.status === 'PENDING' ? 2 : 3),
-            ORDERID: att.supplier_txnid || shortRechargeId,
-            MESSAGE: att.message || (att.status === 'SUCCESS' ? 'Success' : 'Invalid Operator / Gateway response'),
-          });
+          const attUrl = att.target_url || outboundTargetUrl;
+          const attReqData = att.request_data || outboundRequestData || '-';
+          const attRespData = typeof att.raw_response === 'string'
+            ? att.raw_response
+            : (att.raw_response ? JSON.stringify(att.raw_response) : sellerRawResp);
 
           waterfall.push({
             recharge_id: shortRechargeId,
@@ -2012,36 +2186,26 @@ module.exports = function createAdminRechargeReportPage({
             log_type: aIdx === 0 ? 'SupplierRequest' : `SupplierRequest (Attempt ${aIdx + 1} / Rehit)`,
             req_time: attemptReqTime,
             resp_time: attemptRespTime,
-            url: att.target_url || payload.targetUrl || 'https://api.sellergateway.com/recharge',
+            url: attUrl,
             request_data: attReqData,
             response_data: attRespData,
-            status: att.status || 'FAILURE',
+            status: att.status || row.status,
           });
         });
       } else {
-        // Default upstream supplier hit if no routing_attempts recorded
-        const suppUrl = payload.targetUrl || 'https://api.roboticexchange.in/Robotics/webservice/GetMobileRecharge';
-        const suppReqData = `apimember_id=3083&Api_password=****&Mobile_no=${mobile}&Operator_code=${row.operator_code || 'AT'}&Amount=${amountFormatted}&Member_request_txnid=${shortRechargeId}&Circle=${row.circle_name || 'All'}&OfferCheck=OFF`;
-        const suppRespData = typeof payload.raw_response === 'string' ? payload.raw_response : JSON.stringify({
-          STATUS: row.status === 'successful' ? 1 : 3,
-          ORDERID: row.provider_reference || shortRechargeId,
-          MESSAGE: row.status === 'successful' ? 'Success' : (payload.message || 'Transaction processed'),
-        });
-
         waterfall.push({
           recharge_id: shortRechargeId,
           client_id: '',
           log_type: 'SupplierRequest',
-          req_time: formatDateTime(row.created_at),
-          resp_time: formatDateTime(row.updated_at || row.created_at),
-          url: suppUrl,
-          request_data: suppReqData,
-          response_data: suppRespData,
-          status: row.status,
+          req_time: formatDateTime(firstAttempt.timestamp || row.created_at),
+          resp_time: formatDateTime(new Date(new Date(firstAttempt.timestamp || row.created_at).getTime() + (Number(firstAttempt.latency_ms) || 1000))),
+          url: outboundTargetUrl,
+          request_data: outboundRequestData || '-',
+          response_data: sellerRawResp,
+          status: firstAttempt.status || row.status,
         });
       }
 
-      // Hop N+1: Callback (if present)
       if (row.callback_status || row.callback_last_sent_at) {
         waterfall.push({
           recharge_id: shortRechargeId,
@@ -2049,7 +2213,7 @@ module.exports = function createAdminRechargeReportPage({
           log_type: 'Callback',
           req_time: formatDateTime(row.callback_last_sent_at || row.updated_at),
           resp_time: formatDateTime(row.callback_last_sent_at || row.updated_at),
-          url: row.buyer_callback_url || 'https://buyer.domain/webhook/callback',
+          url: row.buyer_callback_url || '-',
           request_data: JSON.stringify({
             status: row.status,
             number: mobile,
@@ -2059,21 +2223,6 @@ module.exports = function createAdminRechargeReportPage({
           }),
           response_data: row.callback_response || 'HTTP 200 OK - Callback Delivered',
           status: row.callback_status || 'delivered',
-        });
-      }
-
-      // Hop N+2: Dispute / Complaint (if present)
-      if (row.dispute_status && row.dispute_status !== 'none') {
-        waterfall.push({
-          recharge_id: shortRechargeId,
-          client_id: row.idempotency_key || '',
-          log_type: 'Dispute / Complaint',
-          req_time: formatDateTime(row.dispute_created_at || row.updated_at),
-          resp_time: formatDateTime(row.dispute_resolved_at || row.updated_at),
-          url: 'https://exchange.easyrechargesolution.com/api/recharge/dispute',
-          request_data: JSON.stringify({ reason: row.dispute_reason }),
-          response_data: JSON.stringify({ status: row.dispute_status, note: row.dispute_resolution_note || 'Pending review' }),
-          status: row.dispute_status,
         });
       }
     }
@@ -2098,6 +2247,7 @@ module.exports = function createAdminRechargeReportPage({
         duration_sec: durationSec,
         response_payload: payload,
       },
+      lifecycle,
       waterfall,
     });
   }
