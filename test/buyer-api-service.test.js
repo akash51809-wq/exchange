@@ -815,5 +815,73 @@ describe('Buyer API Service & Seller Routing Safety Tests', () => {
       },
     );
   });
+
+  it('handleBuyerRecharge returns 400 Duplicate Reference Id when concurrent request hits wallet_entries unique constraint', async () => {
+    let responseStatus = null;
+    let responseBody = null;
+    const mockSendJson = (res, status, body) => {
+      responseStatus = status;
+      responseBody = body;
+    };
+
+    const mockClient = {
+      query: async (sql, params) => {
+        if (sql.includes('FROM wallets')) {
+          return { rows: [{ id: 'wallet-1', balance_minor: 50000n, buyer_balance_minor: 50000n }], rowCount: 1 };
+        }
+        if (sql.includes('INSERT INTO wallet_entries')) {
+          const err = new Error('duplicate key value violates unique constraint "wallet_entries_wallet_id_idempotency_key_key"');
+          err.code = '23505';
+          throw err;
+        }
+        return { rows: [], rowCount: 1 };
+      },
+      release: () => {},
+    };
+
+    const mockDb = {
+      connect: async () => mockClient,
+      query: async (sql, params) => {
+        if (sql.includes('SELECT u.id, u.username')) {
+          return { rows: [{ id: 'user-1', username: 'buyer1', status: 'active' }], rowCount: 1 };
+        }
+        if (sql.includes('FROM recharge_orders')) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (sql.includes('FROM operator_definitions')) {
+          return {
+            rows: [{
+              id: 'op-1',
+              operator_name: 'Airtel',
+              operator_code: 'AIRTEL',
+              minimum_amount_minor: 1000n,
+              maximum_amount_minor: 1000000n,
+              stop_amounts_minor: [],
+              operator_number_length: 10,
+            }],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+
+    const testService = createBuyerApiService({
+      db: mockDb,
+      sendJson: mockSendJson,
+      encryptMobile: (m) => Buffer.from(m),
+      decryptMobile: (b) => String(b),
+    });
+
+    const mockReq = { method: 'GET', headers: {}, socket: { remoteAddress: '127.0.0.1' } };
+    const mockUrl = new URL('http://localhost/webservices/api/recharge?api_token=tok&number=9876543210&amount=100&operator=AIRTEL&ref_id=dup_123');
+
+    await testService.handleBuyerRecharge(mockReq, {}, mockUrl);
+    assert.strictEqual(responseStatus, 400);
+    assert.strictEqual(responseBody.status, 'FAILURE');
+    assert.strictEqual(responseBody.errorcode, '109');
+    assert.strictEqual(responseBody.message, 'FAILED- Duplicate Reference Id');
+    assert.strictEqual(responseBody.ref_id, 'dup_123');
+  });
 });
 
